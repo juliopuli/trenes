@@ -57,7 +57,8 @@
       <legend>Datos</legend>
       <label for="source">Fuente</label>
       <select id="source">
-        <option value="visor">Renfe · visor de flota (flota.json)</option>
+        <option value="ld" selected>Renfe · Largo recorrido / Alta velocidad (flotaLD.json)</option>
+        <option value="visor">Renfe · Cercanías (flota.json)</option>
         <option value="gtfsrt">Renfe · GTFS-RT (vehicle_positions.json)</option>
         <option value="custom">URL personalizada (JSON)</option>
         <option value="demo">Demo (trenes simulados)</option>
@@ -74,8 +75,8 @@
           <select id="interval">
             <option value="5">5 s</option>
             <option value="10">10 s</option>
-            <option value="15" selected>15 s</option>
-            <option value="30">30 s</option>
+            <option value="15">15 s</option>
+            <option value="30" selected>30 s</option>
             <option value="60">60 s</option>
           </select>
         </div>
@@ -100,6 +101,12 @@
         <div><label for="thOrange">Naranja &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.2" step="0.5"></div>
       </div>
       <div class="help">Más lejos del umbral naranja → verde. Cada tren se colorea según el tren más cercano.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Tipo de tren</legend>
+      <div id="types"><div class="sub">Aparecerán al cargar los datos.</div></div>
+      <div class="help">Por defecto solo alta velocidad (AVE, AVLO, AVANT). La proximidad se calcula solo entre los tipos marcados.</div>
     </fieldset>
 
     <fieldset>
@@ -133,6 +140,7 @@
 
   /* ---------- Configuración ---------- */
   const SOURCES = {
+    ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
     gtfsrt: "https://gtfsrt.renfe.com/vehicle_positions.json"
   };
@@ -170,7 +178,11 @@
   const linesLayer = L.layerGroup().addTo(map);
 
   /* ---------- Estado ---------- */
-  let trains = [];            // [{id,label,lat,lon,raw,d,color}]
+  let allTrains = [];         // todos los trenes descargados
+  let trains = [];            // [{id,label,lat,lon,raw,d,color}] (solo tipos marcados)
+  const typeSel = {};         // tipo -> true/false
+  let typesKey = "";
+  const isHighSpeed = tp => /^AV|ALTA\s*VEL/i.test(tp);
   const markers = new Map();  // id -> L.circleMarker
   let pairs = [];
   let timer = null;
@@ -209,8 +221,9 @@
   function normalize(item, idx) {
     const v = item.vehicle && typeof item.vehicle === "object" && item.vehicle.position ? item.vehicle : null; // GTFS-RT
     const pos = v ? v.position : item;
-    const lat = toNum(pos.latitud ?? pos.lat ?? pos.latitude ?? pos.Latitud);
-    const lon = toNum(pos.longitud ?? pos.lon ?? pos.lng ?? pos.long ?? pos.longitude ?? pos.Longitud);
+    const findKey = (o, re) => { for (const k of Object.keys(o)) if (re.test(k) && o[k] !== null && typeof o[k] !== "object") return o[k]; };
+    const lat = toNum(pos.latitud ?? pos.lat ?? pos.latitude ?? pos.Latitud ?? findKey(pos, /^lat/i));
+    const lon = toNum(pos.longitud ?? pos.lon ?? pos.lng ?? pos.long ?? pos.longitude ?? pos.Longitud ?? findKey(pos, /^(lon|lng)/i));
     if (!isFinite(lat) || !isFinite(lon)) return null;
     if (lat < SPAIN_BOUNDS.latMin || lat > SPAIN_BOUNDS.latMax || lon < SPAIN_BOUNDS.lonMin || lon > SPAIN_BOUNDS.lonMax) return null;
     let id, label, raw = {};
@@ -223,13 +236,15 @@
       label = item.codComercial ?? item.nombre ?? item.label ?? id;
       raw = item;
     }
-    return { id: String(id), label: String(label), lat, lon, raw };
+    const tipoRaw = v ? "" : (item.tipoTren ?? item.tipo ?? item.codProducto ?? item.producto ?? findKey(item, /^(tipo|tip_|product|clase|servicio)/i) ?? "");
+    return { id: String(id), label: String(label), lat, lon, raw, tipo: String(tipoRaw).trim() };
   }
 
   /* ---------- Descarga ---------- */
   function buildUrl() {
     let url = el.source.value === "custom" ? el.customUrl.value.trim() : SOURCES[el.source.value];
     if (!url) throw new Error("Indica una URL.");
+    if (el.source.value === "ld") url += "?v=" + Date.now();
     const p = el.proxy.value.trim();
     if (p) url = p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url);
     return url;
@@ -367,17 +382,42 @@
     }
   }
 
+  /* ---------- Tipos de tren ---------- */
+  function updateTypes() {
+    const counts = {};
+    allTrains.forEach(t => { if (t.tipo) counts[t.tipo] = (counts[t.tipo] || 0) + 1; });
+    const keys = Object.keys(counts).sort();
+    keys.forEach(k => { if (!(k in typeSel)) typeSel[k] = isHighSpeed(k); });
+    const box = $("types");
+    if (!keys.length) { box.innerHTML = '<div class="sub">No se ha encontrado el campo de tipo de tren; se muestran todos.</div>'; typesKey = ""; return; }
+    const key = keys.join("|");
+    if (key !== typesKey) {
+      typesKey = key;
+      box.innerHTML = keys.map(k => `<label class="chk"><input type="checkbox" data-t="${esc(k)}" ${typeSel[k] ? "checked" : ""}><span>${esc(k)}</span><span class="n" data-c="${esc(k)}"></span></label>`).join("");
+    }
+    keys.forEach(k => { const n = box.querySelector(`[data-c="${CSS.escape(k)}"]`); if (n) n.textContent = counts[k]; });
+  }
+  const inTypes = t => !t.tipo || typeSel[t.tipo] !== false;
+  $("types").addEventListener("change", e => {
+    const k = e.target.dataset && e.target.dataset.t; if (k === undefined) return;
+    typeSel[k] = e.target.checked;
+    trains = allTrains.filter(inTypes);
+    computeProximity(); render();
+  });
+
   /* ---------- Ciclo de actualización ---------- */
   async function refresh() {
     if (loading) return;
     loading = true;
     el.btnRefresh.disabled = true;
     try {
-      trains = await fetchTrains();
+      allTrains = await fetchTrains();
+      updateTypes();
+      trains = allTrains.filter(inTypes);
       computeProximity();
       render();
       const hora = new Date().toLocaleTimeString("es-ES");
-      setStatus(`${trains.length} trenes · ${pairs.length} pares cercanos · actualizado ${hora}`);
+      setStatus(`${trains.length} de ${allTrains.length} trenes · ${pairs.length} pares cercanos · actualizado ${hora}`);
     } catch (e) {
       const cors = e instanceof TypeError;
       setStatus(cors
