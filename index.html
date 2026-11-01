@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.9</title>
+<title>Trenes Renfe en tiempo real · v1.10</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -75,7 +75,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.9</span></h1>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.10</span></h1>
       <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
     </div>
 
@@ -133,12 +133,12 @@
     <fieldset>
       <legend>Capas de vías</legend>
       <label class="chk"><input type="checkbox" id="showTrackAV" checked>Vía Alta Velocidad<span class="n" style="color:#7b1fa2;font-weight:700">▬▬</span></label>
-      <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía Media Distancia / Conv.<span class="n" style="color:#0284c7;font-weight:700">▬▬</span></label>
-      <label class="chk"><input type="checkbox" id="showTrackCerc">Vía Cercanías<span class="n" style="color:#ea580c;font-weight:700">▬▬</span></label>
+      <label class="chk"><input type="checkbox" id="showTrackMD">Vía convencional (MD / Cercanías)<span class="n" style="color:#0284c7;font-weight:700">▬▬</span></label>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px">
         <div class="help" id="trackStatus" style="margin:0">Cargando trazados…</div>
-        <button class="sm" id="btnReloadTrack" title="Recargar capas de vías">Recargar</button>
+        <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías">Recargar</button>
       </div>
+      <div class="help">Datos de OpenStreetMap. La alta velocidad carga en segundos; la convencional es mucho más pesada y puede tardar 1–2 minutos la primera vez (después queda guardada en el navegador).</div>
     </fieldset>
 
     <fieldset>
@@ -178,7 +178,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.9";
+  const VERSION = "1.10";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -262,7 +262,7 @@
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
     interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
     thRed: $("thRed"), thOrange: $("thOrange"), thTrack: $("thTrack"),
-    showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"), showTrackCerc: $("showTrackCerc"),
+    showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showGray: $("showGray"), showLines: $("showLines"),
     search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nGray: $("nGray"), nTotal: $("nTotal"),
@@ -288,19 +288,69 @@
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
-  /* ---------- Capas de Vías ---------- */
+  /* ---------- Capas de Vías (OpenStreetMap vía Overpass) ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
-  let polyAV = null, polyMD = null, polyCerc = null;
-  let gridAV = new Map(), gridMD = new Map(), gridCerc = new Map();
-  let trackLoaded = false, trackLoading = false;
   const GRID_SIZE = 0.15;
+  const TRACKS = {
+    av: { name: "AV", color: "#7b1fa2", weight: 3.2, opacity: 0.9, minKm: 0.06, key: "avTrack2",
+          query: '[out:json][timeout:120];area["ISO3166-1"="ES"][admin_level=2]->.a;way["railway"="rail"]["highspeed"="yes"][!"service"](area.a);out skel geom qt;',
+          loaded: false, loading: false, err: "", n: 0, poly: null, grid: new Map() },
+    md: { name: "Conv.", color: "#0284c7", weight: 2.2, opacity: 0.75, minKm: 0.2, key: "mdTrack2",
+          query: '[out:json][timeout:180];area["ISO3166-1"="ES"][admin_level=2]->.a;way["railway"="rail"]["highspeed"!="yes"][!"service"]["usage"~"^(main|branch)$"](area.a);out skel geom qt;',
+          loaded: false, loading: false, err: "", n: 0, poly: null, grid: new Map() }
+  };
+  const OVERPASS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter"
+  ];
 
-  const setTrack = msg => { el.trackStatus.textContent = msg; };
+  function updateTrackStatus() {
+    const part = st => st.loading ? `${st.name}: cargando…` : st.loaded ? `${st.name}: ${st.n} tramos` : st.err ? `${st.name}: error (${st.err})` : `${st.name}: sin cargar`;
+    const parts = [part(TRACKS.av)];
+    const md = TRACKS.md;
+    if (el.showTrackMD.checked || md.loaded || md.loading || md.err) parts.push(part(md));
+    el.trackStatus.textContent = parts.join(" · ");
+  }
 
-  function addGeoJsonToGrid(grid, coordsList) {
+  function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+  async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } }
+  async function idbSet(k, v) { try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }
+
+  async function overpass(query) {
+    let lastErr;
+    for (const ep of OVERPASS) {
+      try {
+        const ctl = new AbortController();
+        const to = setTimeout(() => ctl.abort(), 200000);
+        const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "data=" + encodeURIComponent(query), signal: ctl.signal });
+        clearTimeout(to);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const j = await r.json();
+        const ways = (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => e.geometry.map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]));
+        if (ways.length) return ways;
+        throw new Error("respuesta vacía");
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error("sin datos");
+  }
+
+  // Reduce puntos: conserva uno cada minKm (los trazados de OSM llevan un punto cada pocos metros)
+  function decimate(pts, minKm) {
+    const out = [pts[0]]; let last = pts[0];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const p = pts[i];
+      const dy = (p[0] - last[0]) * 111.19, dx = (p[1] - last[1]) * 111.19 * Math.cos(p[0] * Math.PI / 180);
+      if (dx * dx + dy * dy >= minKm * minKm) { out.push(p); last = p; }
+    }
+    out.push(pts[pts.length - 1]);
+    return out;
+  }
+
+  function addWaysToGrid(grid, lines) {
     grid.clear();
-    for (const line of coordsList) {
+    for (const line of lines) {
       for (let i = 0; i < line.length - 1; i++) {
         const la1 = line[i][0], lo1 = line[i][1];
         const la2 = line[i + 1][0], lo2 = line[i + 1][1];
@@ -356,89 +406,68 @@
     return minD;
   }
 
+  // Devuelve la distancia (km) a la vía activa más cercana, o null si no hay ninguna capa cargada y marcada
   function minTrackDistKm(lat, lon) {
-    if (!trackLoaded) return 0;
-    let d = Infinity;
-    if (el.showTrackAV.checked) d = Math.min(d, minDistInGrid(gridAV, lat, lon));
-    if (el.showTrackMD.checked) d = Math.min(d, minDistInGrid(gridMD, lat, lon));
-    if (el.showTrackCerc.checked) d = Math.min(d, minDistInGrid(gridCerc, lat, lon));
-    return d;
+    let d = Infinity, any = false;
+    if (el.showTrackAV.checked && TRACKS.av.loaded) { any = true; d = Math.min(d, minDistInGrid(TRACKS.av.grid, lat, lon)); }
+    if (el.showTrackMD.checked && TRACKS.md.loaded) { any = true; d = Math.min(d, minDistInGrid(TRACKS.md.grid, lat, lon)); }
+    return any ? d : null;
   }
 
   function syncTrackVisibility() {
     trackLayer.clearLayers();
-    if (!trackLoaded) return;
-    if (el.showTrackMD.checked && polyMD) polyMD.addTo(trackLayer);
-    if (el.showTrackCerc.checked && polyCerc) polyCerc.addTo(trackLayer);
-    if (el.showTrackAV.checked && polyAV) polyAV.addTo(trackLayer);
+    if (el.showTrackMD.checked && TRACKS.md.poly) TRACKS.md.poly.addTo(trackLayer);
+    if (el.showTrackAV.checked && TRACKS.av.poly) TRACKS.av.poly.addTo(trackLayer);   // la AV queda encima
   }
 
-  async function loadTrack() {
-    if (trackLoading || trackLoaded) return;
-    trackLoading = true;
-    el.btnReloadTrack.disabled = true;
-    setTrack("Cargando vías (GeoJSON)…");
+  async function loadTrackLayer(kind, force) {
+    const st = TRACKS[kind];
+    if (st.loaded || st.loading) return;
+    st.loading = true; st.err = ""; updateTrackStatus();
     try {
-      const urls = [
-        "https://raw.githubusercontent.com/juliopuli/trenes/main/vias.geojson",
-        "https://raw.githubusercontent.com/delayed/railways-geojson/master/spain.geojson"
-      ];
-      let geojson = null;
-      for (const u of urls) {
-        try {
-          const res = await fetch(u);
-          if (res.ok) { geojson = await res.json(); break; }
-        } catch (e) {}
+      let ways = null;
+      if (!force) {
+        const c = await idbGet(st.key);
+        if (c && c.ways && Date.now() - c.t < 30 * 864e5) ways = c.ways;
       }
-      if (!geojson || !geojson.features) throw new Error("Sin datos de vías");
-
-      const coordsAV = [], coordsMD = [], coordsCerc = [];
-      geojson.features.forEach(f => {
-        if (!f.geometry || !f.geometry.coordinates) return;
-        const geom = f.geometry, props = f.properties || {};
-        const text = JSON.stringify(props).toLowerCase();
-        const isAV = text.includes("highspeed") || text.includes("av") || text.includes("uic") || text.includes("ave") || props.gauge === 1435;
-        const isCerc = text.includes("cercan") || text.includes("rodalies");
-
-        const processCoords = coords => {
-          if (!coords.length || typeof coords[0][0] !== "number") return;
-          const latLon = coords.map(c => [c[1], c[0]]);
-          if (isAV) coordsAV.push(latLon);
-          else if (isCerc) { coordsCerc.push(latLon); coordsMD.push(latLon); }
-          else coordsMD.push(latLon);
-        };
-
-        if (geom.type === "LineString") processCoords(geom.coordinates);
-        else if (geom.type === "MultiLineString") geom.coordinates.forEach(processCoords);
-      });
-
-      addGeoJsonToGrid(gridAV, coordsAV.length ? coordsAV : coordsMD);
-      addGeoJsonToGrid(gridMD, coordsMD);
-      addGeoJsonToGrid(gridCerc, coordsCerc.length ? coordsCerc : coordsMD);
-
-      polyMD   = L.polyline(coordsMD, { renderer: trackCanvas, color: "#0284c7", weight: 2.2, opacity: 0.75, interactive: false });
-      polyCerc = L.polyline(coordsCerc.length ? coordsCerc : coordsMD, { renderer: trackCanvas, color: "#ea580c", weight: 2.5, opacity: 0.85, interactive: false });
-      polyAV   = L.polyline(coordsAV.length ? coordsAV : coordsMD, { renderer: trackCanvas, color: "#7b1fa2", weight: 3.2, opacity: 0.9, interactive: false });
-
-      trackLoaded = true;
+      if (!ways) {
+        const raw = await overpass(st.query);
+        ways = raw.map(w => decimate(w, st.minKm));
+        idbSet(st.key, { t: Date.now(), ways });
+      }
+      addWaysToGrid(st.grid, ways);
+      st.poly = L.polyline(ways, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
+      st.n = ways.length;
+      st.loaded = true;
       syncTrackVisibility();
-      setTrack(`Red cargada correctamente`);
       if (trains.length) { computeProximity(); render(); }
     } catch (e) {
-      setTrack("Error cargando vías. Pulsa Recargar.");
+      st.err = (e && e.name === "AbortError") ? "tiempo agotado" : (e.message || String(e));
     } finally {
-      trackLoading = false;
-      el.btnReloadTrack.disabled = false;
+      st.loading = false;
+      updateTrackStatus();
     }
   }
 
-  [el.showTrackAV, el.showTrackMD, el.showTrackCerc].forEach(chk => {
-    chk.addEventListener("change", () => {
-      syncTrackVisibility();
-      if (trains.length) { computeProximity(); render(); }
-    });
+  function onTrackToggle(kind, chk) {
+    if (chk.checked && !TRACKS[kind].loaded) loadTrackLayer(kind);
+    syncTrackVisibility();
+    updateTrackStatus();
+    if (trains.length) { computeProximity(); render(); }
+  }
+  el.showTrackAV.addEventListener("change", () => onTrackToggle("av", el.showTrackAV));
+  el.showTrackMD.addEventListener("change", () => onTrackToggle("md", el.showTrackMD));
+  el.btnReloadTrack.addEventListener("click", () => {
+    for (const kind of ["av", "md"]) {
+      const st = TRACKS[kind];
+      if (st.loading) continue;
+      st.loaded = false; st.poly = null; st.n = 0; st.grid.clear(); st.err = "";
+    }
+    syncTrackVisibility();
+    if (el.showTrackAV.checked) loadTrackLayer("av", true);
+    if (el.showTrackMD.checked) loadTrackLayer("md", true);
+    updateTrackStatus();
   });
-  el.btnReloadTrack.addEventListener("click", () => { trackLoaded = false; loadTrack(); });
 
   /* ---------- Estado de Trenes con Historial Vectorial ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
@@ -663,14 +692,14 @@
     const tR = Math.max(0, toNum(el.thRed.value) || 3);
     const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
     const tolKm = Math.max(0.1, toNum(el.thTrack.value) || 2.0);
-    const anyTrackChecked = el.showTrackAV.checked || el.showTrackMD.checked || el.showTrackCerc.checked;
 
     trains.forEach(t => {
       t.d = Infinity;
       t.nearTrain = null;
       t.trackDist = minTrackDistKm(t.lat, t.lon);
-      t.offTrack = (trackLoaded && anyTrackChecked) ? (t.trackDist > tolKm) : false;
-      // Si el tren está en inmediaciones de estación, lo eximimos de alertas (offTrack temporal o zona neutra)
+      // Solo se marca "fuera de vía" si hay alguna capa de vía cargada y activa
+      t.offTrack = (t.trackDist !== null) ? (t.trackDist > tolKm) : false;
+      // Si el tren está en inmediaciones de estación, lo eximimos de alertas
       t.inStation = isInStationArea(t.lat, t.lon, 2.5);
       t._info = trainInfo(t);
     });
@@ -695,7 +724,7 @@
             if (dotProduct < -0.00000001) opuestos = true;
           } else {
             const infoA = a._info, infoB = b._info;
-            if (infoA.orig === infoB.dest && infoA.dest === infoB.orig) opuestos = true;
+            if (infoA.orig && infoA.dest && infoA.orig === infoB.dest && infoA.dest === infoB.orig) opuestos = true;
           }
 
           if (!opuestos) {
@@ -877,8 +906,8 @@
   el.source.addEventListener("change", () => {
     el.customWrap.style.display = el.source.value === "custom" ? "block" : "none";
     const isCerc = el.source.value === "visor" || el.source.value === "gtfsrt";
-    el.showTrackCerc.checked = isCerc;
-    syncTrackVisibility();
+    // Cercanías circula por vía convencional: activarla (y cargarla si hace falta)
+    if (isCerc && !el.showTrackMD.checked) { el.showTrackMD.checked = true; onTrackToggle("md", el.showTrackMD); }
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     stationsTried = false;
     refresh();
@@ -901,7 +930,8 @@
   }
   el.proxy.addEventListener("change", () => { try { localStorage.setItem("proxyRenfe", el.proxy.value.trim()); } catch (e) {} });
 
-  loadTrack();
+  loadTrackLayer("av");
+  updateTrackStatus();
   refresh();
   schedule();
 })();
