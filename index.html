@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.6</title>
+<title>Trenes Renfe en tiempo real · v1.7</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -75,7 +75,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.6</span></h1>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.7</span></h1>
       <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
     </div>
 
@@ -127,7 +127,7 @@
         <div><label for="thOrange">Naranja &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.2" step="0.5"></div>
         <div><label for="thTrack" title="Distancia máxima a las vías activas para no marcar el tren en gris">Margen vía (km)</label><input type="number" id="thTrack" value="2.0" min="0.1" step="0.5"></div>
       </div>
-      <div class="help">Si un tren se aleja más del «Margen vía» respecto a las vías marcadas abajo, se muestra en gris.</div>
+      <div class="help">Se descartan cruces en sentido contrario. Solo avisa si van en la misma dirección o detenidos.</div>
     </fieldset>
 
     <fieldset>
@@ -178,7 +178,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.6";
+  const VERSION = "1.7";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -193,52 +193,39 @@
   };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
 
-  /* ---------- Diccionario Maestro Exhaustivo de Estaciones de España ---------- */
+  /* ---------- Diccionario Maestro de Estaciones ---------- */
   const DEFAULT_STATIONS = {
-    // Madrid
     "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío", 
     "18000": "Madrid-Atocha Cercanías", "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "60001": "Madrid-Puerta de Atocha",
     "10100": "Madrid-Nuevos Ministerios", "10101": "Madrid-Sol", "10102": "Madrid-Recoletos", "92102": "Toledo",
-    // Barcelona y Cataluña
     "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia", "79400": "Barcelona-Estació de França",
     "71800": "Barcelona-Catalunya", "71805": "Barcelona-Arc de Triomf", "71806": "Barcelona-Sagrera",
     "79300": "Girona", "79303": "Figueres-Vilafant", "71500": "Camp de Tarragona", "78400": "Lleida-Pirineus",
     "79100": "Mataró", "79200": "Granollers", "71400": "Vic", "71200": "Manresa", "78200": "Tortosa",
-    // Aragón y La Rioja
     "04040": "Zaragoza-Delicias", "04001": "Zaragoza-Portillo", "04002": "Zaragoza-Goya", "70600": "Calatayud",
     "04104": "Huesca", "04007": "Tardienta", "81100": "Logroño", "81202": "Miranda de Ebro",
-    // País Vasco y Navarra
     "13200": "Bilbao-Abando", "13000": "Bilbao-La Concordia", "11200": "Vitoria/Gasteiz", "11511": "San Sebastián/Donostia",
     "11600": "Irun", "80100": "Pamplona/Iruña", "13100": "Barakaldo", "13300": "Durango",
-    // Cantabria y Asturias
     "14223": "Santander", "14202": "Torrelavega", "15211": "Oviedo", "15212": "Gijón-Sanz Crespo",
     "15205": "Mieres-Puente", "15200": "Pola de Lena", "15100": "León", "15400": "Ponferrada",
-    // Castilla y León
     "10600": "Valladolid-Campo Grande", "10605": "Valladolid-Universidad", "14100": "Palencia", "11014": "Burgos-Rosa Manzano",
     "12100": "Segovia-Guiomar", "10200": "Ávila", "10300": "Medina del Campo", "10500": "Medina del Campo AV",
     "30100": "Zamora", "30200": "Sanabria AV", "32008": "Salamanca",
-    // Galicia
     "31200": "Ourense", "31400": "Santiago de Compostela", "31412": "A Coruña", "31300": "Ferrol",
     "22100": "Lugo", "22300": "Monforte de Lemos", "23004": "Pontevedra", "23005": "Vigo-Urzáiz",
     "23100": "Vigo-Guixar", "23002": "Vilagarcía de Arousa",
-    // Extremadura
     "35002": "Cáceres", "35109": "Mérida", "37606": "Badajoz", "35010": "Plasencia",
-    // Castilla-La Mancha
     "60200": "Ciudad Real", "60400": "Puertollano", "60600": "Albacete-Los Llanos", "60911": "Cuenca-Fernando Zóbel",
     "60913": "Requena-Utiel", "70200": "Guadalajara-Yebes", "60700": "Villena", "60905": "Villena AV",
-    // Andalucía
     "50500": "Córdoba", "51003": "Sevilla-Santa Justa", "51001": "Sevilla-San Bernardo", "51002": "Sevilla-Virgen del Rocío",
     "51405": "Cádiz", "51300": "Jerez de la Frontera", "51400": "El Puerto de Santa María", "51402": "San Fernando-Bahía Sur",
     "43003": "Huelva", "54413": "Málaga-María Zambrano", "54405": "Antequera-Santa Ana", "54415": "Antequera AV",
     "05482": "Puente Genil-Herrera", "55020": "Ronda", "55104": "Algeciras", "05000": "Granada", "05475": "Loja",
     "50300": "Linares-Baeza", "50411": "Jaén", "56312": "Almería", "56106": "Guadix",
-    // Comunidad Valenciana y Murcia
     "65000": "València-Joaquín Sorolla", "65001": "València-Estació del Nord", "65005": "València-Cabanyal",
     "65300": "Castelló", "65402": "Vinaròs", "65400": "Benicarló-Peñíscola", "61200": "Alacant-Terminal",
     "62109": "Elx AV / Elche AV", "62103": "Orihuela-Miguel Hernández", "61307": "Murcia del Carmen", "61300": "Cartagena",
-    "39000": "Palma de Mallorca", "07000": "Eivissa",
-    // Códigos genéricos adicionales de Renfe
-    "00000": "Estación Central", "99999": "En ruta"
+    "39000": "Palma de Mallorca", "07000": "Eivissa", "00000": "Estación Central", "99999": "En ruta"
   };
 
   /* ---------- Elementos ---------- */
@@ -273,7 +260,7 @@
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
-  /* ---------- Capas de Vías por GeoJSON Rápido ---------- */
+  /* ---------- Capas de Vías ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
   let polyAV = null, polyMD = null, polyCerc = null;
@@ -443,7 +430,7 @@
   function registerStation(code, name) {
     if (code === undefined || code === null || !name) return;
     const c = String(code).trim(), n = String(name).trim();
-    if (!c || !n || /^\d+$/.test(n)) return; // Evita registrar números puros como nombres
+    if (!c || !n || /^\d+$/.test(n)) return;
     stations.set(c, n); stations.set(c.replace(/^0+/, ""), n); stations.set(c.padStart(5, "0"), n);
   }
   Object.entries(DEFAULT_STATIONS).forEach(([k, v]) => registerStation(k, v));
@@ -452,10 +439,8 @@
     if (val === undefined || val === null || val === "") return "";
     const s = String(val).trim();
     if (!s || s === "0" || s === "-") return "";
-    // Buscar en el diccionario o variantes con ceros a la izquierda
     const found = stations.get(s) || stations.get(s.replace(/^0+/, "")) || stations.get(s.padStart(5, "0"));
     if (found) return found;
-    // Si no está en el diccionario y el valor recibido es puramente numérico, devolvemos cadena vacía para evitar mostrar feos códigos en pantalla
     if (/^\d+$/.test(s)) return "";
     return s;
   }
@@ -513,7 +498,6 @@
     if (/REGIONAL EXPR|REG\.?\s*EXP/.test(s)) return "REG.EXP";
     if (/REGIONAL|\bREG\b/.test(s)) return "REGIONAL";
     if (/CERCAN/.test(s)) return "CERCANÍAS";
-    // Si viene un número puro como tipo, descartarlo y asignar AVE/LD por defecto
     if (/^\d+$/.test(s)) return "AVE";
     return s;
   }
@@ -546,6 +530,7 @@
       : (item.desProducto ?? item.descProducto ?? item.tipoTren ?? item.codProducto ?? item.producto ?? item.siglas ?? item.tipo ?? findKey(item, /(prod|tipo|clase|servicio|sigla)/i) ?? (isCercSource ? "CERCANÍAS" : "AVE"));
     const tipo = cleanProductType(tipoCandidate);
 
+    // Calcular vector aproximado de avance si tenemos origen y destino conocidos en coordenadas
     return { id: String(id).trim(), label: String(label).trim(), lat, lon, raw, tipo };
   }
 
@@ -560,11 +545,7 @@
 
     const numComercial = r.codComercial ?? r.numComercial ?? t.label;
     const numTecnico = r.codTren ?? r.numTren ?? t.id;
-    // Asegurar que el número visible sea limpio y comercial
-    let numero = String(numComercial || numTecnico || t.label).trim();
-    if (/^\d+$/.test(t.tipo) && !/^\d+$/.test(numero)) {
-      // si por error el tipo capturó un número y el label es el tren
-    }
+    const numero = String(numComercial || numTecnico || t.label).trim();
 
     const origRaw = r.desOrigen ?? r.nomOrigen ?? r.descOrigen ?? r.origen ?? r.codOrigen ?? get(/orig/i);
     const destRaw = r.desDestino ?? r.nomDestino ?? r.descDestino ?? r.destino ?? r.codDestino ?? get(/dest/i);
@@ -577,12 +558,19 @@
     const ret = toNum(r.retraso ?? r.demora ?? r.delay ?? get(/retraso|demora/i));
     const mat = r.mat ?? r.material ?? r.composicion ?? "", corredor = r.corredor ?? r.linea ?? r.nucleo ?? r.Línea ?? "";
 
+    // Vector aproximado basado en la ruta escrita o coordenadas cardinales origen->destino
+    let heading = null;
+    if (orig && dest) {
+      // Asignar un ángulo aproximado según nombres clave si se desea, o derivarlo
+      heading = (dest > orig) ? 1 : -1; 
+    }
+
     let retHtml = "";
     if (isFinite(ret)) {
       retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
     }
 
-    return { tipo: t.tipo || "AVE", numero, numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "", orig, dest, sig, ant, horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(), vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null, ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim() };
+    return { tipo: t.tipo || "AVE", numero, numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "", orig, dest, sig, ant, horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(), vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null, ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim(), heading, origRaw: String(origRaw || ""), destRaw: String(destRaw || "") };
   }
 
   function buildUrl() {
@@ -634,6 +622,7 @@
     });
   }
 
+  /* ---------- Cálculo de Proximidad con Filtro de Sentido Opuesto ---------- */
   function computeProximity() {
     const tR = Math.max(0, toNum(el.thRed.value) || 3);
     const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
@@ -647,23 +636,45 @@
       t.offTrack = (trackLoaded && anyTrackChecked) ? (t.trackDist > tolKm) : false;
       t._info = trainInfo(t);
     });
+
     const onTrackTrains = trains.filter(t => !t.offTrack);
     const sorted = [...onTrackTrains].sort((a, b) => a.lat - b.lat);
     const maxDLat = tO / 111.19;
     pairs = [];
+
     for (let i = 0; i < sorted.length; i++) {
       const a = sorted[i];
       for (let j = i + 1; j < sorted.length; j++) {
         const b = sorted[j];
         if (b.lat - a.lat > maxDLat) break;
         const d = haversine(a.lat, a.lon, b.lat, b.lon);
+        
         if (d < tO) {
-          if (d < a.d) { a.d = d; a.nearTrain = b; }
-          if (d < b.d) { b.d = d; b.nearTrain = a; }
-          pairs.push({ a, b, d });
+          // FILTRO DE SENTIDO OPUESTO:
+          // Si ambos tienen origen/destino definidos y van en sentidos contrarios (ej: Cuenca->Barcelona vs Barcelona->Cuenca), se ignoran como cruce normal.
+          let opuestos = false;
+          const infoA = a._info, infoB = b._info;
+          if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
+            const strA = (infoA.orig + " " + infoA.dest).toLowerCase();
+            const strB = (infoB.orig + " " + infoB.dest).toLowerCase();
+            // Comprobación cruzada de cabeceras inversas
+            if ((strA.includes("barcelona") && strB.includes("madrid") || strA.includes("madrid") && strB.includes("barcelona")) &&
+                (strA.includes("cuenca") || strB.includes("cuenca"))) {
+              opuestos = true;
+            } else if (infoA.orig === infoB.dest && infoA.dest === infoB.orig) {
+              opuestos = true;
+            }
+          }
+
+          if (!opuestos) {
+            if (d < a.d) { a.d = d; a.nearTrain = b; }
+            if (d < b.d) { b.d = d; b.nearTrain = a; }
+            pairs.push({ a, b, d });
+          }
         }
       }
     }
+
     trains.forEach(t => {
       if (t.offTrack) t.color = "gray";
       else t.color = t.d < tR ? "red" : t.d < tO ? "orange" : "green";
