@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.18</title>
+<title>Trenes Renfe en tiempo real · v1.19</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -246,7 +246,7 @@
     <div>
       <div class="side-top">
         <button class="help-btn" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
-        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.18</span></h1>
+        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.19</span></h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
@@ -464,7 +464,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.18";
+  const VERSION = "1.19";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -677,11 +677,17 @@
     attribution: "&copy; OpenRailwayMap"
   }).addTo(map);
 
-  const canvas = L.canvas({ padding: 0.5 });
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
+
+  // Pane exclusivo superior para las líneas de alerta sobre la vía (por encima de todas las vías y teselas, y justo debajo de los iconos de los trenes)
+  const alertPane = map.createPane("alertTrackPane");
+  alertPane.style.zIndex = 460;
+  alertPane.style.pointerEvents = "none";
+  const alertCanvas = L.canvas({ pane: "alertTrackPane", padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
-  const GRID_SIZE = 0.08; // ~8 km por celda para indexar sub-segmentos de vía con alta precisión
+
+  const GRID_SIZE = 0.08;
 
   const TRACKS = {
     av: {
@@ -749,7 +755,6 @@
     }
   }
 
-  // Proyecta un punto (lat, lon) sobre el segmento más cercano de una capa de vía
   function snapToTrackLayer(st, lat, lon) {
     if (!st || !st.loaded) return null;
     const r0 = Math.floor(lat / GRID_SIZE), c0 = Math.floor(lon / GRID_SIZE);
@@ -788,9 +793,7 @@
     return best;
   }
 
-  // Construye un grafo local con todos los segmentos de vía en el entorno de los dos trenes y halla el camino exacto sobre el raíl
   function computeLocalTrackRoute(a, b, maxAllowedKm) {
-    // Elegir las capas compatibles según el tipo de tren
     const preferAV = (a.trackGroup === "AV" || b.trackGroup === "AV");
     const layersToTry = preferAV ? [TRACKS.av, TRACKS.md] : [TRACKS.md, TRACKS.av];
 
@@ -798,12 +801,11 @@
       if (!st.loaded) continue;
       const snapA = snapToTrackLayer(st, a.lat, a.lon);
       const snapB = snapToTrackLayer(st, b.lat, b.lon);
-      // Exigir que ambos trenes estén realmente sobre esta vía (a menos de 1.2 km del raíl)
       if (!snapA || !snapB || snapA.distToTrack > 1.2 || snapB.distToTrack > 1.2) continue;
 
       const sA = snapA.seg, sB = snapB.seg;
 
-      // Caso 1: Ambos trenes están exactamente en el mismo sub-segmento
+      // Caso 1: Mismo sub-segmento
       if (sA.id === sB.id) {
         const d = haversine(snapA.snapLat, snapA.snapLon, snapB.snapLat, snapB.snapLon);
         if (d <= maxAllowedKm) {
@@ -815,7 +817,7 @@
         }
       }
 
-      // Caso 2: Ambos trenes están en el mismo `way` de OpenStreetMap -> recorrer todos sus vértices intermedios directamente
+      // Caso 2: Mismo way de OSM -> recorrer vértices intermedios
       if (sA.wayIdx === sB.wayIdx) {
         const wLine = st.ways[sA.wayIdx];
         const posA = sA.segIdx + snapA.t;
@@ -836,7 +838,7 @@
         }
       }
 
-      // Caso 3: Recopilar todos los sub-segmentos de vía en una caja alrededor de A y B (+0.08 grados ~ 8 km de margen)
+      // Caso 3: Grafo fino local sobre los sub-segmentos de la zona
       const minLat = Math.min(snapA.snapLat, snapB.snapLat) - 0.08;
       const maxLat = Math.max(snapA.snapLat, snapB.snapLat) + 0.08;
       const minLon = Math.min(snapA.snapLon, snapB.snapLon) - 0.10;
@@ -863,10 +865,9 @@
 
       if (!localSegs.length) continue;
 
-      // Construir grafo local fino: fusionar vértices a menos de 45 metros (une tramos consecutivos y vías paralelas de doble vía)
-      const nodes = []; // [{lat, lon, adj: [{to, w}]}]
+      const nodes = [];
       const cellMap = new Map();
-      const CELL = 0.001; // ~100m
+      const CELL = 0.001;
 
       function getNode(lat, lon) {
         const gr = Math.floor(lat / CELL), gc = Math.floor(lon / CELL);
@@ -919,7 +920,6 @@
 
       if (startNode === -1 || targetNode === -1) continue;
 
-      // Ejecutar Dijkstra desde startNode hasta targetNode sobre los sub-segmentos reales
       const dist = new Float64Array(nodes.length).fill(Infinity);
       const prev = new Int32Array(nodes.length).fill(-1);
       dist[startNode] = 0;
@@ -928,7 +928,6 @@
       let found = false;
 
       while (pq.length) {
-        // Extraer el mínimo
         let minIdx = 0;
         for (let k = 1; k < pq.length; k++) {
           if (pq[k].d < pq[minIdx].d) minIdx = k;
@@ -1366,7 +1365,6 @@
     }
 
     t.trackGroup = group;
-    // Si el tren está a menos de 800m de su vía, lo imantamos visualmente sobre el raíl
     if (bestSnap && bestSnap.distToTrack <= 0.8) {
       t.drawLat = bestSnap.snapLat;
       t.drawLon = bestSnap.snapLon;
@@ -1534,7 +1532,6 @@
         // 1. FILTRO DE TIPO DE VÍA
         if (!isSameTrackGroup(a, b)) continue;
 
-        // Filtro rápido Haversine (la distancia por vía nunca es menor que la línea recta)
         const straightD = haversine(a.lat, a.lon, b.lat, b.lon);
         if (straightD >= tO) continue;
 
@@ -1548,11 +1545,10 @@
 
         if (anyLayerLoaded) {
           const trackRoute = computeLocalTrackRoute(a, b, tO);
-          if (!trackRoute || trackRoute.distKm >= tO) continue; // Si no están conectados por la misma vía dentro del umbral, se descarta
+          if (!trackRoute || trackRoute.distKm >= tO) continue;
           d = trackRoute.distKm;
           pathCoords = trackRoute.pathCoords;
         } else {
-          // Solo mientras termina la carga inicial de las vías
           pathCoords = [[a.drawLat, a.drawLon], [b.drawLat, b.drawLon]];
         }
 
@@ -1717,15 +1713,35 @@
     });
     for (const [id, m] of markers) if (!alive.has(id)) { map.removeLayer(m); markers.delete(id); }
 
-    // Dibujar unión siguiendo exactamente los vértices de la vía entre ambos trenes
+    // Dibujar unión MUY GRUESA Y DESTACADA siguiendo exactamente los vértices de la vía entre ambos trenes
     linesLayer.clearLayers();
     if (el.showLines.checked) {
       pairs.forEach(p => {
         if (!p.a.visible || !p.b.visible || !p.pathCoords || p.pathCoords.length < 2) return;
-        const col = p.severity === "red" ? COLORS.red : COLORS.orange;
-        // Halo blanco para que resalte sobre la línea morada/azul de la vía
-        L.polyline(p.pathCoords, { renderer: canvas, color: "#ffffff", weight: p.severity === "red" ? 9 : 7, opacity: 0.9, interactive: false }).addTo(linesLayer);
-        L.polyline(p.pathCoords, { renderer: canvas, color: col, weight: p.severity === "red" ? 5.5 : 4.5, opacity: 1.0, interactive: false }).addTo(linesLayer);
+        const isRed = p.severity === "red";
+        const col = isRed ? "#ff1744" : "#ff9100";
+        const coreCol = isRed ? "#ffebee" : "#fff8e1";
+
+        // 1. Halo exterior blanco muy ancho para separar el tramo de cualquier fondo o vía
+        L.polyline(p.pathCoords, {
+          pane: "alertTrackPane", renderer: alertCanvas,
+          color: "#ffffff", weight: isRed ? 16 : 14, opacity: 0.95,
+          lineCap: "round", lineJoin: "round", interactive: false
+        }).addTo(linesLayer);
+
+        // 2. Trazo principal grueso en rojo intenso o naranja vivo
+        L.polyline(p.pathCoords, {
+          pane: "alertTrackPane", renderer: alertCanvas,
+          color: col, weight: isRed ? 10 : 8.5, opacity: 1.0,
+          lineCap: "round", lineJoin: "round", interactive: false
+        }).addTo(linesLayer);
+
+        // 3. Núcleo central discontinuo luminoso para resaltar el corredor entre ambos trenes
+        L.polyline(p.pathCoords, {
+          pane: "alertTrackPane", renderer: alertCanvas,
+          color: coreCol, weight: 3, opacity: 0.95, dashArray: "6, 8",
+          lineCap: "round", lineJoin: "round", interactive: false
+        }).addTo(linesLayer);
       });
     }
 
