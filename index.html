@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.11</title>
+<title>Trenes Renfe en tiempo real · v1.12</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -23,7 +23,7 @@
   .sub{font-size:12px;color:var(--muted)}
   fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
   legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
-  label{display:block;font-size:13px;margin:6px 0 3px}
+  label{display:block;font-size:12px;margin:6px 0 3px}
   input[type=text],input[type=number],select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px}
   .row{display:flex;gap:8px}
   .row>*{flex:1}
@@ -37,30 +37,34 @@
   #status{font-size:12px;color:var(--muted);line-height:1.4}
   #status.err{color:var(--red)}
   #pairs{max-height:240px;overflow-y:auto;font-size:12px}
-  .pair{display:flex;justify-content:space-between;gap:6px;padding:5px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+  .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px solid var(--line);cursor:pointer}
   .pair:hover{background:var(--bg)}
-  .pair .d{font-weight:600;font-variant-numeric:tabular-nums}
+  .pair .d{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
   .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
   .tm{background:none;border:0}
   .tm .b{width:28px;height:28px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.45);transition:transform .15s}
   .tm:hover .b{transform:scale(1.25)}
-  .tm.red .b{background:#e53935;width:32px;height:32px;margin:-2px;animation:pulso 1.4s infinite}
+  .tm.red .b{background:#e53935;width:34px;height:34px;margin:-3px;animation:pulsoRojo 0.9s infinite}
   .tm.orange .b{background:#fb8c00;width:30px;height:30px;margin:-1px}
   .tm.green .b{background:#43a047}
   .tm.gray .b{background:var(--gray);opacity:0.88}
   .tm svg{width:17px;height:17px;fill:#fff}
-  @keyframes pulso{0%{box-shadow:0 0 0 0 rgba(229,57,53,.65)}70%{box-shadow:0 0 0 12px rgba(229,57,53,0)}100%{box-shadow:0 0 0 0 rgba(229,57,53,0)}}
+  @keyframes pulsoRojo{
+    0%{box-shadow:0 0 0 0 rgba(229,57,53,.9);transform:scale(1)}
+    50%{box-shadow:0 0 0 14px rgba(229,57,53,0);transform:scale(1.12)}
+    100%{box-shadow:0 0 0 0 rgba(229,57,53,0);transform:scale(1)}
+  }
 
-  .trtip{font-size:12px;line-height:1.45;padding:8px 10px;min-width:210px}
+  .trtip{font-size:12px;line-height:1.45;padding:8px 10px;min-width:220px}
   .t-head{display:flex;align-items:center;gap:6px;margin-bottom:4px}
   .t-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;color:#fff;background:#6d28d9;letter-spacing:.02em}
   .t-num{font-size:13px;font-weight:700}
   .t-route{font-weight:600;margin:3px 0;padding:3px 0;border-top:1px solid rgba(128,128,128,.2);border-bottom:1px solid rgba(128,128,128,.2)}
   .t-meta{font-size:11.5px;color:#555}
-  .pop-wrap{font-size:12.5px;line-height:1.45;min-width:240px;color:#1b1f24}
+  .pop-wrap{font-size:12.5px;line-height:1.45;min-width:250px;color:#1b1f24}
   .pop-table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}
   .pop-table td{padding:3px 4px;border-bottom:1px solid #eee;vertical-align:top}
-  .pop-table td.k{color:#667085;font-weight:500;width:42%}
+  .pop-table td.k{color:#667085;font-weight:500;width:44%}
   .pop-table td.v{font-weight:600;color:#1b1f24}
   .pop-raw{margin-top:8px;font-size:11px;color:#667085}
   .pop-raw summary{cursor:pointer;user-select:none}
@@ -75,8 +79,8 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.11</span></h1>
-      <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.12</span></h1>
+      <div class="sub">Mapa de España · alerta por proximidad y velocidad</div>
     </div>
 
     <fieldset>
@@ -97,13 +101,13 @@
       <input type="text" id="proxy" placeholder="https://mi-proxy/?url={url}">
       <div class="row" style="margin-top:8px">
         <div>
-          <label for="interval" style="margin-top:0">Actualizar cada</label>
+          <label for="interval" style="margin-top:0">Actualizar cada (para medir vel.)</label>
           <select id="interval">
+            <option value="3">3 s</option>
             <option value="5">5 s</option>
-            <option value="10">10 s</option>
+            <option value="10" selected>10 s (recomendado)</option>
             <option value="15">15 s</option>
-            <option value="30" selected>30 s</option>
-            <option value="60">60 s</option>
+            <option value="30">30 s</option>
           </select>
         </div>
       </div>
@@ -121,37 +125,39 @@
     </fieldset>
 
     <fieldset>
-      <legend>Umbrales y margen de vía</legend>
+      <legend>Reglas de alerta (mismo sentido)</legend>
       <div class="row">
-        <div><label for="thRed">Rojo &lt; (km)</label><input type="number" id="thRed" value="3" min="0.1" step="0.5"></div>
-        <div><label for="thOrange">Naranja &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.2" step="0.5"></div>
-        <div><label for="thTrack" title="Distancia máxima a las vías activas para no marcar el tren en gris">Margen vía (km)</label><input type="number" id="thTrack" value="2.0" min="0.1" step="0.5"></div>
+        <div><label for="thOrange" title="Si dos trenes en el mismo sentido están a menos de esta distancia pasan a naranja">Cerca &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.5" step="0.5"></div>
+        <div><label for="thSpeed" title="Si están cerca y además su velocidad cotejada en 2 medidas supera este valor, pasa a rojo parpadeante">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
+        <div><label for="thTrack" title="Distancia máxima a las vías activas para no marcar el tren en gris">Margen vía (km)</label><input type="number" id="thTrack" value="2.5" min="0.2" step="0.5"></div>
       </div>
-      <div class="help">Se omiten alertas por proximidad en las inmediaciones de estaciones y cruces en sentido opuesto.</div>
+      <div class="help">
+        • <b>Naranja:</b> trenes en el mismo sentido a &lt; 5 km (parados o lentos).<br>
+        • <b>Rojo parpadeante:</b> a &lt; 5 km en el mismo sentido y con velocidad &gt; 100 km/h cotejada con 2 medidas de avance GPS.
+      </div>
     </fieldset>
 
     <fieldset>
       <legend>Capas de vías</legend>
       <label class="chk"><input type="checkbox" id="showTrackAV" checked>Vía Alta Velocidad<span class="n" style="color:#7b1fa2;font-weight:700">▬▬</span></label>
-      <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía convencional (MD / Cercanías)<span class="n" style="color:#0284c7;font-weight:700">▬▬</span></label>
+      <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía Media Distancia / Conv.<span class="n" style="color:#0066cc;font-weight:700">▬▬</span></label>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px">
         <div class="help" id="trackStatus" style="margin:0">Cargando trazados…</div>
         <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías de OpenStreetMap">Recargar</button>
       </div>
-      <div class="help">Muestra al instante el trazado base y descarga en segundo plano la geometría detallada de OpenStreetMap (guardada en caché).</div>
     </fieldset>
 
     <fieldset>
       <legend>Tipo de tren</legend>
       <div id="types"><div class="sub">Aparecerán al cargar los datos.</div></div>
-      <div class="help">Todos marcados por defecto. Desmarca los que no quieras ver: la proximidad se calcula solo entre los tipos marcados.</div>
+      <div class="help">Todos marcados por defecto. La proximidad se calcula entre los tipos marcados.</div>
     </fieldset>
 
     <fieldset>
       <legend>Mostrar</legend>
-      <label class="chk"><input type="checkbox" id="showRed" checked><span class="dot" style="background:var(--red)"></span>Peligro (rojo)<span class="n" id="nRed">0</span></label>
-      <label class="chk"><input type="checkbox" id="showOrange" checked><span class="dot" style="background:var(--orange)"></span>Cerca (naranja)<span class="n" id="nOrange">0</span></label>
-      <label class="chk"><input type="checkbox" id="showGreen" checked><span class="dot" style="background:var(--green)"></span>Sin cercanos (verde)<span class="n" id="nGreen">0</span></label>
+      <label class="chk"><input type="checkbox" id="showRed" checked><span class="dot" style="background:var(--red)"></span>Peligro &gt;100 km/h (rojo)<span class="n" id="nRed">0</span></label>
+      <label class="chk"><input type="checkbox" id="showOrange" checked><span class="dot" style="background:var(--orange)"></span>Cerca &lt;5 km (naranja)<span class="n" id="nOrange">0</span></label>
+      <label class="chk"><input type="checkbox" id="showGreen" checked><span class="dot" style="background:var(--green)"></span>Normal (verde)<span class="n" id="nGreen">0</span></label>
       <label class="chk"><input type="checkbox" id="showGray" checked><span class="dot" style="background:var(--gray)"></span>Fuera de vía activa (gris)<span class="n" id="nGray">0</span></label>
       <label class="chk"><input type="checkbox" id="showLines" checked>Unir con línea los trenes cercanos</label>
       <label for="search">Buscar tren / origen / destino</label>
@@ -160,14 +166,9 @@
     </fieldset>
 
     <fieldset>
-      <legend>Trenes cercanos (más próximos primero)</legend>
+      <legend>Trenes cercanos en el mismo sentido</legend>
       <div id="pairs"><div class="sub">Sin datos todavía.</div></div>
     </fieldset>
-
-    <div class="help">
-      Distancia calculada en línea recta (fórmula de Haversine) entre posiciones GPS.
-      Dos trenes parados en la misma estación o en vías paralelas también cuentan como cercanos.
-    </div>
   </aside>
   <main id="map"></main>
 </div>
@@ -178,7 +179,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.11";
+  const VERSION = "1.12";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -195,88 +196,79 @@
 
   /* ---------- Coordenadas de Estaciones Principales (para filtro de inmediaciones) ---------- */
   const STATION_COORDS = [
-    [40.4065, -3.6896], // Madrid-Puerta de Atocha
-    [40.4722, -3.6822], // Madrid-Chamartín
-    [41.3791, 2.1401],  // Barcelona-Sants
-    [39.4601, -0.3816], // València-Joaquín Sorolla
-    [37.3919, -5.9753], // Sevilla-Santa Justa
-    [36.7115, -4.4316], // Málaga-María Zambrano
-    [41.6587, -0.9114], // Zaragoza-Delicias
-    [43.2614, -2.9277], // Bilbao-Abando
-    [41.6416, -4.7289], // Valladolid-Campo Grande
-    [37.8884, -4.7892], // Córdoba
-    [38.3446, -0.4951], // Alacant-Terminal
-    [42.2351, -8.7118], // Vigo-Urzáiz
-    [37.1841, -3.6091], // Granada
-    [40.0780, -2.1380], // Cuenca-Fernando Zóbel
-    [38.9950, -1.8550], // Albacete-Los Llanos
-    [39.9800, -0.0500], // Castelló
-    [41.1189, 1.2445],  // Camp de Tarragona
-    [42.3411, -7.8647], // Ourense
-    [42.8705, -8.5446], // Santiago
-    [42.5960, -5.5786], // León
-    [43.3662, -5.8536], // Oviedo
-    [37.9746, -1.1301]  // Murcia del Carmen
+    [40.4065, -3.6896], [40.4722, -3.6822], [41.3791, 2.1401],  [39.4601, -0.3816],
+    [37.3919, -5.9753], [36.7115, -4.4316], [41.6587, -0.9114], [43.2614, -2.9277],
+    [41.6416, -4.7289], [37.8884, -4.7892], [38.3446, -0.4951], [42.2351, -8.7118],
+    [37.1841, -3.6091], [40.0780, -2.1380], [38.9950, -1.8550], [39.9800, -0.0500],
+    [41.1189, 1.2445],  [42.3411, -7.8647], [42.8705, -8.5446], [42.5960, -5.5786],
+    [43.3662, -5.8536], [37.9746, -1.1301]
   ];
 
-  function isInStationArea(lat, lon, thresholdKm = 2.5) {
+  function isInStationArea(lat, lon, thresholdKm = 2.2) {
     for (const [stLat, stLon] of STATION_COORDS) {
       if (haversine(lat, lon, stLat, stLon) <= thresholdKm) return true;
     }
     return false;
   }
 
-  /* ---------- Trazado Base Integrado Instantáneo (Respaldo inmediato mientras carga OSM) ---------- */
+  /* ---------- Trazados Base Detallados (AV y Media Distancia / Convencional) ---------- */
   const FALLBACK_AV_WAYS = [
-    // Madrid - Zaragoza - Lleida - Tarragona - Barcelona - Girona - Figueres
     [[40.4065,-3.6896],[40.5567,-3.1670],[40.9250,-2.4500],[41.3410,-1.6440],[41.6587,-0.9114],[41.5200,0.0500],[41.6208,0.6327],[41.3900,1.0200],[41.1992,1.2690],[41.3791,2.1401],[41.9793,2.8169],[42.2654,2.9436]],
-    // Madrid - Ciudad Real - Puertollano - Córdoba - Sevilla
     [[40.4065,-3.6896],[39.8900,-3.9200],[38.9830,-3.9160],[38.6850,-4.1070],[38.1500,-4.4500],[37.8884,-4.7892],[37.6500,-5.4000],[37.3919,-5.9753]],
-    // Córdoba - Puente Genil - Antequera - Málaga
     [[37.8884,-4.7892],[37.3980,-4.7060],[37.0672,-4.6869],[36.7115,-4.4316]],
-    // Antequera - Loja - Granada
     [[37.0672,-4.6869],[37.0180,-4.5570],[37.1670,-4.1480],[37.1841,-3.6091]],
-    // Madrid - Cuenca - Requena - Valencia
     [[40.4065,-3.6896],[40.0300,-3.0100],[40.0442,-2.1380],[39.5890,-1.1740],[39.4601,-0.3816]],
-    // Cuenca - Albacete - Villena - Alicante / Elche - Orihuela - Murcia
     [[40.0442,-2.1380],[39.4200,-1.9600],[38.9997,-1.8490],[38.6064,-0.9234],[38.3446,-0.4951]],
     [[38.6064,-0.9234],[38.2480,-0.7420],[38.0830,-0.9460],[37.9746,-1.1301]],
-    // Madrid - Segovia - Valladolid - Palencia - León - Oviedo
     [[40.4722,-3.6822],[40.8884,-4.0958],[41.3200,-4.4800],[41.6416,-4.7289],[42.0110,-4.5390],[42.5960,-5.5786],[43.1600,-5.8280],[43.3662,-5.8536]],
-    // Palencia - Burgos
     [[42.0110,-4.5390],[42.3712,-3.6657]],
-    // Olmedo - Zamora - Sanabria - Ourense - Santiago - A Coruña / Vigo
     [[41.2850,-4.6850],[41.5126,-5.7369],[42.0289,-6.6214],[42.3411,-7.8647],[42.8705,-8.5446],[43.3526,-8.4098]],
     [[42.8705,-8.5446],[42.5960,-8.7610],[42.4227,-8.6345],[42.2351,-8.7118]],
-    // Plasencia - Cáceres - Mérida - Badajoz
     [[39.9678,-6.1030],[39.4650,-6.3840],[38.9218,-6.3426],[38.8878,-6.9822]],
-    // Madrid - Toledo
     [[40.1500,-3.8200],[39.8624,-4.0113]]
   ];
 
   const FALLBACK_MD_WAYS = [
-    // Valencia - Castellón - Tarragona
-    [[39.4601,-0.3816],[39.9870,-0.0528],[40.4500,0.4400],[40.8000,0.5200],[41.1120,1.2550]],
-    // Sevilla - Jerez - Cádiz
-    [[37.3919,-5.9753],[37.1700,-5.9200],[36.6796,-6.1268],[36.5290,-6.2869]],
-    // Sevilla - Huelva
-    [[37.3919,-5.9753],[37.3300,-6.5400],[37.2518,-6.9447]],
-    // Córdoba - Linares - Alcázar - Madrid
-    [[37.8884,-4.7892],[38.0694,-3.5931],[38.7610,-3.3850],[39.3880,-3.2180],[40.0320,-3.6060],[40.4065,-3.6896]],
-    // Burgos - Miranda - Vitoria - San Sebastián - Irún / Bilbao
-    [[42.3712,-3.6657],[42.6844,-2.9480],[42.8415,-2.6716],[43.0400,-2.2000],[43.3177,-1.9765],[43.3396,-1.7890]],
-    [[42.6844,-2.9480],[43.1400,-2.9600],[43.2614,-2.9277]],
-    // Zaragoza - Pamplona / Logroño - Miranda
-    [[41.6587,-0.9114],[42.0610,-1.6040],[42.8025,-1.6622],[42.8415,-2.6716]],
-    [[42.0610,-1.6040],[42.4567,-2.4439],[42.6844,-2.9480]],
-    // Palencia - Santander
-    [[42.0110,-4.5390],[42.8000,-4.2600],[43.3389,-4.0531],[43.4586,-3.8115]],
-    // León - Ponferrada - Monforte - Ourense / Lugo
-    [[42.5960,-5.5786],[42.6100,-6.0500],[42.5458,-6.6025],[42.4100,-7.2000],[42.5269,-7.5028],[42.3411,-7.8647]],
-    [[42.5269,-7.5028],[43.0145,-7.5516],[43.3526,-8.4098]],
-    // Medina - Salamanca / Ávila - Madrid
-    [[41.3186,-4.9089],[40.9765,-5.6496]],
-    [[41.3186,-4.9089],[40.6596,-4.6869],[40.4722,-3.6822]]
+    // Corredor Mediterráneo completo (Barcelona - Tarragona - Castellón - Valencia - Xàtiva - Alicante - Murcia - Cartagena)
+    [[41.3791,2.1401],[41.2240,1.7250],[41.1120,1.2550],[40.8120,0.5210],[40.4700,0.4730],[39.9870,-0.0528],[39.6800,-0.2700],[39.4601,-0.3816],[39.1500,-0.4350],[38.9900,-0.5200],[38.8700,-0.7800],[38.6100,-0.8700],[38.3446,-0.4951],[38.2650,-0.6980],[38.0830,-0.9460],[37.9746,-1.1301],[37.6050,-0.9860]],
+    // Madrid - Aranjuez - Alcázar - Albacete - Almansa - Xàtiva / Alicante
+    [[40.4065,-3.6896],[40.0320,-3.6060],[39.6100,-3.5000],[39.3880,-3.2180],[39.2000,-2.6500],[38.9997,-1.8490],[38.8680,-1.0970],[38.8700,-0.7800]],
+    // Alcázar - Manzanares - Valdepeñas - Linares-Baeza - Espeluy - Córdoba - Sevilla - Jerez - Cádiz
+    [[39.3880,-3.2180],[38.9950,-3.3700],[38.7610,-3.3850],[38.3800,-3.5050],[38.0694,-3.5931],[38.0180,-3.8600],[38.0300,-4.0500],[37.8884,-4.7892],[37.7500,-5.0500],[37.6180,-5.2800],[37.3919,-5.9753],[37.1750,-5.9220],[36.9150,-6.0700],[36.6796,-6.1268],[36.5930,-6.2250],[36.5290,-6.2869]],
+    // Espeluy - Jaén / Linares - Guadix - Almería / Granada
+    [[38.0180,-3.8600],[37.7780,-3.7890]],
+    [[38.0694,-3.5931],[37.6500,-3.2600],[37.3100,-3.1350],[37.1300,-2.6500],[36.8380,-2.4590]],
+    [[37.3100,-3.1350],[37.3500,-3.4800],[37.1841,-3.6091]],
+    // Andalucía Occidental y Bobadilla (Sevilla - Huelva / Sevilla - Utrera - Osuna - Bobadilla - Ronda - Algeciras / Málaga)
+    [[37.3919,-5.9753],[37.3800,-6.2500],[37.3300,-6.5400],[37.2518,-6.9447]],
+    [[37.1750,-5.9220],[37.2300,-5.1000],[37.0420,-4.7250],[36.7420,-5.1660],[36.4500,-5.3600],[36.1270,-5.4470]],
+    [[37.0420,-4.7250],[36.9000,-4.6500],[36.7115,-4.4316]],
+    // Madrid - Talavera - Navalmoral - Plasencia - Cáceres - Mérida - Badajoz - Zafra - Sevilla
+    [[40.4065,-3.6896],[40.1300,-4.2600],[39.9650,-4.8300],[39.8950,-5.5400],[39.9678,-6.1030],[39.4650,-6.3840],[38.9218,-6.3426],[38.8878,-6.9822]],
+    [[39.4650,-6.3840],[39.5000,-7.0500]],
+    [[38.9218,-6.3426],[38.4250,-6.4150],[37.9200,-6.1500],[37.3919,-5.9753]],
+    [[38.9218,-6.3426],[38.8650,-5.8700],[38.6850,-4.1070]],
+    // Madrid - Villalba - Ávila - Medina del Campo - Valladolid - Venta de Baños - Burgos - Miranda - Vitoria - San Sebastián - Irún
+    [[40.4722,-3.6822],[40.6350,-4.0100],[40.6596,-4.6869],[41.0500,-4.7800],[41.3186,-4.9089],[41.6416,-4.7289],[41.9200,-4.4500],[42.1200,-4.1000],[42.3712,-3.6657],[42.5400,-3.3100],[42.6844,-2.9480],[42.8415,-2.6716],[42.8900,-2.3000],[43.0400,-2.2000],[43.1350,-2.0750],[43.3177,-1.9765],[43.3396,-1.7890]],
+    // Medina - Salamanca - Fuentes de Oñoro / Medina - Zamora
+    [[41.3186,-4.9089],[40.9765,-5.6496],[40.6050,-6.8150]],
+    [[41.3186,-4.9089],[41.5126,-5.7369]],
+    // Palencia - Santander / Palencia - León - Asturias / León - Ponferrada - Monforte - Ourense - Vigo / Lugo - A Coruña
+    [[42.0110,-4.5390],[42.4500,-4.3800],[42.8000,-4.2600],[43.0000,-4.1300],[43.3389,-4.0531],[43.4586,-3.8115]],
+    [[42.0110,-4.5390],[42.3200,-4.9800],[42.5960,-5.5786],[42.9800,-5.6500],[43.1600,-5.8280],[43.3662,-5.8536],[43.5390,-5.6760]],
+    [[42.5960,-5.5786],[42.4550,-6.0550],[42.5458,-6.6025],[42.4100,-7.0100],[42.5269,-7.5028],[42.3411,-7.8647],[42.2600,-8.1500],[42.1600,-8.5200],[42.2351,-8.7118]],
+    [[42.5269,-7.5028],[42.7900,-7.4200],[43.0145,-7.5516],[43.1800,-7.8900],[43.2800,-8.2200],[43.3526,-8.4098],[43.4850,-8.2250]],
+    // Eje del Ebro y Norte (Miranda - Bilbao / Miranda - Logroño - Castejón - Zaragoza - Caspe - Mora - Reus - Tarragona / Lleida - Manresa - Barcelona)
+    [[42.6844,-2.9480],[43.0100,-2.9800],[43.1400,-2.9600],[43.2614,-2.9277]],
+    [[42.6844,-2.9480],[42.4567,-2.4439],[42.2200,-1.9800],[42.0610,-1.6040],[41.9100,-1.3500],[41.6587,-0.9114],[41.2700,-0.4300],[41.2380,-0.0400],[41.0900,0.6300],[41.1500,1.1050],[41.1120,1.2550]],
+    [[42.0610,-1.6040],[42.4500,-1.6500],[42.8025,-1.6622],[42.8900,-2.3000]],
+    [[41.6587,-0.9114],[41.8900,-0.7800],[42.1350,-0.4080],[42.5200,-0.3600]],
+    [[41.6587,-0.9114],[41.8800,-0.1500],[41.9050,0.1900],[41.6208,0.6327],[41.6500,1.1400],[41.7200,1.8250],[41.5450,2.1100],[41.3791,2.1401]],
+    // Madrid - Guadalajara - Sigüenza - Arcos - Ariza - Calatayud - Zaragoza / Teruel - Sagunto - Valencia
+    [[40.4065,-3.6896],[40.6280,-3.1800],[41.0700,-2.6400],[41.2850,-2.1300],[41.3410,-1.6440],[41.6587,-0.9114]],
+    [[41.3410,-1.6440],[40.8650,-1.3100],[40.3420,-1.1120],[39.9000,-0.6500],[39.6800,-0.2700]],
+    // Madrid - Cuenca - Utiel - Valencia (convencional)
+    [[40.0320,-3.6060],[40.0050,-3.0100],[40.0720,-2.1400],[39.5650,-1.2050],[39.4601,-0.3816]]
   ];
 
   /* ---------- Diccionario Maestro de Estaciones ---------- */
@@ -319,7 +311,7 @@
   const el = {
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
     interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
-    thRed: $("thRed"), thOrange: $("thOrange"), thTrack: $("thTrack"),
+    thOrange: $("thOrange"), thSpeed: $("thSpeed"), thTrack: $("thTrack"),
     showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showGray: $("showGray"), showLines: $("showLines"),
@@ -346,23 +338,30 @@
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
-  /* ---------- Capas de Vías (Instantáneas + OpenStreetMap vía Overpass con bbox rápido) ---------- */
+  /* ---------- Capas de Vías (Instantáneas + OpenStreetMap por cuadrantes para evitar fallos en MD) ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
   const GRID_SIZE = 0.15;
 
-  // Usamos [bbox:35.8,-9.5,43.8,3.4] en vez de area["ISO3166-1"="ES"] porque en Overpass es 10x más rápido y no da timeout
+  const SPAIN_QUADRANTS = [
+    "35.8,-9.5,40.2,-3.2", // Suroeste
+    "35.8,-3.2,40.2,3.4",  // Sureste
+    "40.2,-9.5,43.8,-3.2", // Noroeste
+    "40.2,-3.2,43.8,3.4"   // Noreste
+  ];
+
   const TRACKS = {
     av: {
-      name: "AV", color: "#7b1fa2", weight: 3.2, opacity: 0.9, minKm: 0.08, key: "avTrack_v11",
+      name: "AV", color: "#7b1fa2", weight: 3.3, opacity: 0.92, minKm: 0.08, key: "avTrack_v12",
       fallback: FALLBACK_AV_WAYS,
-      query: '[out:json][timeout:35][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;',
+      queries: ['[out:json][timeout:30][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'],
       loaded: false, osmLoaded: false, loading: false, err: "", n: 0, poly: null, grid: new Map()
     },
     md: {
-      name: "Conv.", color: "#0284c7", weight: 2.2, opacity: 0.75, minKm: 0.25, key: "mdTrack_v11",
+      name: "MD/Conv", color: "#0066cc", weight: 2.6, opacity: 0.85, minKm: 0.18, key: "mdTrack_v12",
       fallback: FALLBACK_MD_WAYS,
-      query: '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"="main"][!"service"];out skel geom qt;',
+      // Dividido en 4 cuadrantes e incluyendo main + branch para pintar todas las líneas de Media Distancia sin timeout
+      queries: SPAIN_QUADRANTS.map(b => `[out:json][timeout:25][bbox:${b}];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;`),
       loaded: false, osmLoaded: false, loading: false, err: "", n: 0, poly: null, grid: new Map()
     }
   };
@@ -375,9 +374,9 @@
 
   function updateTrackStatus() {
     const part = st => {
-      if (st.loading) return `${st.name}: actualizando OSM…`;
+      if (st.loading) return `${st.name}: detallando OSM…`;
       if (st.osmLoaded) return `${st.name}: ${st.n} tramos OSM`;
-      if (st.loaded) return `${st.name}: trazado base (${st.n} ejes)`;
+      if (st.loaded) return `${st.name}: red base activa`;
       return `${st.name}: sin cargar`;
     };
     const parts = [];
@@ -390,13 +389,12 @@
   async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } }
   async function idbSet(k, v) { try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }
 
-  async function overpass(query) {
+  async function overpassSingle(query) {
     let lastErr;
     for (const ep of OVERPASS) {
       try {
         const ctl = new AbortController();
-        // Timeout corto de 25 s por servidor para saltar rápido al siguiente si uno está lento
-        const to = setTimeout(() => ctl.abort(), 25000);
+        const to = setTimeout(() => ctl.abort(), 22000);
         const r = await fetch(ep, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -408,7 +406,7 @@
         const j = await r.json();
         const ways = (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => e.geometry.map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]));
         if (ways.length) return ways;
-        throw new Error("respuesta vacía");
+        throw new Error("vacío");
       } catch (e) { lastErr = e; }
     }
     throw lastErr || new Error("sin datos");
@@ -497,9 +495,11 @@
   }
 
   function applyTrackWays(st, ways, isOsm) {
-    addWaysToGrid(st.grid, ways);
-    st.poly = L.polyline(ways, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
-    st.n = ways.length;
+    // Siempre combinamos el trazado base con OSM para garantizar que ningún corredor quede sin pintar
+    const combined = isOsm ? [...st.fallback, ...ways] : ways;
+    addWaysToGrid(st.grid, combined);
+    st.poly = L.polyline(combined, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
+    st.n = combined.length;
     st.loaded = true;
     st.osmLoaded = !!isOsm;
     syncTrackVisibility();
@@ -510,7 +510,6 @@
   async function loadTrackLayer(kind, force) {
     const st = TRACKS[kind];
     if (st.loading) return;
-    // 1. Pintar de inmediato el trazado base integrado si aún no hay nada pintado
     if (!st.loaded && st.fallback) {
       applyTrackWays(st, st.fallback, false);
     }
@@ -524,13 +523,23 @@
         if (c && c.ways && Date.now() - c.t < 30 * 864e5) ways = c.ways;
       }
       if (!ways) {
-        const raw = await overpass(st.query);
-        ways = raw.map(w => decimate(w, st.minKm));
+        const allWays = [];
+        for (const q of st.queries) {
+          try {
+            const raw = await overpassSingle(q);
+            const dec = raw.map(w => decimate(w, st.minKm));
+            allWays.push(...dec);
+            // Actualizar progresivamente la vista a medida que llegan los cuadrantes
+            if (allWays.length) applyTrackWays(st, allWays, true);
+          } catch (e) {}
+        }
+        if (!allWays.length) throw new Error("sin respuesta OSM");
+        ways = allWays;
         idbSet(st.key, { t: Date.now(), ways });
       }
       applyTrackWays(st, ways, true);
     } catch (e) {
-      st.err = (e && e.name === "AbortError") ? "tiempo agotado" : (e.message || String(e));
+      st.err = "usando red base";
     } finally {
       st.loading = false;
       updateTrackStatus();
@@ -550,8 +559,9 @@
     if (el.showTrackMD.checked) loadTrackLayer("md", true);
   });
 
-  /* ---------- Estado de Trenes con Historial Vectorial ---------- */
+  /* ---------- Estado de Trenes con Historial de 2 Medidas de Velocidad y Rumbo ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
+  // trainHistory guarda por id: { pts: [{lat, lon, t}], speeds: [v1, v2], dLat, dLon, hasVector, calcSpeed, fastConfirmed }
   const trainHistory = new Map();
 
   const toNum = v => (v === null || v === undefined || v === "") ? NaN : parseFloat(String(v).replace(",", "."));
@@ -641,6 +651,63 @@
     return s;
   }
 
+  // Actualiza el historial del tren, calculando velocidad real por avance GPS y cotejando con 2 medidas
+  function updateTrainKinematics(trainObj) {
+    const now = Date.now();
+    const id = trainObj.id;
+    let h = trainHistory.get(id);
+    if (!h) {
+      h = { pts: [{ lat: trainObj.lat, lon: trainObj.lon, t: now }], speeds: [], dLat: 0, dLon: 0, hasVector: false, calcSpeed: null, measures: 0 };
+      trainHistory.set(id, h);
+    } else {
+      const lastPt = h.pts[h.pts.length - 1];
+      const dtSec = (now - lastPt.t) / 1000;
+      const distKm = haversine(lastPt.lat, lastPt.lon, trainObj.lat, trainObj.lon);
+
+      // Si las coordenadas GPS han cambiado (> 15 metros), registramos una nueva medida de movimiento real
+      if (distKm >= 0.015 && dtSec >= 1.5) {
+        const vKmh = (distKm / dtSec) * 3600;
+        // Descartar saltos irreales de GPS (> 380 km/h)
+        if (vKmh <= 380) {
+          h.dLat = trainObj.lat - lastPt.lat;
+          h.dLon = trainObj.lon - lastPt.lon;
+          h.hasVector = true;
+          h.pts.push({ lat: trainObj.lat, lon: trainObj.lon, t: now });
+          if (h.pts.length > 4) h.pts.shift();
+          h.speeds.push(vKmh);
+          if (h.speeds.length > 2) h.speeds.shift();
+        }
+      } else if (dtSec > 95) {
+        // Si lleva más de 95 segundos sin cambiar de coordenada en absoluto, el tren está detenido (0 km/h)
+        h.speeds.push(0);
+        if (h.speeds.length > 2) h.speeds.shift();
+        h.pts[h.pts.length - 1].t = now;
+      }
+
+      h.measures = h.speeds.length;
+      if (h.speeds.length === 2) {
+        // Cotejo de las 2 últimas medidas
+        h.calcSpeed = Math.round((h.speeds[0] + h.speeds[1]) / 2);
+      } else if (h.speeds.length === 1) {
+        h.calcSpeed = Math.round(h.speeds[0]);
+      }
+    }
+
+    // Si la fuente ya trae velocidad directa (p.ej. modo Demo o GTFS-RT) y aún no hay 2 medidas GPS
+    const rawVel = toNum(trainObj.raw && (trainObj.raw.velocidad ?? trainObj.raw.vel ?? trainObj.raw.speed ?? trainObj.raw["Velocidad (km/h)"]));
+    if (h.calcSpeed === null && isFinite(rawVel) && rawVel >= 0) {
+      h.calcSpeed = Math.round(rawVel);
+      h.measures = 2;
+    }
+
+    trainObj.dLat = h.dLat;
+    trainObj.dLon = h.dLon;
+    trainObj.hasVector = h.hasVector;
+    trainObj.calcSpeed = h.calcSpeed;
+    trainObj.speedMeasures = h.measures;
+    trainObj.speedsList = [...h.speeds];
+  }
+
   function normalize(item, idx) {
     const v = item.vehicle && typeof item.vehicle === "object" && item.vehicle.position ? item.vehicle : null;
     const pos = v ? v.position : item;
@@ -670,20 +737,7 @@
     const tipo = cleanProductType(tipoCandidate);
 
     const trainObj = { id: String(id).trim(), label: String(label).trim(), lat, lon, raw, tipo };
-
-    const now = Date.now();
-    const prev = trainHistory.get(trainObj.id);
-    if (prev) {
-      trainObj.dLat = lat - prev.lat;
-      trainObj.dLon = lon - prev.lon;
-      trainObj.hasVector = (Math.abs(trainObj.dLat) > 0.0001 || Math.abs(trainObj.dLon) > 0.0001);
-    } else {
-      trainObj.dLat = 0;
-      trainObj.dLon = 0;
-      trainObj.hasVector = false;
-    }
-    trainHistory.set(trainObj.id, { lat, lon, time: now });
-
+    updateTrainKinematics(trainObj);
     return trainObj;
   }
 
@@ -707,7 +761,7 @@
 
     const orig = resolveStation(origRaw), dest = resolveStation(destRaw), sig = resolveStation(sigRaw), ant = resolveStation(antRaw);
     const horaSal = r.horaSalida ?? r.salida ?? get(/hora.*sal/i) ?? "", horaLleg = r.horaLlegada ?? r.llegada ?? get(/hora.*lleg/i) ?? "";
-    const vel = toNum(r.velocidad ?? r.vel ?? r.speed ?? r["Velocidad (km/h)"] ?? get(/vel|speed/i));
+    const vel = t.calcSpeed !== null && t.calcSpeed !== undefined ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
     const ret = toNum(r.retraso ?? r.demora ?? r.delay ?? get(/retraso|demora/i));
     const mat = r.mat ?? r.material ?? r.composicion ?? "", corredor = r.corredor ?? r.linea ?? r.nucleo ?? r.Línea ?? "";
 
@@ -716,7 +770,16 @@
       retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
     }
 
-    return { tipo: t.tipo || "AVE", numero, numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "", orig, dest, sig, ant, horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(), vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null, ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim() };
+    return {
+      tipo: t.tipo || "AVE", numero,
+      numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "",
+      orig, dest, sig, ant,
+      horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(),
+      vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null,
+      measures: t.speedMeasures || 0,
+      speedsList: t.speedsList || [],
+      ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim()
+    };
   }
 
   function buildUrl() {
@@ -749,12 +812,15 @@
   function makeDemoFleet() {
     const names = Object.keys(CITIES), tipos = ["AVE", "AVLO", "ALVIA", "AVANT", "MD"], fleet = [];
     const rnd = (a, b) => a + Math.random() * (b - a);
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 110; i++) {
       let a = names[Math.floor(Math.random() * names.length)], b;
       do { b = names[Math.floor(Math.random() * names.length)]; } while (b === a);
       const km = haversine(...CITIES[a], ...CITIES[b]);
-      const speed = rnd(90, 295), phase = Math.random(), tipo = tipos[i % tipos.length];
+      const speed = rnd(40, 260), phase = Math.random(), tipo = tipos[i % tipos.length];
       fleet.push({ id: "0" + (2100 + i), tipo, a, b, km, speed, phase });
+      if (i % 10 === 0) {
+        fleet.push({ id: "0" + (3100 + i), tipo, a, b, km, speed: speed * 1.05, phase: phase + 0.008 });
+      }
     }
     return fleet;
   }
@@ -764,25 +830,37 @@
     return demoFleet.map(f => {
       let p = (now * f.speed / f.km + f.phase) % 2; if (p > 1) p = 2 - p;
       const [la1, lo1] = CITIES[f.a], [la2, lo2] = CITIES[f.b];
-      return { id: f.id, label: f.id, tipo: f.tipo, lat: la1 + (la2 - la1) * p, lon: lo1 + (lo2 - lo1) * p, raw: { codTren: f.id, desProducto: f.tipo, desOrigen: f.a, desDestino: f.b, velocidad: Math.round(f.speed), retraso: 0 } };
+      const item = { id: f.id, codTren: f.id, desProducto: f.tipo, desOrigen: f.a, desDestino: f.b, latitud: la1 + (la2 - la1) * p, longitud: lo1 + (lo2 - lo1) * p, velocidad: Math.round(f.speed), retraso: 0 };
+      return normalize(item, 0);
     });
   }
 
-  /* ---------- Cálculo de Proximidad con Filtro de Estaciones y Vectorial ---------- */
+  /* ---------- Nueva Lógica de Proximidad (< 5 km Naranja | < 5 km + > 100 km/h cotejado Rojo) ---------- */
+  function isConfirmedHighSpeed(t, minSpeedKmh) {
+    // Si tenemos 2 medidas GPS cotejadas, comprobamos que la media y la última medida superen el umbral
+    if (t.speedsList && t.speedsList.length >= 2) {
+      const avg = (t.speedsList[0] + t.speedsList[1]) / 2;
+      return avg > minSpeedKmh && t.speedsList[1] > minSpeedKmh * 0.85;
+    }
+    // En modo demo o GTFS-RT donde viene velocidad directa
+    if (t.speedMeasures >= 2 && isFinite(t.calcSpeed)) {
+      return t.calcSpeed > minSpeedKmh;
+    }
+    return false;
+  }
+
   function computeProximity() {
-    const tR = Math.max(0, toNum(el.thRed.value) || 3);
-    const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
-    const tolKm = Math.max(0.1, toNum(el.thTrack.value) || 2.0);
+    const tO = Math.max(0.5, toNum(el.thOrange.value) || 5);
+    const minSpeed = Math.max(10, toNum(el.thSpeed.value) || 100);
+    const tolKm = Math.max(0.1, toNum(el.thTrack.value) || 2.5);
 
     trains.forEach(t => {
       t.d = Infinity;
       t.nearTrain = null;
       t.trackDist = minTrackDistKm(t.lat, t.lon);
-      // Si se usa el trazado base aún no detallado por OSM, damos margen extra de 6 km para las curvas
-      const bothOsm = (!el.showTrackAV.checked || TRACKS.av.osmLoaded) && (!el.showTrackMD.checked || TRACKS.md.osmLoaded);
-      const effectiveTol = bothOsm ? tolKm : Math.max(tolKm, 6.0);
-      t.offTrack = (t.trackDist !== null) ? (t.trackDist > effectiveTol) : false;
-      t.inStation = isInStationArea(t.lat, t.lon, 2.5);
+      t.offTrack = (t.trackDist !== null) ? (t.trackDist > tolKm) : false;
+      t.inStation = isInStationArea(t.lat, t.lon, 2.2);
+      t.isFast = isConfirmedHighSpeed(t, minSpeed);
       t._info = trainInfo(t);
     });
 
@@ -800,30 +878,49 @@
 
         if (d < tO) {
           let opuestos = false;
+          // 1. Filtro vectorial si ambos tienen dirección de movimiento medida
           if (a.hasVector && b.hasVector) {
-            const dotProduct = (a.dLat * b.dLat) + (a.dLon * b.dLon);
-            if (dotProduct < -0.00000001) opuestos = true;
+            const magA = Math.hypot(a.dLat, a.dLon), magB = Math.hypot(b.dLat, b.dLon);
+            if (magA > 0 && magB > 0) {
+              const cosAngle = ((a.dLat * b.dLat) + (a.dLon * b.dLon)) / (magA * magB);
+              // Si el ángulo entre trayectorias difiere en más de ~75 grados (cos < 0.25), no van en el mismo sentido
+              if (cosAngle < 0.25) opuestos = true;
+            }
           } else {
+            // 2. Respaldo por origen/destino inverso mientras se recogen las 2 medidas
             const infoA = a._info, infoB = b._info;
-            if (infoA.orig && infoA.dest && infoA.orig === infoB.dest && infoA.dest === infoB.orig) opuestos = true;
+            if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
+              if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) opuestos = true;
+            }
           }
 
           if (!opuestos) {
             if (d < a.d) { a.d = d; a.nearTrain = b; }
             if (d < b.d) { b.d = d; b.nearTrain = a; }
-            pairs.push({ a, b, d });
+            const pairSeverity = (a.isFast || b.isFast) ? "red" : "orange";
+            pairs.push({ a, b, d, severity: pairSeverity });
           }
         }
       }
     }
 
+    // Asignación de color según la nueva regla:
+    // - Fuera de vía -> gris
+    // - En estación o >= 5 km -> verde
+    // - A < 5 km en el mismo sentido: si el tren (o el tren con el que hace par) supera 100 km/h cotejados -> ROJO PARPADEANTE; si no -> NARANJA
     trains.forEach(t => {
-      if (t.offTrack) t.color = "gray";
-      else if (t.inStation) t.color = "green";
-      else t.color = t.d < tR ? "red" : t.d < tO ? "orange" : "green";
+      if (t.offTrack) {
+        t.color = "gray";
+      } else if (t.inStation || !isFinite(t.d) || t.d >= tO) {
+        t.color = "green";
+      } else {
+        const fastRisk = t.isFast || (t.nearTrain && t.nearTrain.isFast);
+        t.color = fastRisk ? "red" : "orange";
+      }
     });
-    pairs.sort((x, y) => x.d - y.d);
-    return { tR, tO };
+
+    pairs.sort((x, y) => (x.severity === y.severity ? x.d - y.d : (x.severity === "red" ? -1 : 1)));
+    return { tO, minSpeed };
   }
 
   function badgeColor(tipo) { return BADGE_COLORS[tipo] || "#475569"; }
@@ -834,13 +931,25 @@
     const ruta = (x.orig || x.dest) ? `<div class="t-route">📍 ${esc(x.orig || "?")} → ${esc(x.dest || "?")}</div>` : "";
     const paradas = [];
     if (x.sig) paradas.push(`Próxima: <b>${esc(x.sig)}</b>`);
-    if (x.vel !== null) paradas.push(`Velocidad: <b>${x.vel} km/h</b>`);
+    if (x.vel !== null) {
+      const mTag = x.measures >= 2 ? " (2 med.)" : " (1 med.)";
+      paradas.push(`Vel. GPS: <b>${x.vel} km/h</b>${mTag}`);
+    } else {
+      paradas.push(`Vel. GPS: <i>calculando…</i>`);
+    }
     const meta = paradas.length ? `<div class="t-meta">${paradas.join(" · ")}</div>` : "";
     const ret = x.retHtml ? `<div style="margin-top:2px">${x.retHtml}</div>` : "";
     const statNote = t.inStation ? `<div style="color:#0284c7;font-weight:600;margin-top:2px">En zona de estación (exento de alertas)</div>` : "";
     const off = t.offTrack ? `<div style="color:var(--gray);font-weight:600;margin-top:2px">Fuera de vía activa</div>` : "";
     const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "otro tren";
-    const near = (!t.offTrack && !t.inStation && isFinite(t.d)) ? `<div style="color:${t.color === "red" ? "#e53935" : "#fb8c00"};font-weight:700;margin-top:3px">⚠ A ${fmtKm(t.d)} de ${esc(nearName)}</div>` : "";
+    let near = "";
+    if (!t.offTrack && !t.inStation && isFinite(t.d)) {
+      if (t.color === "red") {
+        near = `<div style="color:#e53935;font-weight:700;margin-top:3px">🚨 ALERTA ROJA: A ${fmtKm(t.d)} de ${esc(nearName)} (&gt;${el.thSpeed.value} km/h)</div>`;
+      } else {
+        near = `<div style="color:#fb8c00;font-weight:700;margin-top:3px">⚠ Cerca en mismo sentido: A ${fmtKm(t.d)} de ${esc(nearName)}</div>`;
+      }
+    }
     return head + ruta + meta + ret + statNote + off + near;
   }
 
@@ -853,9 +962,14 @@
     if (x.ant) mainRows.push(["Estación anterior", x.ant]);
     if (x.sig) mainRows.push(["Próxima estación", x.sig]);
     if (x.horaSal || x.horaLleg) mainRows.push(["Horario Sal. / Lleg.", `${x.horaSal || "—"} → ${x.horaLleg || "—"}`]);
-    if (x.vel !== null) mainRows.push(["Velocidad", `${x.vel} km/h`]);
+    if (x.vel !== null) {
+      const det = x.speedsList.length ? ` [${x.speedsList.map(v => Math.round(v)).join(" / ")} km/h]` : "";
+      mainRows.push(["Velocidad GPS", `${x.vel} km/h (${x.measures}/2 medidas)${det}`]);
+    } else {
+      mainRows.push(["Velocidad GPS", "Esperando cambio de posición GPS…"]);
+    }
     if (x.retHtml) mainRows.push(["Puntualidad", x.retHtml, true]);
-    mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.offTrack ? "Fuera de vía" : "En ruta vigilada")]);
+    mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.offTrack ? "Fuera de vía" : (t.color === "red" ? "ROJO (>100 km/h y <5 km)" : (t.color === "orange" ? "NARANJA (<5 km, baja vel.)" : "Normal en ruta")))]);
     if (!t.offTrack && !t.inStation && isFinite(t.d)) mainRows.push(["Tren más cercano", `${fmtKm(t.d)}`]);
 
     const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
@@ -911,8 +1025,8 @@
     if (el.showLines.checked) {
       pairs.forEach(p => {
         if (!p.a.visible || !p.b.visible) return;
-        const col = p.d < (toNum(el.thRed.value) || 3) ? COLORS.red : COLORS.orange;
-        L.polyline([[p.a.lat, p.a.lon], [p.b.lat, p.b.lon]], { renderer: canvas, color: col, weight: 2, opacity: 0.8 }).addTo(linesLayer);
+        const col = p.severity === "red" ? COLORS.red : COLORS.orange;
+        L.polyline([[p.a.lat, p.a.lon], [p.b.lat, p.b.lon]], { renderer: canvas, color: col, weight: p.severity === "red" ? 3 : 2, opacity: 0.85 }).addTo(linesLayer);
       });
     }
 
@@ -920,12 +1034,13 @@
     el.nTotal.textContent = visible + " / " + trains.length;
 
     if (!pairs.length) {
-      el.pairs.innerHTML = '<div class="sub">Ningún par de trenes por debajo del umbral en ruta.</div>';
+      el.pairs.innerHTML = '<div class="sub">Ningún par de trenes en el mismo sentido por debajo del umbral.</div>';
     } else {
-      const tR = toNum(el.thRed.value) || 3;
       el.pairs.innerHTML = pairs.slice(0, 100).map((p, i) => {
         const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label, lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
-        return `<div class="pair" data-i="${i}"><span><span class="dot" style="background:${p.d < tR ? COLORS.red : COLORS.orange}"></span> ${esc(la)} ↔ ${esc(lb)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
+        const vMax = Math.max(p.a.calcSpeed || 0, p.b.calcSpeed || 0);
+        const vTxt = vMax > 0 ? ` · ${vMax} km/h` : "";
+        return `<div class="pair" data-i="${i}"><span><span class="dot" style="background:${p.severity === "red" ? COLORS.red : COLORS.orange}"></span> ${esc(la)} ↔ ${esc(lb)}</span><span class="d">${fmtKm(p.d)}${esc(vTxt)}</span></div>`;
       }).join("");
     }
   }
@@ -963,7 +1078,7 @@
       trains = allTrains.filter(inTypes);
       computeProximity();
       render();
-      setStatus(`${trains.length} de ${allTrains.length} trenes · ${pairs.length} pares cercanos · ${new Date().toLocaleTimeString("es-ES")}`);
+      setStatus(`${trains.length} trenes · ${pairs.length} pares cercanos · actualizado ${new Date().toLocaleTimeString("es-ES")}`);
     } catch (e) {
       setStatus("Error al descargar trenes: " + e.message, true);
     } finally {
@@ -989,12 +1104,13 @@
     const isCerc = el.source.value === "visor" || el.source.value === "gtfsrt";
     if (isCerc && !el.showTrackMD.checked) { el.showTrackMD.checked = true; onTrackToggle("md", el.showTrackMD); }
     markers.forEach(m => map.removeLayer(m)); markers.clear();
+    trainHistory.clear();
     stationsTried = false;
     refresh();
   });
   el.customUrl.addEventListener("change", refresh);
   el.proxy.addEventListener("change", refresh);
-  [el.thRed, el.thOrange, el.thTrack].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
+  [el.thOrange, el.thSpeed, el.thTrack].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
   [el.showRed, el.showOrange, el.showGreen, el.showGray, el.showLines].forEach(c => c.addEventListener("change", render));
   el.search.addEventListener("input", render);
   el.pairs.addEventListener("click", e => {
