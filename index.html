@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.13</title>
+<title>Trenes Renfe en tiempo real · v1.14</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -53,8 +53,8 @@
     border:2px solid var(--red);
     border-radius:10px;
     box-shadow:0 4px 16px rgba(0,0,0,.28);
-    min-width:270px;
-    max-width:360px;
+    min-width:290px;
+    max-width:400px;
     max-height:260px;
     display:flex;
     flex-direction:column;
@@ -113,13 +113,13 @@
     100%{box-shadow:0 0 0 0 rgba(229,57,53,0);transform:scale(1)}
   }
 
-  .trtip{font-size:12px;line-height:1.45;padding:8px 10px;min-width:220px}
+  .trtip{font-size:12px;line-height:1.45;padding:8px 10px;min-width:225px}
   .t-head{display:flex;align-items:center;gap:6px;margin-bottom:4px}
   .t-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;color:#fff;background:#6d28d9;letter-spacing:.02em}
   .t-num{font-size:13px;font-weight:700}
   .t-route{font-weight:600;margin:3px 0;padding:3px 0;border-top:1px solid rgba(128,128,128,.2);border-bottom:1px solid rgba(128,128,128,.2)}
   .t-meta{font-size:11.5px;color:#555}
-  .pop-wrap{font-size:12.5px;line-height:1.45;min-width:250px;color:#1b1f24}
+  .pop-wrap{font-size:12.5px;line-height:1.45;min-width:255px;color:#1b1f24}
   .pop-table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}
   .pop-table td{padding:3px 4px;border-bottom:1px solid #eee;vertical-align:top}
   .pop-table td.k{color:#667085;font-weight:500;width:44%}
@@ -138,8 +138,8 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.13</span></h1>
-      <div class="sub">Mapa de España · alerta por proximidad y velocidad</div>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.14</span></h1>
+      <div class="sub">Mapa de España · alerta por alcance y velocidad</div>
     </div>
 
     <fieldset>
@@ -186,12 +186,12 @@
     <fieldset>
       <legend>Reglas de alerta (mismo sentido)</legend>
       <div class="row">
-        <div><label for="thOrange" title="Si dos trenes en el mismo sentido están a menos de esta distancia pasan a amarillo/naranja">Cerca &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.5" step="0.5"></div>
-        <div><label for="thSpeed" title="Si están cerca y además su velocidad cotejada en 2 medidas supera este valor, pasa a rojo parpadeante">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
+        <div><label for="thOrange" title="Distancia de seguridad entre dos trenes en el mismo sentido">Distancia &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.5" step="0.5"></div>
+        <div><label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
       </div>
       <div class="help">
-        • <b>Amarillo/Naranja:</b> trenes en el mismo sentido a &lt; 5 km.<br>
-        • <b>Rojo parpadeante:</b> a &lt; 5 km en el mismo sentido y con velocidad &gt; 100 km/h cotejada con 2 medidas GPS.
+        • <b>Amarillo/Naranja:</b> mismo sentido a &lt; 5 km (o cuando el tren delantero va más rápido y se aleja).<br>
+        • <b>Rojo parpadeante:</b> a &lt; 5 km en el mismo sentido, el tren trasero supera el umbral (&gt; 100 km/h) y va más rápido o igual que el delantero (peligro de alcance).
       </div>
     </fieldset>
 
@@ -213,7 +213,7 @@
 
     <fieldset>
       <legend>Mostrar</legend>
-      <label class="chk"><input type="checkbox" id="showRed" checked><span class="dot" style="background:var(--red)"></span>Alerta roja (&gt;100 km/h)<span class="n" id="nRed">0</span></label>
+      <label class="chk"><input type="checkbox" id="showRed" checked><span class="dot" style="background:var(--red)"></span>Alerta roja (alcance)<span class="n" id="nRed">0</span></label>
       <label class="chk"><input type="checkbox" id="showOrange" checked><span class="dot" style="background:var(--orange)"></span>Precaución (&lt;5 km)<span class="n" id="nOrange">0</span></label>
       <label class="chk"><input type="checkbox" id="showGreen" checked><span class="dot" style="background:var(--green)"></span>Normal (verde)<span class="n" id="nGreen">0</span></label>
       <label class="chk"><input type="checkbox" id="showLines" checked>Unir con línea los trenes cercanos</label>
@@ -231,11 +231,11 @@
   <main id="mapWrap">
     <div id="redOverlay" class="empty">
       <div class="ro-head">
-        <span>🚨 ALERTAS ROJAS (&lt;5 km y &gt;100 km/h)</span>
+        <span>🚨 ALERTAS ROJAS POR ALCANCE</span>
         <span id="roCount">0</span>
       </div>
       <div id="redList">
-        <div class="sub">Ningún tren en alerta roja ahora mismo.</div>
+        <div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>
       </div>
     </div>
     <div id="map"></div>
@@ -248,7 +248,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.13";
+  const VERSION = "1.14";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -265,41 +265,21 @@
 
   /* ---------- Traductor Oficial de Códigos Numéricos de Producto de Renfe ---------- */
   const PRODUCT_CODES = {
-    "1": "AVE",
-    "2": "AVANT",
-    "3": "ALVIA",
-    "4": "EUROMED",
-    "5": "ALTARIA",
-    "6": "TALGO",
-    "7": "INTERCITY",
-    "8": "MD",
-    "9": "REG.EXP",
-    "10": "REGIONAL",
-    "11": "AVE",
-    "12": "AVLO",
-    "13": "INTERCITY",
-    "14": "MD",
-    "15": "AVANT",
-    "16": "ALVIA",
-    "17": "REG.EXP",
-    "18": "REGIONAL",
-    "19": "CERCANÍAS",
-    "20": "AVLO",
-    "22": "AVLO",
-    "28": "INTERCITY"
+    "1": "AVE", "2": "AVANT", "3": "ALVIA", "4": "EUROMED", "5": "ALTARIA",
+    "6": "TALGO", "7": "INTERCITY", "8": "MD", "9": "REG.EXP", "10": "REGIONAL",
+    "11": "AVE", "12": "AVLO", "13": "INTERCITY", "14": "MD", "15": "AVANT",
+    "16": "ALVIA", "17": "REG.EXP", "18": "REGIONAL", "19": "CERCANÍAS",
+    "20": "AVLO", "22": "AVLO", "28": "INTERCITY"
   };
 
-  /* ---------- Inferencia de Tipo de Tren por Rango de Numeración Renfe ---------- */
   function inferTypeFromNumber(numStr) {
     const n = parseInt(String(numStr).replace(/\D/g, ""), 10);
     if (!isFinite(n)) return "LD";
     if (n >= 6000 && n <= 6999) return "AVLO";
     if (n >= 2000 && n <= 3999) return "AVE";
-    if (n >= 8000 && n <= 8999) return "AVANT";
-    if (n >= 9000 && n <= 9999) return "AVANT";
+    if (n >= 8000 && n <= 9999) return "AVANT";
     if (n >= 1000 && n <= 1999) return "EUROMED";
-    if (n >= 4000 && n <= 4999) return "ALVIA";
-    if (n >= 5000 && n <= 5999) return "ALVIA";
+    if (n >= 4000 && n <= 5999) return "ALVIA";
     if (n >= 700 && n <= 999) return "INTERCITY";
     if (n >= 10000 && n <= 16999) return "MD";
     if (n >= 17000 && n <= 18999) return "REG.EXP";
@@ -660,11 +640,9 @@
     return [];
   }
 
-  /* ---------- Clasificador Mejorado de Tipo de Tren ---------- */
   function resolveTrainType(item, trainNumber) {
     if (!item || typeof item !== "object") return inferTypeFromNumber(trainNumber);
 
-    // 1. Buscar primero cualquier texto explícito en los campos del JSON
     const textFields = [
       item.desProducto, item.descProducto, item.nomProducto, item.producto,
       item.tipoTren, item.tipo, item.siglas, item.clase, item.servicio, item.lineaComercial
@@ -690,14 +668,12 @@
       if (/CERCAN|RODALIES/.test(s)) return "CERCANÍAS";
     }
 
-    // 2. Traducir código numérico de producto de Renfe (codProducto / tipoTren numérico)
     const codeCand = item.codProducto ?? item.idProducto ?? item.tipoTren ?? item.producto ?? item.tipo;
     if (codeCand !== undefined && codeCand !== null && codeCand !== "") {
       const c = String(codeCand).trim().replace(/^0+/, "");
       if (PRODUCT_CODES[c]) return PRODUCT_CODES[c];
     }
 
-    // 3. Respaldo por el rango oficial del número de tren de Renfe
     return inferTypeFromNumber(trainNumber);
   }
 
@@ -860,7 +836,7 @@
       const speed = rnd(40, 260), phase = Math.random(), tipo = tipos[i % tipos.length];
       fleet.push({ id: "0" + (2100 + i), tipo, a, b, km, speed, phase });
       if (i % 10 === 0) {
-        fleet.push({ id: "0" + (3100 + i), tipo, a, b, km, speed: speed * 1.05, phase: phase + 0.008 });
+        fleet.push({ id: "0" + (3100 + i), tipo, a, b, km, speed: speed * 1.15, phase: phase - 0.008 });
       }
     }
     return fleet;
@@ -876,7 +852,7 @@
     });
   }
 
-  /* ---------- Lógica de Proximidad (Todos evaluados por Distancia y Velocidad, sin Grises) ---------- */
+  /* ---------- Lógica de Proximidad y Posición Relativa (Delantero vs Trasero) ---------- */
   function isConfirmedHighSpeed(t, minSpeedKmh) {
     if (t.speedsList && t.speedsList.length >= 2) {
       const avg = (t.speedsList[0] + t.speedsList[1]) / 2;
@@ -888,6 +864,28 @@
     return false;
   }
 
+  // Determina cuál de los dos trenes (a, b) va detrás (trailing) y cuál delante (leading) en el sentido de la marcha
+  function getTrailingAndLeading(a, b) {
+    // Vector de dirección de la marcha común (sumando los vectores de desplazamiento medidos)
+    let vLat = 0, vLon = 0;
+    if (a.hasVector) { vLat += a.dLat; vLon += a.dLon; }
+    if (b.hasVector) { vLat += b.dLat; vLon += b.dLon; }
+    if (vLat === 0 && vLon === 0) return null;
+
+    // Vector de posición relativa desde A hacia B: (B - A)
+    const abLat = b.lat - a.lat;
+    const abLon = (b.lon - a.lon) * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+    const vLonScaled = vLon * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+
+    // Producto escalar: si (B - A) · V > 0, entonces B está por delante de A en el sentido de avance
+    const proj = (abLat * vLat) + (abLon * vLonScaled);
+    if (Math.abs(proj) < 1e-9) return null;
+
+    return proj > 0
+      ? { trailing: a, leading: b } // A va detrás, B va delante
+      : { trailing: b, leading: a }; // B va detrás, A va delante
+  }
+
   function computeProximity() {
     const tO = Math.max(0.5, toNum(el.thOrange.value) || 5);
     const minSpeed = Math.max(10, toNum(el.thSpeed.value) || 100);
@@ -895,12 +893,13 @@
     trains.forEach(t => {
       t.d = Infinity;
       t.nearTrain = null;
+      t.hasRedPair = false;
+      t.roleInfo = "";
       t.inStation = isInStationArea(t.lat, t.lon, 2.2);
       t.isFast = isConfirmedHighSpeed(t, minSpeed);
       t._info = trainInfo(t);
     });
 
-    // Todos los trenes que no están dentro de una estación entran en el cálculo (sin descartar por trazado)
     const activeTrains = trains.filter(t => !t.inStation);
     const sorted = [...activeTrains].sort((a, b) => a.lat - b.lat);
     const maxDLat = tO / 111.19;
@@ -929,10 +928,45 @@
           }
 
           if (!opuestos) {
+            const order = getTrailingAndLeading(a, b);
+            let pairSeverity = "orange";
+            let trailing = a, leading = b;
+
+            if (order) {
+              trailing = order.trailing;
+              leading = order.leading;
+              const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
+              const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
+
+              // REGLA DE ALCANCE:
+              // Si el que va delante va más rápido que el que va detrás (vLead > vTrail), el peligro se aleja -> NARANJA (no rojo).
+              // Solo es ALERTA ROJA si el de atrás supera el umbral (>100 km/h) y va más rápido o igual que el de delante (vTrail >= vLead).
+              if (trailing.isFast && vTrail >= vLead) {
+                pairSeverity = "red";
+              } else {
+                pairSeverity = "orange";
+              }
+            } else {
+              // Si aún no hay vector para saber quién va delante pero alguno supera la velocidad umbral, solo marcamos rojo si el otro está parado
+              const vA = isFinite(a.calcSpeed) ? a.calcSpeed : 0;
+              const vB = isFinite(b.calcSpeed) ? b.calcSpeed : 0;
+              if ((a.isFast && vB === 0) || (b.isFast && vA === 0)) {
+                pairSeverity = "red";
+              }
+            }
+
             if (d < a.d) { a.d = d; a.nearTrain = b; }
             if (d < b.d) { b.d = d; b.nearTrain = a; }
-            const pairSeverity = (a.isFast || b.isFast) ? "red" : "orange";
-            pairs.push({ a, b, d, severity: pairSeverity });
+            if (pairSeverity === "red") {
+              a.hasRedPair = true;
+              b.hasRedPair = true;
+            }
+            if (order) {
+              trailing.roleInfo = `Detrás de ${leading.tipo} ${leading.label}`;
+              leading.roleInfo  = `Delante de ${trailing.tipo} ${trailing.label}`;
+            }
+
+            pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, severity: pairSeverity });
           }
         }
       }
@@ -942,8 +976,7 @@
       if (t.inStation || !isFinite(t.d) || t.d >= tO) {
         t.color = "green";
       } else {
-        const fastRisk = t.isFast || (t.nearTrain && t.nearTrain.isFast);
-        t.color = fastRisk ? "red" : "orange";
+        t.color = t.hasRedPair ? "red" : "orange";
       }
     });
 
@@ -969,12 +1002,13 @@
     const ret = x.retHtml ? `<div style="margin-top:2px">${x.retHtml}</div>` : "";
     const statNote = t.inStation ? `<div style="color:#0284c7;font-weight:600;margin-top:2px">En zona de estación (exento de alertas)</div>` : "";
     const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "otro tren";
+    const roleTxt = t.roleInfo ? ` (${t.roleInfo})` : "";
     let near = "";
     if (!t.inStation && isFinite(t.d)) {
       if (t.color === "red") {
-        near = `<div style="color:#e53935;font-weight:700;margin-top:3px">🚨 ALERTA ROJA: A ${fmtKm(t.d)} de ${esc(nearName)} (&gt;${el.thSpeed.value} km/h)</div>`;
+        near = `<div style="color:#e53935;font-weight:700;margin-top:3px">🚨 PELIGRO ALCANCE: A ${fmtKm(t.d)}${esc(roleTxt)}</div>`;
       } else {
-        near = `<div style="color:#d97706;font-weight:700;margin-top:3px">⚠ Precaución: A ${fmtKm(t.d)} de ${esc(nearName)}</div>`;
+        near = `<div style="color:#d97706;font-weight:700;margin-top:3px">⚠ Precaución: A ${fmtKm(t.d)} de ${esc(nearName)}${esc(roleTxt)}</div>`;
       }
     }
     return head + ruta + meta + ret + statNote + near;
@@ -996,7 +1030,8 @@
       mainRows.push(["Velocidad GPS", "Esperando cambio de posición GPS…"]);
     }
     if (x.retHtml) mainRows.push(["Puntualidad", x.retHtml, true]);
-    mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.color === "red" ? "ROJO (>100 km/h y <5 km)" : (t.color === "orange" ? "AMARILLO/NARANJA (<5 km)" : "Normal en ruta"))]);
+    if (t.roleInfo) mainRows.push(["Posición en vía", t.roleInfo]);
+    mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.color === "red" ? "ROJO (Alcance a >100 km/h)" : (t.color === "orange" ? "AMARILLO/NARANJA (<5 km sin alcance)" : "Normal en ruta"))]);
     if (!t.inStation && isFinite(t.d)) mainRows.push(["Tren más cercano", `${fmtKm(t.d)}`]);
 
     const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
@@ -1011,6 +1046,19 @@
   const TRAIN_SVG = '<svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>';
   function makeIcon(color) {
     return L.divIcon({ className: "tm " + color, html: '<div class="b">' + TRAIN_SVG + '</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
+  }
+
+  function formatPairText(p) {
+    if (p.hasOrder) {
+      const tr = `${p.trailing.tipo ? p.trailing.tipo + " " : ""}${p.trailing.label}`;
+      const ld = `${p.leading.tipo ? p.leading.tipo + " " : ""}${p.leading.label}`;
+      const vT = isFinite(p.trailing.calcSpeed) ? `${p.trailing.calcSpeed}` : "?";
+      const vL = isFinite(p.leading.calcSpeed) ? `${p.leading.calcSpeed}` : "?";
+      return `${esc(tr)} (${vT}) ➔ ${esc(ld)} (${vL} km/h)`;
+    }
+    const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label;
+    const lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
+    return `${esc(la)} ↔ ${esc(lb)}`;
   }
 
   function render() {
@@ -1060,7 +1108,6 @@
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
     el.nTotal.textContent = visible + " / " + trains.length;
 
-    // Separar pares Rojos (esquina superior izquierda del mapa) y Amarillos/Naranjas (banda lateral izquierda)
     const redPairs = [];
     const orangePairs = [];
     pairs.forEach((p, idx) => {
@@ -1068,34 +1115,27 @@
       else orangePairs.push({ p, idx });
     });
 
-    // 1. Actualizar recuadro superior izquierdo del mapa (Solo Rojos)
+    // 1. Recuadro superior izquierdo del mapa (Solo Alertas Rojas por alcance)
     el.roCount.textContent = redPairs.length;
     if (!redPairs.length) {
       el.redOverlay.classList.add("empty");
-      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja ahora mismo.</div>';
+      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
     } else {
       el.redOverlay.classList.remove("empty");
       el.redList.innerHTML = redPairs.map(({ p, idx }) => {
-        const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label;
-        const lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
-        const vMax = Math.max(p.a.calcSpeed || 0, p.b.calcSpeed || 0);
         return `<div class="ro-item" data-i="${idx}">` +
-          `<span>🔴 ${esc(la)} ↔ ${esc(lb)}</span>` +
-          `<span class="ro-d">${fmtKm(p.d)} · ${vMax} km/h</span>` +
+          `<span>🔴 ${formatPairText(p)}</span>` +
+          `<span class="ro-d">${fmtKm(p.d)}</span>` +
           `</div>`;
       }).join("");
     }
 
-    // 2. Actualizar lista en la banda lateral izquierda (Solo Amarillos/Naranjas)
+    // 2. Banda lateral izquierda (Solo Amarillos/Naranjas en precaución o alejándose)
     if (!orangePairs.length) {
       el.pairs.innerHTML = '<div class="sub">Ningún par en precaución (amarillo/naranja).</div>';
     } else {
       el.pairs.innerHTML = orangePairs.slice(0, 100).map(({ p, idx }) => {
-        const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label;
-        const lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
-        const vMax = Math.max(p.a.calcSpeed || 0, p.b.calcSpeed || 0);
-        const vTxt = vMax > 0 ? ` · ${vMax} km/h` : "";
-        return `<div class="pair" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${esc(la)} ↔ ${esc(lb)}</span><span class="d">${fmtKm(p.d)}${esc(vTxt)}</span></div>`;
+        return `<div class="pair" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
       }).join("");
     }
   }
