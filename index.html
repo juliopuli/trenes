@@ -80,6 +80,12 @@
           </select>
         </div>
       </div>
+      <label for="basemap">Mapa base</label>
+      <select id="basemap">
+        <option value="gris">Claro (gris)</option>
+        <option value="calles">Calles</option>
+        <option value="sat">Satélite</option>
+      </select>
       <div class="row" style="margin-top:10px">
         <button class="primary" id="btnRefresh">Actualizar ahora</button>
         <button id="btnPause">Pausar</button>
@@ -146,10 +152,20 @@
 
   /* ---------- Mapa ---------- */
   const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    maxZoom: 19, subdomains: "abcd",
-    attribution: "&copy; colaboradores de OpenStreetMap &copy; CARTO"
-  }).addTo(map);
+  const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+  const BASES = {
+    gris:   { url: ESRI + "Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 16, maxZoom: 18, attribution: "Tiles &copy; Esri" } },
+    calles: { url: ESRI + "World_Street_Map/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 19, maxZoom: 19, attribution: "Tiles &copy; Esri" } },
+    sat:    { url: ESRI + "World_Imagery/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 18, maxZoom: 19, attribution: "Tiles &copy; Esri, Maxar, Earthstar Geographics" } }
+  };
+  let baseLayer = null;
+  function setBase(k) {
+    if (baseLayer) map.removeLayer(baseLayer);
+    baseLayer = L.tileLayer(BASES[k].url, BASES[k].o).addTo(map);
+    baseLayer.bringToBack();
+  }
+  setBase("gris");
+  document.getElementById("basemap").addEventListener("change", e => setBase(e.target.value));
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
