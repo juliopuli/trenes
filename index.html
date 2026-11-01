@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.17</title>
+<title>Trenes Renfe en tiempo real · v1.18</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -183,7 +183,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.17</span></h1>
+      <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.18</span></h1>
       <div class="sub">Control de tráfico y seguridad</div>
     </div>
 
@@ -304,7 +304,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "1.17";
+  const VERSION = "1.18";
   const PROXY_WORKER = "https://trenes.juliopuli.workers.dev/?url=";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
@@ -1170,17 +1170,18 @@
     allTrains.forEach(t => { if (t.tipo) counts[t.tipo] = (counts[t.tipo] || 0) + 1; });
     const keys = Object.keys(counts).sort();
     keys.forEach(k => { if (!(k in typeSel)) typeSel[k] = true; });
-    if (!keys.length) { el.typesBox.innerHTML = '<div class="sub">Sin tipos.</div>'; typesKey = ""; return; }
+    const box = $("types");
+    if (!keys.length) { box.innerHTML = '<div class="sub">Sin tipos.</div>'; typesKey = ""; return; }
     const key = keys.join("|");
     if (key !== typesKey) {
       typesKey = key;
-      el.typesBox.innerHTML = keys.map(k => `<label class="chk"><input type="checkbox" data-t="${esc(k)}" ${typeSel[k] ? "checked" : ""}><span>${esc(k)}</span><span class="n" data-c="${esc(k)}"></span></label>`).join("");
+      box.innerHTML = keys.map(k => `<label class="chk"><input type="checkbox" data-t="${esc(k)}" ${typeSel[k] ? "checked" : ""}><span>${esc(k)}</span><span class="n" data-c="${esc(k)}"></span></label>`).join("");
     }
-    keys.forEach(k => { const n = el.typesBox.querySelector(`[data-c="${CSS.escape(k)}"]`); if (n) n.textContent = counts[k]; });
+    keys.forEach(k => { const n = box.querySelector(`[data-c="${CSS.escape(k)}"]`); if (n) n.textContent = counts[k]; });
   }
 
   const inTypes = t => !t.tipo || typeSel[t.tipo] !== false;
-  el.typesBox.addEventListener("change", e => {
+  $("types").addEventListener("change", e => {
     const k = e.target.dataset && e.target.dataset.t; if (k === undefined) return;
     typeSel[k] = e.target.checked;
     trains = allTrains.filter(inTypes);
