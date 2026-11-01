@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.16</title>
+<title>Trenes Renfe en tiempo real · v1.17</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -183,7 +183,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.16</span></h1>
+      <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.17</span></h1>
       <div class="sub">Control de tráfico y seguridad</div>
     </div>
 
@@ -304,7 +304,8 @@
 (() => {
   "use strict";
 
-  const VERSION = "1.16";
+  const VERSION = "1.17";
+  const PROXY_WORKER = "https://trenes.juliopuli.workers.dev/?url=";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -429,23 +430,6 @@
     "54413": "Málaga-María Zambrano", "65000": "València-Joaquín Sorolla", "61200": "Alacant-Terminal", "32008": "Salamanca"
   };
 
-  const $ = id => document.getElementById(id);
-  const el = {
-    source: $("source"),
-    thOrange: $("thOrange"), thSpeed: $("thSpeed"),
-    showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"),
-    btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
-    showLines: $("showLines"),
-    search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nTotal: $("nTotal"),
-    pairs: $("pairs"), redOverlay: $("redOverlay"), roCount: $("roCount"), redList: $("redList"),
-    btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"), basemap: $("basemap"),
-    toolBtnSource: $("toolBtnSource"), popupSource: $("popupSource"),
-    toolBtnBasemap: $("toolBtnBasemap"), popupBasemap: $("popupBasemap"),
-    toolBtnTracks: $("toolBtnTracks"), popupTracks: $("popupTracks"),
-    toolBtnTypes: $("toolBtnTypes"), popupTypes: $("popupTypes"),
-    typesBox: $("types")
-  };
-
   /* ---------- Mapa ---------- */
   const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
@@ -470,8 +454,8 @@
   const GRID_SIZE = 0.15;
 
   const TRACKS = {
-    av: { name: "AV", color: "#7b1fa2", weight: 3.3, opacity: 0.92, minKm: 0.08, key: "avTrack_v12", fallback: FALLBACK_AV_WAYS, loaded: false, osmLoaded: false, loading: false, poly: null, grid: new Map() },
-    md: { name: "MD/Conv", color: "#0066cc", weight: 2.6, opacity: 0.85, minKm: 0.18, key: "mdTrack_v12", fallback: FALLBACK_MD_WAYS, loaded: false, osmLoaded: false, loading: false, poly: null, grid: new Map() }
+    av: { name: "AV", color: "#7b1fa2", weight: 3.3, opacity: 0.92, fallback: FALLBACK_AV_WAYS, loaded: false, poly: null, grid: new Map() },
+    md: { name: "MD/Conv", color: "#0066cc", weight: 2.6, opacity: 0.85, fallback: FALLBACK_MD_WAYS, loaded: false, poly: null, grid: new Map() }
   };
 
   function addWaysToGrid(grid, lines) {
@@ -612,14 +596,13 @@
   }
 
   let stationsTried = false;
-  function proxify(url) { return url; }
   async function loadStations() {
     if (stationsTried || el.source.value !== "ld") return;
     stationsTried = true;
     const base = SOURCES.ld.replace("flotaLD.json", "");
     for (const file of ["estacionesEstatico.geojson", "estaciones.geojson"]) {
       try {
-        const r = await fetch(proxify(base + file));
+        const r = await fetch(PROXY_WORKER + encodeURIComponent(base + file));
         if (!r.ok) continue;
         const g = await r.json();
         (g.features || []).forEach(f => {
@@ -907,16 +890,10 @@
       : { trailing: b, leading: a };
   }
 
-  function buildUrl() {
-    let url = SOURCES[el.source.value];
-    if (!url) throw new Error("Fuente no válida.");
-    if (el.source.value === "ld") url += "?v=" + Date.now();
-    return url;
-  }
-
   async function fetchTrains() {
     if (el.source.value === "demo") return demoTrains();
-    const res = await fetch(buildUrl(), { cache: "no-store" });
+    const targetUrl = SOURCES[el.source.value];
+    const res = await fetch(PROXY_WORKER + encodeURIComponent(targetUrl), { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     const list = extractList(data).map(normalize).filter(Boolean);
@@ -924,6 +901,39 @@
     const seen = new Map();
     list.forEach(t => seen.set(t.id, t));
     return [...seen.values()];
+  }
+
+  const CITIES = {
+    "Madrid-Puerta de Atocha": [40.4065, -3.6896], "Barcelona-Sants": [41.3791, 2.1401], "València-Joaquín Sorolla": [39.4601, -0.3816],
+    "Sevilla-Santa Justa": [37.3919, -5.9753], "Málaga-María Zambrano": [36.7115, -4.4316], "Zaragoza-Delicias": [41.6587, -0.9114],
+    "Bilbao-Abando": [43.2614, -2.9277], "Valladolid-Campo Grande": [41.6416, -4.7289], "Córdoba": [37.8884, -4.7892],
+    "Alacant-Terminal": [38.3446, -0.4951], "Vigo-Urzáiz": [42.2351, -8.7118], "Granada": [37.1841, -3.6091]
+  };
+  let demoFleet = null;
+  function makeDemoFleet() {
+    const names = Object.keys(CITIES), tipos = ["AVE", "AVLO", "ALVIA", "AVANT", "MD", "INTERCITY", "REG.EXP"], fleet = [];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    for (let i = 0; i < 110; i++) {
+      let a = names[Math.floor(Math.random() * names.length)], b;
+      do { b = names[Math.floor(Math.random() * names.length)]; } while (b === a);
+      const km = haversine(...CITIES[a], ...CITIES[b]);
+      const speed = rnd(40, 260), phase = Math.random(), tipo = tipos[i % tipos.length];
+      fleet.push({ id: "0" + (2100 + i), tipo, a, b, km, speed, phase });
+      if (i % 10 === 0) {
+        fleet.push({ id: "0" + (3100 + i), tipo, a, b, km, speed: speed * 1.15, phase: phase - 0.008 });
+      }
+    }
+    return fleet;
+  }
+  function demoTrains() {
+    if (!demoFleet) demoFleet = makeDemoFleet();
+    const now = Date.now() / 3600000;
+    return demoFleet.map(f => {
+      let p = (now * f.speed / f.km + f.phase) % 2; if (p > 1) p = 2 - p;
+      const [la1, lo1] = CITIES[f.a], [la2, lo2] = CITIES[f.b];
+      const item = { id: f.id, codTren: f.id, desProducto: f.tipo, desOrigen: f.a, desDestino: f.b, latitud: la1 + (la2 - la1) * p, longitud: lo1 + (lo2 - lo1) * p, velocidad: Math.round(f.speed), retraso: 0 };
+      return normalize(item, 0);
+    });
   }
 
   function computeProximity() {
@@ -1199,7 +1209,7 @@
 
   function schedule() {
     clearInterval(timer);
-    if (!paused) timer = setInterval(refresh, 10000); // Fijo a 10 segundos
+    if (!paused) timer = setInterval(refresh, 10000);
   }
 
   function flyToPairIndex(idx) {
