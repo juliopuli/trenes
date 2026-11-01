@@ -116,7 +116,7 @@
     <fieldset>
       <legend>Tipo de tren</legend>
       <div id="types"><div class="sub">Aparecerán al cargar los datos.</div></div>
-      <div class="help">Por defecto solo alta velocidad (AVE, AVLO, AVANT). La proximidad se calcula solo entre los tipos marcados.</div>
+      <div class="help">Todos marcados por defecto. Desmarca los que no quieras ver: la proximidad se calcula solo entre los tipos marcados.</div>
     </fieldset>
 
     <fieldset>
@@ -125,6 +125,8 @@
       <label class="chk"><input type="checkbox" id="showOrange" checked><span class="dot" style="background:var(--orange)"></span>Cerca (naranja)<span class="n" id="nOrange">0</span></label>
       <label class="chk"><input type="checkbox" id="showGreen" checked><span class="dot" style="background:var(--green)"></span>Sin cercanos (verde)<span class="n" id="nGreen">0</span></label>
       <label class="chk"><input type="checkbox" id="showLines" checked>Unir con línea los trenes cercanos</label>
+      <label class="chk"><input type="checkbox" id="showTrack" checked>Vía de alta velocidad<span class="n" style="color:#7b1fa2">▬▬</span></label>
+      <div class="help" id="trackStatus" style="margin:0 0 6px"></div>
       <label for="search">Buscar tren / línea / núcleo</label>
       <input type="text" id="search" placeholder="p. ej. 03123, C1, Madrid…">
       <div class="sub" style="margin-top:6px">Trenes en pantalla: <b id="nTotal">0</b></div>
@@ -165,7 +167,7 @@
     thRed: $("thRed"), thOrange: $("thOrange"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
     search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nTotal: $("nTotal"),
-    pairs: $("pairs")
+    pairs: $("pairs"), showTrack: $("showTrack"), trackStatus: $("trackStatus")
   };
 
   /* ---------- Mapa ---------- */
@@ -187,13 +189,60 @@
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
+  /* ---------- Vía de alta velocidad (OpenStreetMap / Overpass) ---------- */
+  const trackCanvas = L.canvas({ padding: 0.5 });
+  const trackLayer = L.layerGroup().addTo(map);
+  let trackLine = null, trackLoaded = false, trackLoading = false;
+  const OVERPASS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter"
+  ];
+  const OQ = '[out:json][timeout:90];area["ISO3166-1"="ES"][admin_level=2]->.a;way["railway"="rail"]["highspeed"="yes"][!"service"](area.a);out skel geom qt;';
+  const setTrack = msg => { el.trackStatus.textContent = msg; };
+  function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+  async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } }
+  async function idbSet(k, v) { try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }
+  async function loadTrack() {
+    if (trackLoaded || trackLoading) return;
+    trackLoading = true; setTrack("Cargando vía de alta velocidad… (la primera vez puede tardar un minuto)");
+    try {
+      let ways = null;
+      const c = await idbGet("avTrack");
+      if (c && c.ways && Date.now() - c.t < 30 * 864e5) ways = c.ways;
+      if (!ways) {
+        let lastErr;
+        for (const ep of OVERPASS) {
+          try {
+            const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "data=" + encodeURIComponent(OQ) });
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const j = await r.json();
+            ways = (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => e.geometry.map(q => [+q.lat.toFixed(5), +q.lon.toFixed(5)]));
+            if (ways.length) break;
+          } catch (e) { lastErr = e; }
+        }
+        if (!ways || !ways.length) throw lastErr || new Error("sin datos");
+        idbSet("avTrack", { t: Date.now(), ways });
+      }
+      trackLine = L.polyline(ways, { renderer: trackCanvas, color: "#7b1fa2", weight: 3, opacity: 0.85, interactive: false });
+      trackLoaded = true;
+      if (el.showTrack.checked) trackLine.addTo(trackLayer);
+      setTrack(ways.length + " tramos de vía de alta velocidad (datos de OpenStreetMap)");
+    } catch (e) {
+      setTrack("No se pudo cargar la vía (" + (e.message || e) + "). Desmarca y vuelve a marcar la casilla para reintentar.");
+    } finally { trackLoading = false; }
+  }
+  el.showTrack.addEventListener("change", () => {
+    if (el.showTrack.checked) { if (trackLoaded) trackLine.addTo(trackLayer); else loadTrack(); }
+    else if (trackLine) trackLayer.removeLayer(trackLine);
+  });
+
   /* ---------- Estado ---------- */
   let allTrains = [];         // todos los trenes descargados
   let trains = [];            // [{id,label,lat,lon,raw,d,color}] (solo tipos marcados)
   const typeSel = {};         // tipo -> true/false
   let typesKey = "";
-  const isHighSpeed = tp => /^AV|ALTA\s*VEL/i.test(tp);
-  const markers = new Map();  // id -> L.circleMarker
+  const markers = new Map();  // id -> L.marker
   let pairs = [];
   let timer = null;
   let paused = false;
@@ -451,7 +500,7 @@
     const counts = {};
     allTrains.forEach(t => { if (t.tipo) counts[t.tipo] = (counts[t.tipo] || 0) + 1; });
     const keys = Object.keys(counts).sort();
-    keys.forEach(k => { if (!(k in typeSel)) typeSel[k] = isHighSpeed(k); });
+    keys.forEach(k => { if (!(k in typeSel)) typeSel[k] = true; });
     const box = $("types");
     if (!keys.length) {
       const campos = allTrains[0] ? Object.keys(allTrains[0].raw).filter(k => typeof allTrains[0].raw[k] !== "object").join(", ") : "";
@@ -538,6 +587,7 @@
   el.proxy.addEventListener("change", () => { try { localStorage.setItem("proxyRenfe", el.proxy.value.trim()); } catch (e) {} });
   refresh();
   schedule();
+  if (el.showTrack.checked) loadTrack();
 })();
 </script>
 </body>
