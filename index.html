@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.15</title>
+<title>Trenes Renfe en tiempo real · v1.15.1</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -20,6 +20,12 @@
   #mapWrap{position:relative;height:100%;width:100%}
   #map{height:100%;width:100%;background:#cfd8e3}
   h1{font-size:17px;margin:0 0 2px;display:flex;align-items:center;justify-content:space-between}
+  .title-flex{display:flex;align-items:center;gap:8px;width:100%;justify-content:space-between;}
+  .help-btn{
+    background:var(--accent);color:#fff;border:0;border-radius:50%;width:24px;height:24px;
+    font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.2);
+  }
+  .help-btn:hover{filter:brightness(1.1);}
   .ver{font-size:11px;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line)}
   .sub{font-size:12px;color:var(--muted)}
   fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
@@ -43,58 +49,42 @@
   .pair .d{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
   .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
 
+  /* Ventana flotante de ayuda / lógica */
+  #helpModal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5); z-index: 2000; display: none;
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  #helpModal.active { display: flex; }
+  .modal-content {
+    background: var(--panel); border-radius: 12px; max-width: 520px; width: 100%;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.3); overflow: hidden; display: flex; flex-direction: column;
+  }
+  .modal-header {
+    background: var(--accent); color: #fff; padding: 12px 16px; font-weight: 700;
+    display: flex; align-items: center; justify-content: space-between; font-size: 15px;
+  }
+  .modal-close { background: none; border: 0; color: #fff; font-size: 18px; cursor: pointer; }
+  .modal-body { padding: 16px; font-size: 13px; line-height: 1.5; max-height: 75vh; overflow-y: auto; }
+  .legend-item { display: flex; gap: 10px; margin-bottom: 12px; align-items: flex-start; }
+  .legend-dot { width: 16px; height: 16px; border-radius: 50%; margin-top: 2px; flex-shrink: 0; }
+
   /* Panel flotante superior izquierdo en el mapa para Alertas Rojas */
   #redOverlay{
-    position:absolute;
-    top:12px;
-    left:54px;
-    z-index:1000;
-    background:var(--panel);
-    border:2px solid var(--red);
-    border-radius:10px;
-    box-shadow:0 4px 16px rgba(0,0,0,.28);
-    min-width:290px;
-    max-width:410px;
-    max-height:260px;
-    display:flex;
-    flex-direction:column;
-    overflow:hidden;
-    pointer-events:auto;
+    position:absolute; top:12px; left:54px; z-index:1000; background:var(--panel);
+    border:2px solid var(--red); border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,.28);
+    min-width:290px; max-width:410px; max-height:260px; display:flex; flex-direction:column; overflow:hidden; pointer-events:auto;
   }
-  #redOverlay.empty{
-    border-color:var(--line);
-    opacity:0.9;
-  }
+  #redOverlay.empty{ border-color:var(--line); opacity:0.9; }
   .ro-head{
-    background:var(--red);
-    color:#fff;
-    font-size:12px;
-    font-weight:700;
-    padding:6px 10px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    letter-spacing:.02em;
+    background:var(--red); color:#fff; font-size:12px; font-weight:700; padding:6px 10px;
+    display:flex; align-items:center; justify-content:space-between; letter-spacing:.02em;
   }
-  #redOverlay.empty .ro-head{
-    background:var(--bg);
-    color:var(--muted);
-    border-bottom:1px solid var(--line);
-  }
-  #redList{
-    padding:6px 8px;
-    overflow-y:auto;
-    font-size:12px;
-  }
+  #redOverlay.empty .ro-head{ background:var(--bg); color:var(--muted); border-bottom:1px solid var(--line); }
+  #redList{ padding:6px 8px; overflow-y:auto; font-size:12px; }
   .ro-item{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:8px;
-    padding:5px 4px;
-    border-bottom:1px solid var(--line);
-    cursor:pointer;
-    font-weight:600;
+    display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 4px;
+    border-bottom:1px solid var(--line); cursor:pointer; font-weight:600;
   }
   .ro-item:last-child{border-bottom:0}
   .ro-item:hover{background:var(--bg)}
@@ -138,8 +128,11 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.15</span></h1>
-      <div class="sub">Mapa de España · alerta por alcance y misma vía</div>
+      <div class="title-flex">
+        <h1>🚆 Trenes Renfe</h1>
+        <button class="help-btn" id="btnHelp" title="¿Cómo funciona?">?</button>
+      </div>
+      <div class="sub">Control de tráfico y seguridad</div>
     </div>
 
     <fieldset>
@@ -243,13 +236,45 @@
   </main>
 </div>
 
+<!-- Ventana Modal de Ayuda / Lógica -->
+<div id="helpModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span>📖 ¿Cómo funciona este sistema de alertas?</span>
+      <button class="modal-close" id="btnCloseHelp">×</button>
+    </div>
+    <div class="modal-body">
+      <p>Este mapa vigila en tiempo real los trenes de Renfe en España para evitar que se acerquen demasiado de forma peligrosa.</p>
+      
+      <div class="legend-item">
+        <div class="legend-dot" style="background: #43a047;"></div>
+        <div><b>Trenes en Verde:</b> Viajan con total seguridad. Están suficientemente lejos unos de otros o se encuentran en las inmediaciones de estaciones (donde van despacio y frenan).</div>
+      </div>
+
+      <div class="legend-item">
+        <div class="legend-dot" style="background: #f59e0b;"></div>
+        <div><b>Trenes en Naranja / Amarillo (Precaución):</b> Dos trenes circulan por el <u>mismo tipo de vía</u> en la <u>misma dirección y sentido</u>, y se encuentran a menos de 5 kilómetros de distancia (o el de delante va más rápido y se está alejando).</div>
+      </div>
+
+      <div class="legend-item">
+        <div class="legend-dot" style="background: #e53935; animation: pulsoRojo 0.9s infinite;"></div>
+        <div><b>Alerta Roja (Peligro de Alcance):</b> Salta cuando dos trenes están a menos de 5 km en el mismo sentido, pero <u>el tren de atrás va rápido (a más de 100 km/h) y alcanza al de delante</u> (porque va a igual o mayor velocidad). ¡El espacio entre ellos se reduce rápidamente!</div>
+      </div>
+
+      <p style="margin-top: 12px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--line); pt: 8px;">
+        * Nota: Los trenes de Alta Velocidad (AVE) y los de Media Distancia (Convencionales) nunca se cruzan en las alertas, ya que van por vías diferentes aunque pasen cerca.
+      </p>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 (() => {
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.15";
+  const VERSION = "1.15.1";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -263,6 +288,12 @@
     ALTARIA: "#00695c", "CERCANÍAS": "#ea580c", TREN: "#475569"
   };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
+
+  /* ---------- Modal de Ayuda ---------- */
+  const helpModal = document.getElementById("helpModal");
+  document.getElementById("btnHelp").addEventListener("click", () => helpModal.classList.add("active"));
+  document.getElementById("btnCloseHelp").addEventListener("click", () => helpModal.classList.remove("active"));
+  helpModal.addEventListener("click", (e) => { if (e.target === helpModal) helpModal.classList.remove("active"); });
 
   /* ---------- Traductor Oficial de Códigos Numéricos de Producto de Renfe ---------- */
   const PRODUCT_CODES = {
@@ -390,89 +421,6 @@
     return false;
   }
 
-  /* ---------- Trazados Base Detallados (AV y Media Distancia / Convencional) ---------- */
-  const FALLBACK_AV_WAYS = [
-    [[40.4065,-3.6896],[40.5567,-3.1670],[40.9250,-2.4500],[41.3410,-1.6440],[41.6587,-0.9114],[41.5200,0.0500],[41.6208,0.6327],[41.3900,1.0200],[41.1992,1.2690],[41.3791,2.1401],[41.9793,2.8169],[42.2654,2.9436]],
-    [[40.4065,-3.6896],[39.8900,-3.9200],[38.9830,-3.9160],[38.6850,-4.1070],[38.1500,-4.4500],[37.8884,-4.7892],[37.6500,-5.4000],[37.3919,-5.9753]],
-    [[37.8884,-4.7892],[37.3980,-4.7060],[37.0672,-4.6869],[36.7115,-4.4316]],
-    [[37.0672,-4.6869],[37.0180,-4.5570],[37.1670,-4.1480],[37.1841,-3.6091]],
-    [[40.4065,-3.6896],[40.0300,-3.0100],[40.0442,-2.1380],[39.5890,-1.1740],[39.4601,-0.3816]],
-    [[40.0442,-2.1380],[39.4200,-1.9600],[38.9997,-1.8490],[38.6064,-0.9234],[38.3446,-0.4951]],
-    [[38.6064,-0.9234],[38.2480,-0.7420],[38.0830,-0.9460],[37.9746,-1.1301]],
-    [[40.4722,-3.6822],[40.8884,-4.0958],[41.3200,-4.4800],[41.6416,-4.7289],[42.0110,-4.5390],[42.5960,-5.5786],[43.1600,-5.8280],[43.3662,-5.8536]],
-    [[42.0110,-4.5390],[42.3712,-3.6657]],
-    [[41.2850,-4.6850],[41.5126,-5.7369],[42.0289,-6.6214],[42.3411,-7.8647],[42.8705,-8.5446],[43.3526,-8.4098]],
-    [[42.8705,-8.5446],[42.5960,-8.7610],[42.4227,-8.6345],[42.2351,-8.7118]],
-    [[39.9678,-6.1030],[39.4650,-6.3840],[38.9218,-6.3426],[38.8878,-6.9822]],
-    [[40.1500,-3.8200],[39.8624,-4.0113]]
-  ];
-
-  const FALLBACK_MD_WAYS = [
-    [[41.3791,2.1401],[41.2240,1.7250],[41.1120,1.2550],[40.8120,0.5210],[40.4700,0.4730],[39.9870,-0.0528],[39.6800,-0.2700],[39.4601,-0.3816],[39.1500,-0.4350],[38.9900,-0.5200],[38.8700,-0.7800],[38.6100,-0.8700],[38.3446,-0.4951],[38.2650,-0.6980],[38.0830,-0.9460],[37.9746,-1.1301],[37.6050,-0.9860]],
-    [[40.4065,-3.6896],[40.0320,-3.6060],[39.6100,-3.5000],[39.3880,-3.2180],[39.2000,-2.6500],[38.9997,-1.8490],[38.8680,-1.0970],[38.8700,-0.7800]],
-    [[39.3880,-3.2180],[38.9950,-3.3700],[38.7610,-3.3850],[38.3800,-3.5050],[38.0694,-3.5931],[38.0180,-3.8600],[38.0300,-4.0500],[37.8884,-4.7892],[37.7500,-5.0500],[37.6180,-5.2800],[37.3919,-5.9753],[37.1750,-5.9220],[36.9150,-6.0700],[36.6796,-6.1268],[36.5930,-6.2250],[36.5290,-6.2869]],
-    [[38.0180,-3.8600],[37.7780,-3.7890]],
-    [[38.0694,-3.5931],[37.6500,-3.2600],[37.3100,-3.1350],[37.1300,-2.6500],[36.8380,-2.4590]],
-    [[37.3100,-3.1350],[37.3500,-3.4800],[37.1841,-3.6091]],
-    [[37.3919,-5.9753],[37.3800,-6.2500],[37.3300,-6.5400],[37.2518,-6.9447]],
-    [[37.1750,-5.9220],[37.2300,-5.1000],[37.0420,-4.7250],[36.7420,-5.1660],[36.4500,-5.3600],[36.1270,-5.4470]],
-    [[37.0420,-4.7250],[36.9000,-4.6500],[36.7115,-4.4316]],
-    [[40.4065,-3.6896],[40.1300,-4.2600],[39.9650,-4.8300],[39.8950,-5.5400],[39.9678,-6.1030],[39.4650,-6.3840],[38.9218,-6.3426],[38.8878,-6.9822]],
-    [[39.4650,-6.3840],[39.5000,-7.0500]],
-    [[38.9218,-6.3426],[38.4250,-6.4150],[37.9200,-6.1500],[37.3919,-5.9753]],
-    [[38.9218,-6.3426],[38.8650,-5.8700],[38.6850,-4.1070]],
-    [[40.4722,-3.6822],[40.6350,-4.0100],[40.6596,-4.6869],[41.0500,-4.7800],[41.3186,-4.9089],[41.6416,-4.7289],[41.9200,-4.4500],[42.1200,-4.1000],[42.3712,-3.6657],[42.5400,-3.3100],[42.6844,-2.9480],[42.8415,-2.6716],[42.8900,-2.3000],[43.0400,-2.2000],[43.1350,-2.0750],[43.3177,-1.9765],[43.3396,-1.7890]],
-    [[41.3186,-4.9089],[40.9765,-5.6496],[40.6050,-6.8150]],
-    [[41.3186,-4.9089],[41.5126,-5.7369]],
-    [[42.0110,-4.5390],[42.4500,-4.3800],[42.8000,-4.2600],[43.0000,-4.1300],[43.3389,-4.0531],[43.4586,-3.8115]],
-    [[42.0110,-4.5390],[42.3200,-4.9800],[42.5960,-5.5786],[42.9800,-5.6500],[43.1600,-5.8280],[43.3662,-5.8536],[43.5390,-5.6760]],
-    [[42.5960,-5.5786],[42.4550,-6.0550],[42.5458,-6.6025],[42.4100,-7.0100],[42.5269,-7.5028],[42.3411,-7.8647],[42.2600,-8.1500],[42.1600,-8.5200],[42.2351,-8.7118]],
-    [[42.5269,-7.5028],[42.7900,-7.4200],[43.0145,-7.5516],[43.1800,-7.8900],[43.2800,-8.2200],[43.3526,-8.4098],[43.4850,-8.2250]],
-    [[42.6844,-2.9480],[43.0100,-2.9800],[43.1400,-2.9600],[43.2614,-2.9277]],
-    [[42.6844,-2.9480],[42.4567,-2.4439],[42.2200,-1.9800],[42.0610,-1.6040],[41.9100,-1.3500],[41.6587,-0.9114],[41.2700,-0.4300],[41.2380,-0.0400],[41.0900,0.6300],[41.1500,1.1050],[41.1120,1.2550]],
-    [[42.0610,-1.6040],[42.4500,-1.6500],[42.8025,-1.6622],[42.8900,-2.3000]],
-    [[41.6587,-0.9114],[41.8900,-0.7800],[42.1350,-0.4080],[42.5200,-0.3600]],
-    [[41.6587,-0.9114],[41.8800,-0.1500],[41.9050,0.1900],[41.6208,0.6327],[41.6500,1.1400],[41.7200,1.8250],[41.5450,2.1100],[41.3791,2.1401]],
-    [[40.4065,-3.6896],[40.6280,-3.1800],[41.0700,-2.6400],[41.2850,-2.1300],[41.3410,-1.6440],[41.6587,-0.9114]],
-    [[41.3410,-1.6440],[40.8650,-1.3100],[40.3420,-1.1120],[39.9000,-0.6500],[39.6800,-0.2700]],
-    [[40.0320,-3.6060],[40.0050,-3.0100],[40.0720,-2.1400],[39.5650,-1.2050],[39.4601,-0.3816]]
-  ];
-
-  /* ---------- Diccionario Maestro de Estaciones ---------- */
-  const DEFAULT_STATIONS = {
-    "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío",
-    "18000": "Madrid-Atocha Cercanías", "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "60001": "Madrid-Puerta de Atocha",
-    "10100": "Madrid-Nuevos Ministerios", "10101": "Madrid-Sol", "10102": "Madrid-Recoletos", "92102": "Toledo",
-    "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia", "79400": "Barcelona-Estació de França",
-    "71800": "Barcelona-Catalunya", "71805": "Barcelona-Arc de Triomf", "71806": "Barcelona-Sagrera",
-    "79300": "Girona", "79303": "Figueres-Vilafant", "71500": "Camp de Tarragona", "78400": "Lleida-Pirineus",
-    "79100": "Mataró", "79200": "Granollers", "71400": "Vic", "71200": "Manresa", "78200": "Tortosa",
-    "04040": "Zaragoza-Delicias", "04001": "Zaragoza-Portillo", "04002": "Zaragoza-Goya", "70600": "Calatayud",
-    "04104": "Huesca", "04007": "Tardienta", "81100": "Logroño", "81202": "Miranda de Ebro",
-    "13200": "Bilbao-Abando", "13000": "Bilbao-La Concordia", "11200": "Vitoria/Gasteiz", "11511": "San Sebastián/Donostia",
-    "11600": "Irun", "80100": "Pamplona/Iruña", "13100": "Barakaldo", "13300": "Durango",
-    "14223": "Santander", "14202": "Torrelavega", "15211": "Oviedo", "15212": "Gijón-Sanz Crespo",
-    "15205": "Mieres-Puente", "15200": "Pola de Lena", "15100": "León", "15400": "Ponferrada",
-    "10600": "Valladolid-Campo Grande", "10605": "Valladolid-Universidad", "14100": "Palencia", "11014": "Burgos-Rosa Manzano",
-    "12100": "Segovia-Guiomar", "10200": "Ávila", "10300": "Medina del Campo", "10500": "Medina del Campo AV",
-    "30100": "Zamora", "30200": "Sanabria AV", "32008": "Salamanca",
-    "31200": "Ourense", "31400": "Santiago de Compostela", "31412": "A Coruña", "31300": "Ferrol",
-    "22100": "Lugo", "22300": "Monforte de Lemos", "23004": "Pontevedra", "23005": "Vigo-Urzáiz",
-    "23100": "Vigo-Guixar", "23002": "Vilagarcía de Arousa",
-    "35002": "Cáceres", "35109": "Mérida", "37606": "Badajoz", "35010": "Plasencia",
-    "60200": "Ciudad Real", "60400": "Puertollano", "60600": "Albacete-Los Llanos", "60911": "Cuenca-Fernando Zóbel",
-    "60913": "Requena-Utiel", "70200": "Guadalajara-Yebes", "60700": "Villena", "60905": "Villena AV",
-    "50500": "Córdoba", "51003": "Sevilla-Santa Justa", "51001": "Sevilla-San Bernardo", "51002": "Sevilla-Virgen del Rocío",
-    "51405": "Cádiz", "51300": "Jerez de la Frontera", "51400": "El Puerto de Santa María", "51402": "San Fernando-Bahía Sur",
-    "43003": "Huelva", "54413": "Málaga-María Zambrano", "54405": "Antequera-Santa Ana", "54415": "Antequera AV",
-    "05482": "Puente Genil-Herrera", "55020": "Ronda", "55104": "Algeciras", "05000": "Granada", "05475": "Loja",
-    "50300": "Linares-Baeza", "50411": "Jaén", "56312": "Almería", "56106": "Guadix",
-    "65000": "València-Joaquín Sorolla", "65001": "València-Estació del Nord", "65005": "València-Cabanyal",
-    "65300": "Castelló", "65402": "Vinaròs", "65400": "Benicarló-Peñíscola", "61200": "Alacant-Terminal",
-    "62109": "Elx AV / Elche AV", "62103": "Orihuela-Miguel Hernández", "61307": "Murcia del Carmen", "61300": "Cartagena",
-    "39000": "Palma de Mallorca", "07000": "Eivissa", "00000": "Estación Central", "99999": "En ruta"
-  };
-
   /* ---------- Elementos ---------- */
   const $ = id => document.getElementById(id);
   const el = {
@@ -483,7 +431,7 @@
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
     search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nTotal: $("nTotal"),
-    pairs: $("pairs"), redOverlay: $("redOverlay"), roCount: $("roCount"), redList: $("redList")
+    pairs: $("pairs")
   };
 
   /* ---------- Mapa ---------- */
@@ -505,7 +453,7 @@
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
-  /* ---------- Capas de Vías e Índice Espacial (para saber en qué vía va un tren híbrido) ---------- */
+  /* ---------- Capas de Vías ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
   const GRID_SIZE = 0.15;
@@ -656,7 +604,6 @@
     const combined = isOsm ? [...st.fallback, ...ways] : ways;
     addWaysToGrid(st.grid, combined);
     st.poly = L.polyline(combined, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
-    st.n = combined.length;
     st.loaded = true;
     st.osmLoaded = !!isOsm;
     syncTrackVisibility();
@@ -943,16 +890,10 @@
     };
   }
 
-  /* ---------- Clasificación de Vía Activa por Tren (Evita cruzar MD con AVE) ---------- */
   function getTrainTrackGroup(t) {
     const tipo = (t.tipo || "").toUpperCase();
-    // 1. Alta Velocidad pura (ancho internacional UIC exclusivo)
     if (tipo === "AVE" || tipo === "AVLO" || tipo === "AVANT") return "AV";
-    // 2. Convencional pura (ancho ibérico / cercanías / media distancia convencional)
     if (tipo === "MD" || tipo === "REGIONAL" || tipo === "REG.EXP" || tipo === "CERCANÍAS") return "CONV";
-
-    // 3. Trenes híbridos / cambio de ancho (ALVIA, EUROMED, INTERCITY, ALTARIA, TALGO):
-    // Determinamos en qué vía están circulando realmente ahora mismo según su velocidad o cercanía a los trazados AV vs MD
     if (isFinite(t.calcSpeed) && t.calcSpeed > 205) return "AV";
     const dAV = TRACKS.av.loaded ? minDistInGrid(TRACKS.av.grid, t.lat, t.lon) : Infinity;
     const dMD = TRACKS.md.loaded ? minDistInGrid(TRACKS.md.grid, t.lat, t.lon) : Infinity;
@@ -964,12 +905,10 @@
   function isSameTrackGroup(a, b) {
     const gA = a.trackGroup || getTrainTrackGroup(a);
     const gB = b.trackGroup || getTrainTrackGroup(b);
-    // Un tren AV puro (AVE/AVLO/AVANT) NUNCA comparte vía con un CONV puro (MD/REGIONAL/CERCANÍAS)
     if ((gA === "AV" && gB === "CONV") || (gA === "CONV" && gB === "AV")) return false;
     return true;
   }
 
-  /* ---------- Vector de Rumbo Geográfico por Estaciones (Origen/Anterior -> Próxima/Destino) ---------- */
   function getRouteVector(t) {
     const x = t._info || trainInfo(t);
     const cOrig = findStationCoords(x.orig);
@@ -977,22 +916,10 @@
     const cSig  = findStationCoords(x.sig);
     const cAnt  = findStationCoords(x.ant);
 
-    // Prioridad 1: Desde posición actual del tren hacia la próxima parada (si está a más de 3 km)
-    if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 3.0) {
-      return [cSig[0] - t.lat, cSig[1] - t.lon];
-    }
-    // Prioridad 2: Desde estación anterior hacia estación siguiente
-    if (cAnt && cSig && (cAnt[0] !== cSig[0] || cAnt[1] !== cSig[1])) {
-      return [cSig[0] - cAnt[0], cSig[1] - cAnt[1]];
-    }
-    // Prioridad 3: Desde posición actual hacia el destino final (si está a más de 5 km)
-    if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 5.0) {
-      return [cDest[0] - t.lat, cDest[1] - t.lon];
-    }
-    // Prioridad 4: Desde estación de origen hacia estación de destino
-    if (cOrig && cDest && (cOrig[0] !== cDest[0] || cOrig[1] !== cDest[1])) {
-      return [cDest[0] - cOrig[0], cDest[1] - cOrig[1]];
-    }
+    if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 3.0) return [cSig[0] - t.lat, cSig[1] - t.lon];
+    if (cAnt && cSig && (cAnt[0] !== cSig[0] || cAnt[1] !== cSig[1])) return [cSig[0] - cAnt[0], cSig[1] - cAnt[1]];
+    if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 5.0) return [cDest[0] - t.lat, cDest[1] - t.lon];
+    if (cOrig && cDest && (cOrig[0] !== cDest[0] || cOrig[1] !== cDest[1])) return [cDest[0] - cOrig[0], cDest[1] - cOrig[1]];
     return null;
   }
 
@@ -1005,34 +932,28 @@
     return (x1 * x2 + y1 * y2) / (m1 * m2);
   }
 
-  /* ---------- Verificación Estricta de Mismo Sentido ---------- */
   function areMovingSameDirection(a, b) {
     const infoA = a._info, infoB = b._info;
     const refLat = (a.lat + b.lat) / 2;
 
-    // 1. Si el origen de uno es exactamente el destino del otro (o comparten estación cruzada), van en sentido opuesto
     if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
       if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return false;
       if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return false;
       if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return false;
     }
 
-    // 2. Comprobar vectores de ruta geográficos (Estaciones de Origen/Próxima/Destino)
     const rA = a.routeVec, rB = b.routeVec;
     if (rA && rB) {
       const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
-      // Si sus rutas geográficas forman un ángulo > 60° (cos < 0.5), NO van en el mismo sentido
       if (cosRoute !== null && cosRoute < 0.5) return false;
     }
 
-    // 3. Comprobar vectores GPS reales de movimiento
     if (a.hasVector && b.hasVector) {
       const cosGps = cosBetweenVectors(a.dLat, a.dLon, b.dLat, b.dLon, refLat);
       if (cosGps !== null && cosGps < 0.5) return false;
       return true;
     }
 
-    // 4. Si solo uno tiene vector GPS y el otro tiene vector de ruta, compararlos entre sí
     if (a.hasVector && rB) {
       const cosMix = cosBetweenVectors(a.dLat, a.dLon, rB[0], rB[1], refLat);
       if (cosMix !== null && cosMix < 0.5) return false;
@@ -1042,7 +963,6 @@
       if (cosMix !== null && cosMix < 0.5) return false;
     }
 
-    // 5. Si aún no hay vectores GPS en ambos, exigir que ambos tengan vector de ruta claramente paralelo (cos > 0.65)
     if (rA && rB) {
       const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
       return cosRoute !== null && cosRoute > 0.65;
@@ -1051,7 +971,6 @@
     return false;
   }
 
-  // Determina quién va detrás (trailing) y quién delante (leading) usando el vector GPS o el vector de ruta
   function getTrailingAndLeading(a, b) {
     let vLat = 0, vLon = 0;
     if (a.hasVector) { vLat += a.dLat; vLon += a.dLon; }
@@ -1093,51 +1012,6 @@
     return [...seen.values()];
   }
 
-  const CITIES = {
-    "Madrid-Puerta de Atocha": [40.4065, -3.6896], "Barcelona-Sants": [41.3791, 2.1401], "València-Joaquín Sorolla": [39.4601, -0.3816],
-    "Sevilla-Santa Justa": [37.3919, -5.9753], "Málaga-María Zambrano": [36.7115, -4.4316], "Zaragoza-Delicias": [41.6587, -0.9114],
-    "Bilbao-Abando": [43.2614, -2.9277], "Valladolid-Campo Grande": [41.6416, -4.7289], "Córdoba": [37.8884, -4.7892],
-    "Alacant-Terminal": [38.3446, -0.4951], "Vigo-Urzáiz": [42.2351, -8.7118], "Granada": [37.1841, -3.6091]
-  };
-  let demoFleet = null;
-  function makeDemoFleet() {
-    const names = Object.keys(CITIES), tipos = ["AVE", "AVLO", "ALVIA", "AVANT", "MD", "INTERCITY", "REG.EXP"], fleet = [];
-    const rnd = (a, b) => a + Math.random() * (b - a);
-    for (let i = 0; i < 110; i++) {
-      let a = names[Math.floor(Math.random() * names.length)], b;
-      do { b = names[Math.floor(Math.random() * names.length)]; } while (b === a);
-      const km = haversine(...CITIES[a], ...CITIES[b]);
-      const speed = rnd(40, 260), phase = Math.random(), tipo = tipos[i % tipos.length];
-      fleet.push({ id: "0" + (2100 + i), tipo, a, b, km, speed, phase });
-      if (i % 10 === 0) {
-        fleet.push({ id: "0" + (3100 + i), tipo, a, b, km, speed: speed * 1.15, phase: phase - 0.008 });
-      }
-    }
-    return fleet;
-  }
-  function demoTrains() {
-    if (!demoFleet) demoFleet = makeDemoFleet();
-    const now = Date.now() / 3600000;
-    return demoFleet.map(f => {
-      let p = (now * f.speed / f.km + f.phase) % 2; if (p > 1) p = 2 - p;
-      const [la1, lo1] = CITIES[f.a], [la2, lo2] = CITIES[f.b];
-      const item = { id: f.id, codTren: f.id, desProducto: f.tipo, desOrigen: f.a, desDestino: f.b, latitud: la1 + (la2 - la1) * p, longitud: lo1 + (lo2 - lo1) * p, velocidad: Math.round(f.speed), retraso: 0 };
-      return normalize(item, 0);
-    });
-  }
-
-  /* ---------- Lógica de Proximidad (Misma Vía + Mismo Sentido + Velocidad de Alcance) ---------- */
-  function isConfirmedHighSpeed(t, minSpeedKmh) {
-    if (t.speedsList && t.speedsList.length >= 2) {
-      const avg = (t.speedsList[0] + t.speedsList[1]) / 2;
-      return avg > minSpeedKmh && t.speedsList[1] > minSpeedKmh * 0.85;
-    }
-    if (t.speedMeasures >= 2 && isFinite(t.calcSpeed)) {
-      return t.calcSpeed > minSpeedKmh;
-    }
-    return false;
-  }
-
   function computeProximity() {
     const tO = Math.max(0.5, toNum(el.thOrange.value) || 5);
     const minSpeed = Math.max(10, toNum(el.thSpeed.value) || 100);
@@ -1165,12 +1039,10 @@
         const b = sorted[j];
         if (b.lat - a.lat > maxDLat) break;
 
-        // 1. FILTRO DE TIPO DE VÍA: un AVE/AVLO/AVANT nunca puede entrar en alerta con un MD/Regional/Cercanías
         if (!isSameTrackGroup(a, b)) continue;
 
         const d = haversine(a.lat, a.lon, b.lat, b.lon);
         if (d < tO) {
-          // 2. FILTRO ESTRICTO DE SENTIDO DE LA MARCHA (Ruta geográfica + GPS)
           if (!areMovingSameDirection(a, b)) continue;
 
           const order = getTrailingAndLeading(a, b);
@@ -1183,8 +1055,6 @@
             const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
             const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
 
-            // 3. REGLA DE ALCANCE:
-            // Solo es alerta roja si el tren que va detrás supera el umbral (>100 km/h) y va más rápido o igual que el de delante
             if (trailing.isFast && vTrail >= vLead) {
               pairSeverity = "red";
             } else {
@@ -1217,7 +1087,6 @@
     });
 
     pairs.sort((x, y) => x.d - y.d);
-    return { tO, minSpeed };
   }
 
   function badgeColor(tipo) { return BADGE_COLORS[tipo] || "#475569"; }
@@ -1255,11 +1124,9 @@
     const x = t._info || trainInfo(t);
     const vGrp = t.trackGroup === "AV" ? "Alta Velocidad (UIC)" : (t.trackGroup === "CONV" ? "Convencional (Ibérico)" : "Ancho Variable / Mixto");
     const mainRows = [
-      ["Tipo de servicio", x.tipo],
-      ["Infraestructura", vGrp],
+      ["Tipo de servicio", x.tipo], ["Infraestructura", vGrp],
       ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
-      ["Origen", x.orig || "—"],
-      ["Destino", x.dest || "—"]
+      ["Origen", x.orig || "—"], ["Destino", x.dest || "—"]
     ];
     if (x.ant) mainRows.push(["Estación anterior", x.ant]);
     if (x.sig) mainRows.push(["Próxima estación", x.sig]);
@@ -1302,9 +1169,10 @@
     return `${esc(la)} ↔ ${esc(lb)}`;
   }
 
+  /* ---------- Función render() restaurada ---------- */
   function render() {
     const q = el.search.value.trim().toLowerCase();
-    const show = { red: el.showRed.checked, orange: el.showOrange.checked, green: el.showGreen.checked };
+    const show = { red: true, orange: true, green: true };
     const counts = { red: 0, orange: 0, green: 0 };
     const alive = new Set();
     let visible = 0;
@@ -1356,24 +1224,19 @@
       else orangePairs.push({ p, idx });
     });
 
-    // 1. Recuadro superior izquierdo del mapa (Solo Alertas Rojas por alcance)
     el.roCount.textContent = redPairs.length;
     if (!redPairs.length) {
       el.redOverlay.classList.add("empty");
-      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
+      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance.</div>';
     } else {
       el.redOverlay.classList.remove("empty");
       el.redList.innerHTML = redPairs.map(({ p, idx }) => {
-        return `<div class="ro-item" data-i="${idx}">` +
-          `<span>🔴 ${formatPairText(p)}</span>` +
-          `<span class="ro-d">${fmtKm(p.d)}</span>` +
-          `</div>`;
+        return `<div class="ro-item" data-i="${idx}"><span>🔴 ${formatPairText(p)}</span><span class="ro-d">${fmtKm(p.d)}</span></div>`;
       }).join("");
     }
 
-    // 2. Banda lateral izquierda (Solo Amarillos/Naranjas en precaución o alejándose)
     if (!orangePairs.length) {
-      el.pairs.innerHTML = '<div class="sub">Ningún par en precaución (amarillo/naranja).</div>';
+      el.pairs.innerHTML = '<div class="sub">Ningún par en precaución.</div>';
     } else {
       el.pairs.innerHTML = orangePairs.slice(0, 100).map(({ p, idx }) => {
         return `<div class="pair" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
@@ -1395,6 +1258,7 @@
     }
     keys.forEach(k => { const n = box.querySelector(`[data-c="${CSS.escape(k)}"]`); if (n) n.textContent = counts[k]; });
   }
+
   const inTypes = t => !t.tipo || typeSel[t.tipo] !== false;
   $("types").addEventListener("change", e => {
     const k = e.target.dataset && e.target.dataset.t; if (k === undefined) return;
@@ -1471,8 +1335,8 @@
   }
   el.proxy.addEventListener("change", () => { try { localStorage.setItem("proxyRenfe", el.proxy.value.trim()); } catch (e) {} });
 
-  if (el.showTrackAV.checked) loadTrackLayer("av");
-  if (el.showTrackMD.checked) loadTrackLayer("md");
+  loadTrackLayer("av");
+  loadTrackLayer("md");
   updateTrackStatus();
   refresh();
   schedule();
