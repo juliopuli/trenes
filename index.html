@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.15</title>
+<title>Trenes Renfe en tiempo real · v1.16</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -19,8 +19,16 @@
   #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:14px 14px 24px;display:flex;flex-direction:column;gap:14px}
   #mapWrap{position:relative;height:100%;width:100%}
   #map{height:100%;width:100%;background:#cfd8e3}
-  h1{font-size:17px;margin:0 0 2px;display:flex;align-items:center;justify-content:space-between}
-  .ver{font-size:11px;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line)}
+  h1{font-size:16px;margin:0;display:flex;align-items:center;gap:8px;flex:1}
+  .side-top{display:flex;align-items:center;gap:8px}
+  .help-btn{
+    width:26px;height:26px;border-radius:50%;border:1.5px solid var(--accent);
+    background:var(--accent);color:#fff;font-weight:800;font-size:14px;
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+    flex-shrink:0;padding:0;box-shadow:0 2px 5px rgba(29,78,216,.3);
+  }
+  .help-btn:hover{filter:brightness(1.08);transform:scale(1.05)}
+  .ver{font-size:11px;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line);margin-left:auto}
   .sub{font-size:12px;color:var(--muted)}
   fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
   legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
@@ -35,13 +43,17 @@
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   button.sm{padding:4px 8px;font-size:11px;border-radius:6px}
   button:hover{filter:brightness(.96)}
-  #status{font-size:12px;color:var(--muted);line-height:1.4}
+  #status{font-size:12px;color:var(--muted);line-height:1.4;margin-top:4px}
   #status.err{color:var(--red)}
-  #pairs{max-height:240px;overflow-y:auto;font-size:12px}
+  #pairs{max-height:280px;overflow-y:auto;font-size:12px}
   .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px solid var(--line);cursor:pointer}
   .pair:hover{background:var(--bg)}
   .pair .d{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
   .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
+
+  /* Contadores resumen compactos en el faldón */
+  .stat-pills{display:flex;gap:6px;margin-top:8px}
+  .stat-pill{flex:1;display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:7px;background:var(--bg);border:1px solid var(--line);font-size:12px;font-weight:600}
 
   /* Panel flotante superior izquierdo en el mapa para Alertas Rojas */
   #redOverlay{
@@ -100,6 +112,99 @@
   .ro-item:hover{background:var(--bg)}
   .ro-item .ro-d{color:var(--red);font-variant-numeric:tabular-nums;white-space:nowrap}
 
+  /* Botones flotantes superior derecha (Actualizar / Pausar) */
+  #topRightControls{
+    position:absolute;
+    top:12px;
+    right:12px;
+    z-index:1000;
+    display:flex;
+    gap:8px;
+  }
+  .fab-btn{
+    width:40px;height:40px;border-radius:10px;background:var(--panel);
+    border:1px solid var(--line);color:var(--text);display:flex;
+    align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:0 3px 12px rgba(0,0,0,.22);padding:0;
+  }
+  .fab-btn:hover{background:var(--bg);border-color:var(--accent)}
+  .fab-btn svg{width:20px;height:20px;fill:currentColor}
+  @keyframes giroRefresh{to{transform:rotate(360deg)}}
+  .fab-btn.spinning svg{animation:giroRefresh .8s linear infinite}
+  .fab-btn.paused{border-color:var(--orange);color:var(--orange)}
+
+  /* Barra flotante inferior izquierda */
+  #bottomLeftControls{
+    position:absolute;
+    bottom:24px;
+    left:12px;
+    z-index:1000;
+    display:flex;
+    gap:8px;
+    align-items:flex-end;
+  }
+  .fl-wrap{position:relative}
+  .fl-btn{
+    height:42px;padding:0 12px;border-radius:10px;background:var(--panel);
+    border:1px solid var(--line);color:var(--text);display:flex;
+    align-items:center;gap:7px;cursor:pointer;font-size:12.5px;font-weight:600;
+    box-shadow:0 3px 12px rgba(0,0,0,.24);
+  }
+  .fl-btn:hover,.fl-btn.active{border-color:var(--accent);background:var(--bg)}
+  .fl-btn svg{width:19px;height:19px;fill:currentColor;flex-shrink:0}
+  .fl-pop{
+    position:absolute;
+    bottom:50px;
+    left:0;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    box-shadow:0 6px 24px rgba(0,0,0,.28);
+    padding:12px;
+    min-width:240px;
+    display:none;
+    z-index:1002;
+  }
+  .fl-pop.open{display:block}
+  .fl-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+
+  /* Switch visual para Fuente y Mapa base */
+  .sw-group{display:flex;flex-direction:column;gap:6px}
+  .sw-opt{
+    display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;
+    border:1px solid var(--line);background:var(--bg);color:var(--text);
+    font-size:12.5px;font-weight:600;cursor:pointer;text-align:left;
+  }
+  .sw-opt.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .sw-opt .sw-ind{width:10px;height:10px;border-radius:50%;background:currentColor;opacity:.4}
+  .sw-opt.active .sw-ind{opacity:1;background:#fff}
+
+  /* Ventana modal explicativa (?) */
+  #helpModal{
+    position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;
+    display:none;align-items:center;justify-content:center;padding:16px;
+    backdrop-filter:blur(2px);
+  }
+  #helpModal.open{display:flex}
+  .hm-card{
+    background:var(--panel);color:var(--text);border:1px solid var(--line);
+    border-radius:16px;max-width:580px;width:100%;max-height:88vh;
+    display:flex;flex-direction:column;box-shadow:0 16px 40px rgba(0,0,0,.4);overflow:hidden;
+  }
+  .hm-head{
+    background:var(--accent);color:#fff;padding:14px 18px;display:flex;
+    align-items:center;justify-content:space-between;font-size:16px;font-weight:700;
+  }
+  .hm-close{background:rgba(255,255,255,.2);border:0;color:#fff;width:30px;height:30px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+  .hm-body{padding:18px;overflow-y:auto;font-size:13.5px;line-height:1.55;display:flex;flex-direction:column;gap:14px}
+  .hm-box{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--bg)}
+  .hm-box-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;margin-bottom:6px}
+  .hm-diagram{
+    margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--panel);
+    border:1px dashed var(--line);font-family:monospace;font-size:12px;
+    display:flex;align-items:center;justify-content:space-between;gap:6px;
+  }
+
   .tm{background:none;border:0}
   .tm .b{width:28px;height:28px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.45);transition:transform .15s}
   .tm:hover .b{transform:scale(1.25)}
@@ -130,7 +235,8 @@
   @media (max-width:760px){
     #app{grid-template-columns:1fr;grid-template-rows:46% 54%}
     #side{order:2;border-right:0;border-top:1px solid var(--line)}
-    #redOverlay{left:48px;right:10px;max-width:none}
+    #redOverlay{left:48px;right:60px;max-width:none}
+    .fl-btn span.lbl{display:none}
   }
 </style>
 </head>
@@ -138,50 +244,12 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.15</span></h1>
-      <div class="sub">Mapa de España · alerta por alcance y misma vía</div>
+      <div class="side-top">
+        <button class="help-btn" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
+        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.16</span></h1>
+      </div>
+      <div id="status">Iniciando…</div>
     </div>
-
-    <fieldset>
-      <legend>Datos</legend>
-      <label for="source">Fuente</label>
-      <select id="source">
-        <option value="ld" selected>Renfe · Largo recorrido / Alta velocidad (flotaLD.json)</option>
-        <option value="visor">Renfe · Cercanías (flota.json)</option>
-        <option value="gtfsrt">Renfe · GTFS-RT (vehicle_positions.json)</option>
-        <option value="custom">URL personalizada (JSON)</option>
-        <option value="demo">Demo (trenes simulados)</option>
-      </select>
-      <div id="customWrap" style="display:none">
-        <label for="customUrl">URL JSON</label>
-        <input type="text" id="customUrl" placeholder="https://...">
-      </div>
-      <label for="proxy">Proxy CORS (opcional)</label>
-      <input type="text" id="proxy" placeholder="https://mi-proxy/?url={url}">
-      <div class="row" style="margin-top:8px">
-        <div>
-          <label for="interval" style="margin-top:0">Actualizar cada (para medir vel.)</label>
-          <select id="interval">
-            <option value="3">3 s</option>
-            <option value="5">5 s</option>
-            <option value="10" selected>10 s (recomendado)</option>
-            <option value="15">15 s</option>
-            <option value="30">30 s</option>
-          </select>
-        </div>
-      </div>
-      <label for="basemap">Mapa base</label>
-      <select id="basemap">
-        <option value="gris">Claro (gris)</option>
-        <option value="calles" selected>Calles</option>
-        <option value="sat">Satélite</option>
-      </select>
-      <div class="row" style="margin-top:10px">
-        <button class="primary" id="btnRefresh">Actualizar ahora</button>
-        <button id="btnPause">Pausar</button>
-      </div>
-      <div id="status" style="margin-top:8px">Iniciando…</div>
-    </fieldset>
 
     <fieldset>
       <legend>Reglas de alerta (mismo sentido y vía)</legend>
@@ -190,46 +258,43 @@
         <div><label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
       </div>
       <div class="help">
-        • <b>Misma vía:</b> solo compara trenes compatibles (AVE/AVLO/AVANT no se mezclan con MD/Regional/Cercanías).<br>
-        • <b>Mismo sentido:</b> verificado por vector GPS y rumbo geográfico de las estaciones.<br>
+        • <b>Misma vía:</b> AVE/AVLO/AVANT no se mezclan con MD/Regional/Cercanías.<br>
+        • <b>Mismo sentido:</b> verificado por GPS y rumbo de estaciones.<br>
         • <b>Rojo:</b> el tren trasero va a &gt; 100 km/h y más rápido que el delantero.
       </div>
     </fieldset>
 
     <fieldset>
-      <legend>Capas de vías</legend>
-      <label class="chk"><input type="checkbox" id="showTrackAV" checked>Vía Alta Velocidad<span class="n" style="color:#7b1fa2;font-weight:700">▬▬</span></label>
-      <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía Media Distancia / Conv.<span class="n" style="color:#0066cc;font-weight:700">▬▬</span></label>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px">
-        <div class="help" id="trackStatus" style="margin:0">Cargando trazados…</div>
-        <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías de OpenStreetMap">Recargar</button>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Tipo de tren</legend>
-      <div id="types"><div class="sub">Aparecerán al cargar los datos.</div></div>
-      <div class="help">Todos marcados por defecto. La proximidad se calcula entre los tipos marcados y compatibles en vía.</div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Mostrar</legend>
-      <label class="chk"><input type="checkbox" id="showRed" checked><span class="dot" style="background:var(--red)"></span>Alerta roja (alcance)<span class="n" id="nRed">0</span></label>
-      <label class="chk"><input type="checkbox" id="showOrange" checked><span class="dot" style="background:var(--orange)"></span>Precaución (&lt;5 km)<span class="n" id="nOrange">0</span></label>
-      <label class="chk"><input type="checkbox" id="showGreen" checked><span class="dot" style="background:var(--green)"></span>Normal (verde)<span class="n" id="nGreen">0</span></label>
-      <label class="chk"><input type="checkbox" id="showLines" checked>Unir con línea los trenes cercanos</label>
+      <legend>Búsqueda y pantalla</legend>
+      <label class="chk" style="margin-top:0"><input type="checkbox" id="showLines" checked>Unir con línea los trenes cercanos</label>
       <label for="search">Buscar tren / origen / destino</label>
       <input type="text" id="search" placeholder="p. ej. 02112, ALVIA, Málaga, Madrid…">
-      <div class="sub" style="margin-top:6px">Trenes en pantalla: <b id="nTotal">0</b></div>
+      <div class="stat-pills">
+        <div class="stat-pill"><span>🔴 Peligro</span><span id="nRed">0</span></div>
+        <div class="stat-pill"><span>🟠 Precaución</span><span id="nOrange">0</span></div>
+        <div class="stat-pill"><span>🟢 Normal</span><span id="nGreen">0</span></div>
+      </div>
+      <div class="sub" style="margin-top:8px">Trenes en pantalla: <b id="nTotal">0</b></div>
     </fieldset>
 
     <fieldset>
       <legend>Trenes en precaución (amarillo/naranja)</legend>
       <div id="pairs"><div class="sub">Sin datos todavía.</div></div>
     </fieldset>
+
+    <!-- Controles internos ocultos para mantener intacto el motor de la v1.15 -->
+    <div style="display:none">
+      <div id="customWrap"><input type="text" id="customUrl"></div>
+      <input type="text" id="proxy">
+      <select id="interval"><option value="10" selected>10 s</option></select>
+      <input type="checkbox" id="showRed" checked>
+      <input type="checkbox" id="showOrange" checked>
+      <input type="checkbox" id="showGreen" checked>
+    </div>
   </aside>
 
   <main id="mapWrap">
+    <!-- Panel flotante superior izquierdo: Alertas Rojas -->
     <div id="redOverlay" class="empty">
       <div class="ro-head">
         <span>🚨 ALERTAS ROJAS POR ALCANCE</span>
@@ -239,8 +304,158 @@
         <div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>
       </div>
     </div>
+
+    <!-- Controles flotantes superior derecha: Actualizar (fijo 10s) y Pausar -->
+    <div id="topRightControls">
+      <button class="fab-btn" id="btnRefresh" title="Actualizar ahora (automático cada 10 s)">
+        <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      </button>
+      <button class="fab-btn" id="btnPause" title="Pausar / Reanudar actualización automática">
+        <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      </button>
+    </div>
+
+    <!-- Barra flotante inferior izquierda: Fuente, Mapa base, Capas de vías, Tipo de tren -->
+    <div id="bottomLeftControls">
+      <!-- 1. Fuente (Alta Velocidad/Convencional vs Cercanías) -->
+      <div class="fl-wrap">
+        <button class="fl-btn" data-pop="popSource" title="Cambiar fuente de trenes">
+          <svg viewBox="0 0 24 24"><path d="M4 3h2v18H4V3zm14 0h2v18h-2V3zM7 6h10v2H7V6zm0 5h10v2H7v-2zm0 5h10v2H7v-2z"/></svg>
+          <span class="lbl" id="lblSource">LD / Alta Velocidad</span>
+        </button>
+        <div class="fl-pop" id="popSource">
+          <div class="fl-title">Fuente de trenes</div>
+          <div class="sw-group" id="sourceSwitch">
+            <button type="button" class="sw-opt active" data-val="ld"><span class="sw-ind"></span>Alta Velocidad y Larga Distancia</button>
+            <button type="button" class="sw-opt" data-val="visor"><span class="sw-ind"></span>Red de Cercanías</button>
+          </div>
+          <select id="source" style="display:none">
+            <option value="ld" selected>LD</option>
+            <option value="visor">Cercanías</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 2. Mapa base -->
+      <div class="fl-wrap">
+        <button class="fl-btn" data-pop="popBase" title="Cambiar mapa de fondo">
+          <svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.1V5l6 2.1V19z"/></svg>
+          <span class="lbl" id="lblBase">Calles</span>
+        </button>
+        <div class="fl-pop" id="popBase">
+          <div class="fl-title">Mapa base</div>
+          <div class="sw-group" id="baseSwitch">
+            <button type="button" class="sw-opt active" data-val="calles"><span class="sw-ind"></span>Mapa de Calles</button>
+            <button type="button" class="sw-opt" data-val="sat"><span class="sw-ind"></span>Imagen Satélite</button>
+            <button type="button" class="sw-opt" data-val="gris"><span class="sw-ind"></span>Mapa Claro (Gris)</button>
+          </div>
+          <select id="basemap" style="display:none">
+            <option value="gris">Claro (gris)</option>
+            <option value="calles" selected>Calles</option>
+            <option value="sat">Satélite</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 3. Capas de vías (Logo de trazado y agujas ferroviarias) -->
+      <div class="fl-wrap">
+        <button class="fl-btn" data-pop="popTracks" title="Capas de vías ferroviarias">
+          <svg viewBox="0 0 24 24"><path d="M5 3v18h2v-6.5l7 6.5h3l-8-7.5V3H5zm12 0v8.5l-3.5 3.2 1.4 1.5L19 12.4V3h-2z"/></svg>
+          <span class="lbl">Capas de vías</span>
+        </button>
+        <div class="fl-pop" id="popTracks" style="min-width:265px">
+          <div class="fl-title">Trazado ferroviario real</div>
+          <label class="chk"><input type="checkbox" id="showTrackAV" checked>Vía Alta Velocidad<span class="n" style="color:#7b1fa2;font-weight:700">▬▬</span></label>
+          <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía Convencional / MD<span class="n" style="color:#0066cc;font-weight:700">▬▬</span></label>
+          <label class="chk"><input type="checkbox" id="showOrmTiles" checked>Detalle Adif / OpenRailwayMap<span class="n" style="color:#d97706;font-weight:700">┼┼</span></label>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding-top:6px;border-top:1px solid var(--line)">
+            <div class="help" id="trackStatus" style="margin:0">Cargando vías…</div>
+            <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías reales">Recargar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Tipo de tren -->
+      <div class="fl-wrap">
+        <button class="fl-btn" data-pop="popTypes" title="Filtrar por tipo de tren">
+          <svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>
+          <span class="lbl">Tipo de tren</span>
+        </button>
+        <div class="fl-pop" id="popTypes" style="max-height:300px;overflow-y:auto">
+          <div class="fl-title">Mostrar tipos de tren</div>
+          <div id="types"><div class="sub">Aparecerán al cargar los datos.</div></div>
+        </div>
+      </div>
+    </div>
+
     <div id="map"></div>
   </main>
+</div>
+
+<!-- Ventana flotante explicativa (?) pensada de forma muy gráfica y sencilla -->
+<div id="helpModal">
+  <div class="hm-card">
+    <div class="hm-head">
+      <span>❓ ¿Cómo funciona el radar de trenes?</span>
+      <button class="hm-close" id="btnCloseHelp" title="Cerrar">×</button>
+    </div>
+    <div class="hm-body">
+      <p style="margin:0">
+        Esta aplicación es un <b>sistema inteligente de alertas de proximidad de trenes en España</b>. Cada 10 segundos mira dónde está cada tren por GPS, hacia dónde viaja y a qué velocidad se mueve.
+      </p>
+
+      <div class="hm-box" style="border-left:5px solid #43a047">
+        <div class="hm-box-title"><span class="dot" style="background:#43a047;width:14px;height:14px"></span> 1. Trenes en VERDE (Todo tranquilo)</div>
+        <div>
+          El tren viaja con total normalidad:
+          <ul style="margin:4px 0 0;padding-left:18px">
+            <li>No tiene ningún otro tren cerca (a menos de <b>5 km</b>) en su misma vía y dirección.</li>
+            <li>Si se cruza de frente con otro tren en sentido contrario, <b>sigue en verde</b> porque cada uno va por su vía paralela.</li>
+            <li>Si llega a una estación grande (como Atocha, Sants o Málaga), también se pone en verde porque allí los trenes van muy despacio para aparcar en su andén.</li>
+          </ul>
+        </div>
+        <div class="hm-diagram">
+          <span>🚆 Tren A ➔</span>
+          <span style="color:#43a047;font-weight:700">─── Más de 5 km (Seguro) ───</span>
+          <span>🚆 Tren B ➔</span>
+        </div>
+      </div>
+
+      <div class="hm-box" style="border-left:5px solid #f59e0b">
+        <div class="hm-box-title"><span class="dot" style="background:#f59e0b;width:14px;height:14px"></span> 2. Trenes en NARANJA (Precaución, sin peligro de choque)</div>
+        <div>
+          Dos trenes van por la <b>misma vía y en el mismo sentido</b> a <b>menos de 5 km</b>, pero <b>NO hay peligro inminente</b> porque:
+          <ul style="margin:4px 0 0;padding-left:18px">
+            <li>Ambos van despacito (a menos de 100 km/h) o están parados esperando señal.</li>
+            <li>O bien <b>el tren que va delante corre más que el que va detrás</b>, así que cada vez se alejan más el uno del otro.</li>
+          </ul>
+        </div>
+        <div class="hm-diagram">
+          <span>🚆 Detrás (90 km/h) ➔</span>
+          <span style="color:#d97706;font-weight:700">── 3 km (Se aleja) ──</span>
+          <span>🚆 Delante (130 km/h) ➔➔</span>
+        </div>
+      </div>
+
+      <div class="hm-box" style="border-left:5px solid #e53935">
+        <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO PARPADEANTE (¡Peligro por alcance!)</div>
+        <div>
+          Salta la <b>Alerta Roja</b> arriba en el mapa cuando se cumplen estas 4 cosas a la vez:
+          <ol style="margin:4px 0 0;padding-left:18px">
+            <li>Los dos trenes usan el <b>mismo tipo de vía</b> (un AVE nunca puede chocar con un Media Distancia convencional aunque sus vías pasen juntas).</li>
+            <li>Van en el <b>mismo sentido de la marcha</b> a <b>menos de 5 km</b>.</li>
+            <li>El tren que viene por <b>detrás va lanzado a más de 100 km/h</b>.</li>
+            <li>El tren de <b>atrás va más rápido (o igual) que el de delante</b>, por lo que le está recortando distancia rápidamente.</li>
+          </ol>
+        </div>
+        <div class="hm-diagram" style="border-color:#e53935">
+          <span style="color:#e53935;font-weight:700">🚆 Detrás (180 km/h) ➔➔</span>
+          <span style="color:#e53935;font-weight:700">── ¡3 km y acercándose! ──</span>
+          <span>🚆 Delante (80 km/h) ➔</span>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -249,7 +464,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.15";
+  const VERSION = "1.16";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -390,54 +605,6 @@
     return false;
   }
 
-  /* ---------- Trazados Base Detallados (AV y Media Distancia / Convencional) ---------- */
-  const FALLBACK_AV_WAYS = [
-    [[40.4065,-3.6896],[40.5567,-3.1670],[40.9250,-2.4500],[41.3410,-1.6440],[41.6587,-0.9114],[41.5200,0.0500],[41.6208,0.6327],[41.3900,1.0200],[41.1992,1.2690],[41.3791,2.1401],[41.9793,2.8169],[42.2654,2.9436]],
-    [[40.4065,-3.6896],[39.8900,-3.9200],[38.9830,-3.9160],[38.6850,-4.1070],[38.1500,-4.4500],[37.8884,-4.7892],[37.6500,-5.4000],[37.3919,-5.9753]],
-    [[37.8884,-4.7892],[37.3980,-4.7060],[37.0672,-4.6869],[36.7115,-4.4316]],
-    [[37.0672,-4.6869],[37.0180,-4.5570],[37.1670,-4.1480],[37.1841,-3.6091]],
-    [[40.4065,-3.6896],[40.0300,-3.0100],[40.0442,-2.1380],[39.5890,-1.1740],[39.4601,-0.3816]],
-    [[40.0442,-2.1380],[39.4200,-1.9600],[38.9997,-1.8490],[38.6064,-0.9234],[38.3446,-0.4951]],
-    [[38.6064,-0.9234],[38.2480,-0.7420],[38.0830,-0.9460],[37.9746,-1.1301]],
-    [[40.4722,-3.6822],[40.8884,-4.0958],[41.3200,-4.4800],[41.6416,-4.7289],[42.0110,-4.5390],[42.5960,-5.5786],[43.1600,-5.8280],[43.3662,-5.8536]],
-    [[42.0110,-4.5390],[42.3712,-3.6657]],
-    [[41.2850,-4.6850],[41.5126,-5.7369],[42.0289,-6.6214],[42.3411,-7.8647],[42.8705,-8.5446],[43.3526,-8.4098]],
-    [[42.8705,-8.5446],[42.5960,-8.7610],[42.4227,-8.6345],[42.2351,-8.7118]],
-    [[39.9678,-6.1030],[39.4650,-6.3840],[38.9218,-6.3426],[38.8878,-6.9822]],
-    [[40.1500,-3.8200],[39.8624,-4.0113]]
-  ];
-
-  const FALLBACK_MD_WAYS = [
-    [[41.3791,2.1401],[41.2240,1.7250],[41.1120,1.2550],[40.8120,0.5210],[40.4700,0.4730],[39.9870,-0.0528],[39.6800,-0.2700],[39.4601,-0.3816],[39.1500,-0.4350],[38.9900,-0.5200],[38.8700,-0.7800],[38.6100,-0.8700],[38.3446,-0.4951],[38.2650,-0.6980],[38.0830,-0.9460],[37.9746,-1.1301],[37.6050,-0.9860]],
-    [[40.4065,-3.6896],[40.0320,-3.6060],[39.6100,-3.5000],[39.3880,-3.2180],[39.2000,-2.6500],[38.9997,-1.8490],[38.8680,-1.0970],[38.8700,-0.7800]],
-    [[39.3880,-3.2180],[38.9950,-3.3700],[38.7610,-3.3850],[38.3800,-3.5050],[38.0694,-3.5931],[38.0180,-3.8600],[38.0300,-4.0500],[37.8884,-4.7892],[37.7500,-5.0500],[37.6180,-5.2800],[37.3919,-5.9753],[37.1750,-5.9220],[36.9150,-6.0700],[36.6796,-6.1268],[36.5930,-6.2250],[36.5290,-6.2869]],
-    [[38.0180,-3.8600],[37.7780,-3.7890]],
-    [[38.0694,-3.5931],[37.6500,-3.2600],[37.3100,-3.1350],[37.1300,-2.6500],[36.8380,-2.4590]],
-    [[37.3100,-3.1350],[37.3500,-3.4800],[37.1841,-3.6091]],
-    [[37.3919,-5.9753],[37.3800,-6.2500],[37.3300,-6.5400],[37.2518,-6.9447]],
-    [[37.1750,-5.9220],[37.2300,-5.1000],[37.0420,-4.7250],[36.7420,-5.1660],[36.4500,-5.3600],[36.1270,-5.4470]],
-    [[37.0420,-4.7250],[36.9000,-4.6500],[36.7115,-4.4316]],
-    [[40.4065,-3.6896],[40.1300,-4.2600],[39.9650,-4.8300],[39.8950,-5.5400],[39.9678,-6.1030],[39.4650,-6.3840],[38.9218,-6.3426],[38.8878,-6.9822]],
-    [[39.4650,-6.3840],[39.5000,-7.0500]],
-    [[38.9218,-6.3426],[38.4250,-6.4150],[37.9200,-6.1500],[37.3919,-5.9753]],
-    [[38.9218,-6.3426],[38.8650,-5.8700],[38.6850,-4.1070]],
-    [[40.4722,-3.6822],[40.6350,-4.0100],[40.6596,-4.6869],[41.0500,-4.7800],[41.3186,-4.9089],[41.6416,-4.7289],[41.9200,-4.4500],[42.1200,-4.1000],[42.3712,-3.6657],[42.5400,-3.3100],[42.6844,-2.9480],[42.8415,-2.6716],[42.8900,-2.3000],[43.0400,-2.2000],[43.1350,-2.0750],[43.3177,-1.9765],[43.3396,-1.7890]],
-    [[41.3186,-4.9089],[40.9765,-5.6496],[40.6050,-6.8150]],
-    [[41.3186,-4.9089],[41.5126,-5.7369]],
-    [[42.0110,-4.5390],[42.4500,-4.3800],[42.8000,-4.2600],[43.0000,-4.1300],[43.3389,-4.0531],[43.4586,-3.8115]],
-    [[42.0110,-4.5390],[42.3200,-4.9800],[42.5960,-5.5786],[42.9800,-5.6500],[43.1600,-5.8280],[43.3662,-5.8536],[43.5390,-5.6760]],
-    [[42.5960,-5.5786],[42.4550,-6.0550],[42.5458,-6.6025],[42.4100,-7.0100],[42.5269,-7.5028],[42.3411,-7.8647],[42.2600,-8.1500],[42.1600,-8.5200],[42.2351,-8.7118]],
-    [[42.5269,-7.5028],[42.7900,-7.4200],[43.0145,-7.5516],[43.1800,-7.8900],[43.2800,-8.2200],[43.3526,-8.4098],[43.4850,-8.2250]],
-    [[42.6844,-2.9480],[43.0100,-2.9800],[43.1400,-2.9600],[43.2614,-2.9277]],
-    [[42.6844,-2.9480],[42.4567,-2.4439],[42.2200,-1.9800],[42.0610,-1.6040],[41.9100,-1.3500],[41.6587,-0.9114],[41.2700,-0.4300],[41.2380,-0.0400],[41.0900,0.6300],[41.1500,1.1050],[41.1120,1.2550]],
-    [[42.0610,-1.6040],[42.4500,-1.6500],[42.8025,-1.6622],[42.8900,-2.3000]],
-    [[41.6587,-0.9114],[41.8900,-0.7800],[42.1350,-0.4080],[42.5200,-0.3600]],
-    [[41.6587,-0.9114],[41.8800,-0.1500],[41.9050,0.1900],[41.6208,0.6327],[41.6500,1.1400],[41.7200,1.8250],[41.5450,2.1100],[41.3791,2.1401]],
-    [[40.4065,-3.6896],[40.6280,-3.1800],[41.0700,-2.6400],[41.2850,-2.1300],[41.3410,-1.6440],[41.6587,-0.9114]],
-    [[41.3410,-1.6440],[40.8650,-1.3100],[40.3420,-1.1120],[39.9000,-0.6500],[39.6800,-0.2700]],
-    [[40.0320,-3.6060],[40.0050,-3.0100],[40.0720,-2.1400],[39.5650,-1.2050],[39.4601,-0.3816]]
-  ];
-
   /* ---------- Diccionario Maestro de Estaciones ---------- */
   const DEFAULT_STATIONS = {
     "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío",
@@ -479,14 +646,15 @@
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
     interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
     thOrange: $("thOrange"), thSpeed: $("thSpeed"),
-    showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"),
+    showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"), showOrmTiles: $("showOrmTiles"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
     search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nTotal: $("nTotal"),
-    pairs: $("pairs"), redOverlay: $("redOverlay"), roCount: $("roCount"), redList: $("redList")
+    pairs: $("pairs"), redOverlay: $("redOverlay"), roCount: $("roCount"), redList: $("redList"),
+    lblSource: $("lblSource"), lblBase: $("lblBase"), helpModal: $("helpModal")
   };
 
-  /* ---------- Mapa ---------- */
+  /* ---------- Mapa Base y Capa Oficial OpenRailwayMap (Adif/OSM) ---------- */
   const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const BASES = {
@@ -501,40 +669,43 @@
     baseLayer.bringToBack();
   }
   setBase("calles");
-  document.getElementById("basemap").addEventListener("change", e => setBase(e.target.value));
+
+  // Capa de teselas oficial de OpenRailwayMap con toda la infraestructura ferroviaria real de Adif
+  const ormTileLayer = L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png", {
+    subdomains: ["a", "b", "c"],
+    maxZoom: 19,
+    opacity: 0.78,
+    attribution: "&copy; OpenRailwayMap"
+  }).addTo(map);
+
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
-  /* ---------- Capas de Vías e Índice Espacial (para saber en qué vía va un tren híbrido) ---------- */
+  /* ---------- Capas Vectoriales Exactas de Vías (Overpass + GeoJSON Renfe sin mezclar líneas rectas) ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
   const GRID_SIZE = 0.15;
 
-  const SPAIN_QUADRANTS = [
-    "35.8,-9.5,40.2,-3.2",
-    "35.8,-3.2,40.2,3.4",
-    "40.2,-9.5,43.8,-3.2",
-    "40.2,-3.2,43.8,3.4"
-  ];
-
   const TRACKS = {
     av: {
-      name: "AV", color: "#7b1fa2", weight: 3.3, opacity: 0.92, minKm: 0.08, key: "avTrack_v12",
-      fallback: FALLBACK_AV_WAYS,
-      queries: ['[out:json][timeout:30][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'],
+      name: "AV", color: "#7b1fa2", weight: 3.0, opacity: 0.9, minKm: 0.02, key: "avTrack_v16",
+      queries: [
+        '[out:json][timeout:40][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'
+      ],
       loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map()
     },
     md: {
-      name: "MD/Conv", color: "#0066cc", weight: 2.6, opacity: 0.85, minKm: 0.18, key: "mdTrack_v12",
-      fallback: FALLBACK_MD_WAYS,
-      queries: SPAIN_QUADRANTS.map(b => `[out:json][timeout:25][bbox:${b}];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;`),
+      name: "MD/Conv", color: "#0066cc", weight: 2.2, opacity: 0.85, minKm: 0.03, key: "mdTrack_v16",
+      queries: [
+        '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"="main"][!"service"];out skel geom qt;'
+      ],
       loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map()
     }
   };
 
   const OVERPASS = [
-    "https://overpass.kumi.systems/api/interpreter",
     "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter"
   ];
 
@@ -597,15 +768,14 @@
 
   function updateTrackStatus() {
     const part = st => {
-      if (st.loading) return `${st.name}: detallando OSM…`;
-      if (st.osmLoaded) return `${st.name}: ${st.n} tramos OSM`;
-      if (st.loaded) return `${st.name}: red base activa`;
-      return `${st.name}: sin cargar`;
+      if (st.loading) return `${st.name}: descargando trazado real…`;
+      if (st.osmLoaded) return `${st.name}: ${st.n} tramos reales`;
+      return `${st.name}: pendiente`;
     };
     const parts = [];
     if (el.showTrackAV.checked) parts.push(part(TRACKS.av));
     if (el.showTrackMD.checked) parts.push(part(TRACKS.md));
-    el.trackStatus.textContent = parts.length ? parts.join(" · ") : "Capas de vías ocultas";
+    el.trackStatus.textContent = parts.length ? parts.join(" · ") : "Vías vectoriales ocultas";
   }
 
   function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
@@ -617,7 +787,7 @@
     for (const ep of OVERPASS) {
       try {
         const ctl = new AbortController();
-        const to = setTimeout(() => ctl.abort(), 22000);
+        const to = setTimeout(() => ctl.abort(), 35000);
         const r = await fetch(ep, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -633,6 +803,32 @@
       } catch (e) { lastErr = e; }
     }
     throw lastErr || new Error("sin datos");
+  }
+
+  // Intenta descargar también lineas.geojson oficial del visor de Renfe si existe
+  async function fetchRenfeOfficialLines() {
+    const base = SOURCES.ld.replace("flotaLD.json", "");
+    for (const file of ["lineas.geojson", "lineasLD.geojson"]) {
+      try {
+        const r = await fetch(proxify(base + file));
+        if (!r.ok) continue;
+        const g = await r.json();
+        const ways = [];
+        for (const f of (g.features || [])) {
+          const geom = f.geometry;
+          if (!geom) continue;
+          if (geom.type === "LineString" && geom.coordinates.length > 1) {
+            ways.push(geom.coordinates.map(c => [+c[1].toFixed(5), +c[0].toFixed(5)]));
+          } else if (geom.type === "MultiLineString") {
+            for (const line of geom.coordinates) {
+              if (line.length > 1) ways.push(line.map(c => [+c[1].toFixed(5), +c[0].toFixed(5)]));
+            }
+          }
+        }
+        if (ways.length) return ways;
+      } catch (e) {}
+    }
+    return null;
   }
 
   function decimate(pts, minKm) {
@@ -652,13 +848,13 @@
     if (el.showTrackAV.checked && TRACKS.av.poly) TRACKS.av.poly.addTo(trackLayer);
   }
 
-  function applyTrackWays(st, ways, isOsm) {
-    const combined = isOsm ? [...st.fallback, ...ways] : ways;
-    addWaysToGrid(st.grid, combined);
-    st.poly = L.polyline(combined, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
-    st.n = combined.length;
+  function applyTrackWays(st, ways) {
+    // Pintamos EXCLUSIVAMENTE las vías reales detalladas (sin mezclar líneas rectas artificiales)
+    addWaysToGrid(st.grid, ways);
+    st.poly = L.polyline(ways, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
+    st.n = ways.length;
     st.loaded = true;
-    st.osmLoaded = !!isOsm;
+    st.osmLoaded = true;
     syncTrackVisibility();
     updateTrackStatus();
   }
@@ -666,9 +862,6 @@
   async function loadTrackLayer(kind, force) {
     const st = TRACKS[kind];
     if (st.loading) return;
-    if (!st.loaded && st.fallback) {
-      applyTrackWays(st, st.fallback, false);
-    }
     if (st.osmLoaded && !force) return;
 
     st.loading = true; updateTrackStatus();
@@ -676,7 +869,7 @@
       let ways = null;
       if (!force) {
         const c = await idbGet(st.key);
-        if (c && c.ways && Date.now() - c.t < 30 * 864e5) ways = c.ways;
+        if (c && c.ways && c.ways.length && Date.now() - c.t < 30 * 864e5) ways = c.ways;
       }
       if (!ways) {
         const allWays = [];
@@ -685,14 +878,17 @@
             const raw = await overpassSingle(q);
             const dec = raw.map(w => decimate(w, st.minKm));
             allWays.push(...dec);
-            if (allWays.length) applyTrackWays(st, allWays, true);
           } catch (e) {}
+        }
+        if (!allWays.length && kind === "av") {
+          const renfeWays = await fetchRenfeOfficialLines();
+          if (renfeWays) allWays.push(...renfeWays);
         }
         if (!allWays.length) throw new Error("sin respuesta OSM");
         ways = allWays;
         idbSet(st.key, { t: Date.now(), ways });
       }
-      applyTrackWays(st, ways, true);
+      applyTrackWays(st, ways);
     } catch (e) {
     } finally {
       st.loading = false;
@@ -707,6 +903,10 @@
   }
   el.showTrackAV.addEventListener("change", () => onTrackToggle("av", el.showTrackAV));
   el.showTrackMD.addEventListener("change", () => onTrackToggle("md", el.showTrackMD));
+  el.showOrmTiles.addEventListener("change", () => {
+    if (el.showOrmTiles.checked) ormTileLayer.addTo(map);
+    else map.removeLayer(ormTileLayer);
+  });
   el.btnReloadTrack.addEventListener("click", () => {
     if (el.showTrackAV.checked) loadTrackLayer("av", true);
     if (el.showTrackMD.checked) loadTrackLayer("md", true);
@@ -946,13 +1146,9 @@
   /* ---------- Clasificación de Vía Activa por Tren (Evita cruzar MD con AVE) ---------- */
   function getTrainTrackGroup(t) {
     const tipo = (t.tipo || "").toUpperCase();
-    // 1. Alta Velocidad pura (ancho internacional UIC exclusivo)
     if (tipo === "AVE" || tipo === "AVLO" || tipo === "AVANT") return "AV";
-    // 2. Convencional pura (ancho ibérico / cercanías / media distancia convencional)
     if (tipo === "MD" || tipo === "REGIONAL" || tipo === "REG.EXP" || tipo === "CERCANÍAS") return "CONV";
 
-    // 3. Trenes híbridos / cambio de ancho (ALVIA, EUROMED, INTERCITY, ALTARIA, TALGO):
-    // Determinamos en qué vía están circulando realmente ahora mismo según su velocidad o cercanía a los trazados AV vs MD
     if (isFinite(t.calcSpeed) && t.calcSpeed > 205) return "AV";
     const dAV = TRACKS.av.loaded ? minDistInGrid(TRACKS.av.grid, t.lat, t.lon) : Infinity;
     const dMD = TRACKS.md.loaded ? minDistInGrid(TRACKS.md.grid, t.lat, t.lon) : Infinity;
@@ -964,12 +1160,11 @@
   function isSameTrackGroup(a, b) {
     const gA = a.trackGroup || getTrainTrackGroup(a);
     const gB = b.trackGroup || getTrainTrackGroup(b);
-    // Un tren AV puro (AVE/AVLO/AVANT) NUNCA comparte vía con un CONV puro (MD/REGIONAL/CERCANÍAS)
     if ((gA === "AV" && gB === "CONV") || (gA === "CONV" && gB === "AV")) return false;
     return true;
   }
 
-  /* ---------- Vector de Rumbo Geográfico por Estaciones (Origen/Anterior -> Próxima/Destino) ---------- */
+  /* ---------- Vector de Rumbo Geográfico por Estaciones ---------- */
   function getRouteVector(t) {
     const x = t._info || trainInfo(t);
     const cOrig = findStationCoords(x.orig);
@@ -977,19 +1172,15 @@
     const cSig  = findStationCoords(x.sig);
     const cAnt  = findStationCoords(x.ant);
 
-    // Prioridad 1: Desde posición actual del tren hacia la próxima parada (si está a más de 3 km)
     if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 3.0) {
       return [cSig[0] - t.lat, cSig[1] - t.lon];
     }
-    // Prioridad 2: Desde estación anterior hacia estación siguiente
     if (cAnt && cSig && (cAnt[0] !== cSig[0] || cAnt[1] !== cSig[1])) {
       return [cSig[0] - cAnt[0], cSig[1] - cAnt[1]];
     }
-    // Prioridad 3: Desde posición actual hacia el destino final (si está a más de 5 km)
     if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 5.0) {
       return [cDest[0] - t.lat, cDest[1] - t.lon];
     }
-    // Prioridad 4: Desde estación de origen hacia estación de destino
     if (cOrig && cDest && (cOrig[0] !== cDest[0] || cOrig[1] !== cDest[1])) {
       return [cDest[0] - cOrig[0], cDest[1] - cOrig[1]];
     }
@@ -1005,34 +1196,28 @@
     return (x1 * x2 + y1 * y2) / (m1 * m2);
   }
 
-  /* ---------- Verificación Estricta de Mismo Sentido ---------- */
   function areMovingSameDirection(a, b) {
     const infoA = a._info, infoB = b._info;
     const refLat = (a.lat + b.lat) / 2;
 
-    // 1. Si el origen de uno es exactamente el destino del otro (o comparten estación cruzada), van en sentido opuesto
     if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
       if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return false;
       if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return false;
       if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return false;
     }
 
-    // 2. Comprobar vectores de ruta geográficos (Estaciones de Origen/Próxima/Destino)
     const rA = a.routeVec, rB = b.routeVec;
     if (rA && rB) {
       const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
-      // Si sus rutas geográficas forman un ángulo > 60° (cos < 0.5), NO van en el mismo sentido
       if (cosRoute !== null && cosRoute < 0.5) return false;
     }
 
-    // 3. Comprobar vectores GPS reales de movimiento
     if (a.hasVector && b.hasVector) {
       const cosGps = cosBetweenVectors(a.dLat, a.dLon, b.dLat, b.dLon, refLat);
       if (cosGps !== null && cosGps < 0.5) return false;
       return true;
     }
 
-    // 4. Si solo uno tiene vector GPS y el otro tiene vector de ruta, compararlos entre sí
     if (a.hasVector && rB) {
       const cosMix = cosBetweenVectors(a.dLat, a.dLon, rB[0], rB[1], refLat);
       if (cosMix !== null && cosMix < 0.5) return false;
@@ -1042,7 +1227,6 @@
       if (cosMix !== null && cosMix < 0.5) return false;
     }
 
-    // 5. Si aún no hay vectores GPS en ambos, exigir que ambos tengan vector de ruta claramente paralelo (cos > 0.65)
     if (rA && rB) {
       const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
       return cosRoute !== null && cosRoute > 0.65;
@@ -1051,7 +1235,6 @@
     return false;
   }
 
-  // Determina quién va detrás (trailing) y quién delante (leading) usando el vector GPS o el vector de ruta
   function getTrailingAndLeading(a, b) {
     let vLat = 0, vLon = 0;
     if (a.hasVector) { vLat += a.dLat; vLon += a.dLon; }
@@ -1082,7 +1265,7 @@
     return url;
   }
   async function fetchTrains() {
-    if (el.source.value === "demo") return demoTrains();
+    if (el.source.value === "demo") return [];
     const res = await fetch(buildUrl(), { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
@@ -1093,40 +1276,6 @@
     return [...seen.values()];
   }
 
-  const CITIES = {
-    "Madrid-Puerta de Atocha": [40.4065, -3.6896], "Barcelona-Sants": [41.3791, 2.1401], "València-Joaquín Sorolla": [39.4601, -0.3816],
-    "Sevilla-Santa Justa": [37.3919, -5.9753], "Málaga-María Zambrano": [36.7115, -4.4316], "Zaragoza-Delicias": [41.6587, -0.9114],
-    "Bilbao-Abando": [43.2614, -2.9277], "Valladolid-Campo Grande": [41.6416, -4.7289], "Córdoba": [37.8884, -4.7892],
-    "Alacant-Terminal": [38.3446, -0.4951], "Vigo-Urzáiz": [42.2351, -8.7118], "Granada": [37.1841, -3.6091]
-  };
-  let demoFleet = null;
-  function makeDemoFleet() {
-    const names = Object.keys(CITIES), tipos = ["AVE", "AVLO", "ALVIA", "AVANT", "MD", "INTERCITY", "REG.EXP"], fleet = [];
-    const rnd = (a, b) => a + Math.random() * (b - a);
-    for (let i = 0; i < 110; i++) {
-      let a = names[Math.floor(Math.random() * names.length)], b;
-      do { b = names[Math.floor(Math.random() * names.length)]; } while (b === a);
-      const km = haversine(...CITIES[a], ...CITIES[b]);
-      const speed = rnd(40, 260), phase = Math.random(), tipo = tipos[i % tipos.length];
-      fleet.push({ id: "0" + (2100 + i), tipo, a, b, km, speed, phase });
-      if (i % 10 === 0) {
-        fleet.push({ id: "0" + (3100 + i), tipo, a, b, km, speed: speed * 1.15, phase: phase - 0.008 });
-      }
-    }
-    return fleet;
-  }
-  function demoTrains() {
-    if (!demoFleet) demoFleet = makeDemoFleet();
-    const now = Date.now() / 3600000;
-    return demoFleet.map(f => {
-      let p = (now * f.speed / f.km + f.phase) % 2; if (p > 1) p = 2 - p;
-      const [la1, lo1] = CITIES[f.a], [la2, lo2] = CITIES[f.b];
-      const item = { id: f.id, codTren: f.id, desProducto: f.tipo, desOrigen: f.a, desDestino: f.b, latitud: la1 + (la2 - la1) * p, longitud: lo1 + (lo2 - lo1) * p, velocidad: Math.round(f.speed), retraso: 0 };
-      return normalize(item, 0);
-    });
-  }
-
-  /* ---------- Lógica de Proximidad (Misma Vía + Mismo Sentido + Velocidad de Alcance) ---------- */
   function isConfirmedHighSpeed(t, minSpeedKmh) {
     if (t.speedsList && t.speedsList.length >= 2) {
       const avg = (t.speedsList[0] + t.speedsList[1]) / 2;
@@ -1165,12 +1314,10 @@
         const b = sorted[j];
         if (b.lat - a.lat > maxDLat) break;
 
-        // 1. FILTRO DE TIPO DE VÍA: un AVE/AVLO/AVANT nunca puede entrar en alerta con un MD/Regional/Cercanías
         if (!isSameTrackGroup(a, b)) continue;
 
         const d = haversine(a.lat, a.lon, b.lat, b.lon);
         if (d < tO) {
-          // 2. FILTRO ESTRICTO DE SENTIDO DE LA MARCHA (Ruta geográfica + GPS)
           if (!areMovingSameDirection(a, b)) continue;
 
           const order = getTrailingAndLeading(a, b);
@@ -1183,8 +1330,6 @@
             const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
             const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
 
-            // 3. REGLA DE ALCANCE:
-            // Solo es alerta roja si el tren que va detrás supera el umbral (>100 km/h) y va más rápido o igual que el de delante
             if (trailing.isFast && vTrail >= vLead) {
               pairSeverity = "red";
             } else {
@@ -1304,15 +1449,14 @@
 
   function render() {
     const q = el.search.value.trim().toLowerCase();
-    const show = { red: el.showRed.checked, orange: el.showOrange.checked, green: el.showGreen.checked };
     const counts = { red: 0, orange: 0, green: 0 };
     const alive = new Set();
     let visible = 0;
 
     trains.forEach(t => {
       counts[t.color]++;
-      let ok = show[t.color];
-      if (ok && q) {
+      let ok = true; // Siempre se muestran todas las alertas
+      if (q) {
         const x = t._info || trainInfo(t);
         const searchStr = `${t.id} ${t.label} ${x.tipo} ${x.numero} ${x.orig} ${x.dest} ${x.sig}`.toLowerCase();
         ok = searchStr.includes(q);
@@ -1407,6 +1551,7 @@
     if (loading) return;
     loading = true;
     el.btnRefresh.disabled = true;
+    el.btnRefresh.classList.add("spinning");
     try {
       await loadStations();
       allTrains = await fetchTrains();
@@ -1420,11 +1565,12 @@
     } finally {
       loading = false;
       el.btnRefresh.disabled = false;
+      el.btnRefresh.classList.remove("spinning");
     }
   }
   function schedule() {
     clearInterval(timer);
-    if (!paused) timer = setInterval(refresh, Math.max(3, +el.interval.value) * 1000);
+    if (!paused) timer = setInterval(refresh, 10000); // Fijo en 10 segundos
   }
 
   function flyToPairIndex(idx) {
@@ -1433,27 +1579,77 @@
     map.flyTo([(p.a.lat + p.b.lat) / 2, (p.a.lon + p.b.lon) / 2], Math.max(map.getZoom(), 11), { duration: 0.8 });
   }
 
-  el.btnRefresh.addEventListener("click", refresh);
-  el.btnPause.addEventListener("click", () => {
-    paused = !paused;
-    el.btnPause.textContent = paused ? "Reanudar" : "Pausar";
-    schedule();
-    if (!paused) refresh();
+  /* ---------- Eventos de Interfaz y Controles Flotantes ---------- */
+  // Ventana modal (?)
+  $("btnHelp").addEventListener("click", () => el.helpModal.classList.add("open"));
+  $("btnCloseHelp").addEventListener("click", () => el.helpModal.classList.remove("open"));
+  el.helpModal.addEventListener("click", e => { if (e.target === el.helpModal) el.helpModal.classList.remove("open"); });
+
+  // Desplegables flotantes inferior izquierda
+  const popButtons = document.querySelectorAll(".fl-btn[data-pop]");
+  const popups = document.querySelectorAll(".fl-pop");
+  popButtons.forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const targetId = btn.dataset.pop;
+      const targetPop = $(targetId);
+      const isOpen = targetPop.classList.contains("open");
+      popups.forEach(p => p.classList.remove("open"));
+      popButtons.forEach(b => b.classList.remove("active"));
+      if (!isOpen) {
+        targetPop.classList.add("open");
+        btn.classList.add("active");
+      }
+    });
   });
-  el.interval.addEventListener("change", schedule);
-  el.source.addEventListener("change", () => {
-    el.customWrap.style.display = el.source.value === "custom" ? "block" : "none";
-    const isCerc = el.source.value === "visor" || el.source.value === "gtfsrt";
-    if (isCerc && !el.showTrackMD.checked) { el.showTrackMD.checked = true; onTrackToggle("md", el.showTrackMD); }
+  popups.forEach(p => p.addEventListener("click", e => e.stopPropagation()));
+  document.addEventListener("click", () => {
+    popups.forEach(p => p.classList.remove("open"));
+    popButtons.forEach(b => b.classList.remove("active"));
+  });
+
+  // Switch flotante de Fuente (LD/AV vs Cercanías)
+  $("sourceSwitch").addEventListener("click", e => {
+    const opt = e.target.closest(".sw-opt");
+    if (!opt) return;
+    const val = opt.dataset.val;
+    $("sourceSwitch").querySelectorAll(".sw-opt").forEach(b => b.classList.toggle("active", b === opt));
+    el.source.value = val;
+    el.lblSource.textContent = val === "ld" ? "LD / Alta Velocidad" : "Cercanías";
+    if (val === "visor" && !el.showTrackMD.checked) {
+      el.showTrackMD.checked = true;
+      onTrackToggle("md", el.showTrackMD);
+    }
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     trainHistory.clear();
     stationsTried = false;
     refresh();
   });
-  el.customUrl.addEventListener("change", refresh);
-  el.proxy.addEventListener("change", refresh);
+
+  // Switch flotante de Mapa Base
+  $("baseSwitch").addEventListener("click", e => {
+    const opt = e.target.closest(".sw-opt");
+    if (!opt) return;
+    const val = opt.dataset.val;
+    $("baseSwitch").querySelectorAll(".sw-opt").forEach(b => b.classList.toggle("active", b === opt));
+    $("basemap").value = val;
+    el.lblBase.textContent = val === "calles" ? "Calles" : (val === "sat" ? "Satélite" : "Claro");
+    setBase(val);
+  });
+
+  el.btnRefresh.addEventListener("click", refresh);
+  el.btnPause.addEventListener("click", () => {
+    paused = !paused;
+    el.btnPause.classList.toggle("paused", paused);
+    el.btnPause.innerHTML = paused
+      ? '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+    schedule();
+    if (!paused) refresh();
+  });
+
   [el.thOrange, el.thSpeed].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
-  [el.showRed, el.showOrange, el.showGreen, el.showLines].forEach(c => c.addEventListener("change", render));
+  el.showLines.addEventListener("change", render);
   el.search.addEventListener("input", render);
   el.pairs.addEventListener("click", e => {
     const row = e.target.closest(".pair"); if (!row) return;
@@ -1464,12 +1660,12 @@
     flyToPairIndex(+row.dataset.i);
   });
 
+  // Proxy CORS interno activo y oculto
   const DEFAULT_PROXY = "https://trenes.juliopuli.workers.dev/?url={url}";
-  try { el.proxy.value = localStorage.getItem("proxyRenfe") || DEFAULT_PROXY; } catch (e) { el.proxy.value = DEFAULT_PROXY; }
+  el.proxy.value = DEFAULT_PROXY;
   if (/^https?:$/.test(location.protocol) && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && !el.proxy.value) {
     el.proxy.value = "/api?url={url}";
   }
-  el.proxy.addEventListener("change", () => { try { localStorage.setItem("proxyRenfe", el.proxy.value.trim()); } catch (e) {} });
 
   if (el.showTrackAV.checked) loadTrackLayer("av");
   if (el.showTrackMD.checked) loadTrackLayer("md");
