@@ -404,7 +404,7 @@
 
   // Si la página se sirve desde servidor.py (http://localhost), usar su proxy integrado
   // Pega aquí la URL de tu Cloudflare Worker, p. ej. "https://trenes.miusuario.workers.dev/?url={url}"
-  const DEFAULT_PROXY = "";
+  const DEFAULT_PROXY = "https://trenes.juliopuli.workers.dev/?url={url}";
   try { el.proxy.value = localStorage.getItem("proxyRenfe") || DEFAULT_PROXY; } catch (e) { el.proxy.value = DEFAULT_PROXY; }
   if (/^https?:$/.test(location.protocol) && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && !el.proxy.value) {
     el.proxy.value = "/api?url={url}";
