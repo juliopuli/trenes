@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.19</title>
+<title>Trenes Renfe en tiempo real · v1.20</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -183,7 +183,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.19</span></h1>
+      <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.20</span></h1>
       <div class="sub">Control de tráfico y seguridad</div>
     </div>
 
@@ -304,7 +304,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "1.19";
+  const VERSION = "1.20";
   const PROXY_WORKER = "https://trenes.juliopuli.workers.dev/?url=";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
@@ -428,24 +428,6 @@
     "71801": "Barcelona-Sants", "79400": "Barcelona-Estació de França", "04040": "Zaragoza-Delicias",
     "13200": "Bilbao-Abando", "10600": "Valladolid-Campo Grande", "50500": "Córdoba", "51003": "Sevilla-Santa Justa",
     "54413": "Málaga-María Zambrano", "65000": "València-Joaquín Sorolla", "61200": "Alacant-Terminal", "32008": "Salamanca"
-  };
-
-  /* ---------- Elementos del DOM ---------- */
-  const $ = id => document.getElementById(id);
-  const el = {
-    source: $("source"),
-    thOrange: $("thOrange"), thSpeed: $("thSpeed"),
-    showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"),
-    btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
-    showLines: $("showLines"),
-    search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nTotal: $("nTotal"),
-    pairs: $("pairs"), redOverlay: $("redOverlay"), roCount: $("roCount"), redList: $("redList"),
-    btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"), basemap: $("basemap"),
-    toolBtnSource: $("toolBtnSource"), popupSource: $("popupSource"),
-    toolBtnBasemap: $("toolBtnBasemap"), popupBasemap: $("popupBasemap"),
-    toolBtnTracks: $("toolBtnTracks"), popupTracks: $("popupTracks"),
-    toolBtnTypes: $("toolBtnTypes"), popupTypes: $("popupTypes"),
-    typesBox: $("types")
   };
 
   /* ---------- Mapa ---------- */
