@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.2</title>
+<title>Trenes Renfe en tiempo real · v1.3</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -75,7 +75,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.2</span></h1>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.3</span></h1>
       <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
     </div>
 
@@ -121,12 +121,13 @@
     </fieldset>
 
     <fieldset>
-      <legend>Umbrales de proximidad</legend>
+      <legend>Umbrales y vía AV</legend>
       <div class="row">
         <div><label for="thRed">Rojo &lt; (km)</label><input type="number" id="thRed" value="3" min="0.1" step="0.5"></div>
         <div><label for="thOrange">Naranja &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.2" step="0.5"></div>
+        <div><label for="thTrack" title="Distancia máxima a la vía de alta velocidad para no marcar el tren en gris">Margen AV (km)</label><input type="number" id="thTrack" value="1.5" min="0.2" step="0.5"></div>
       </div>
-      <div class="help">Más lejos del umbral naranja → verde. Los trenes fuera del trazado de alta velocidad se muestran en gris.</div>
+      <div class="help">Más lejos del umbral naranja → verde. Si un tren está a más distancia de la vía AV que el «Margen AV», pasa a gris.</div>
     </fieldset>
 
     <fieldset>
@@ -168,7 +169,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.2";
+  const VERSION = "1.3";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -181,7 +182,6 @@
     REGIONAL: "#5d4037", "REG.EXP": "#5d4037", LD: "#4527a0", TALGO: "#37474f"
   };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
-  const TRACK_TOLERANCE_KM = 0.5;
 
   /* ---------- Diccionario base de estaciones de España (Adif / Renfe) ---------- */
   const DEFAULT_STATIONS = {
@@ -213,7 +213,7 @@
   const el = {
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
     interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
-    thRed: $("thRed"), thOrange: $("thOrange"),
+    thRed: $("thRed"), thOrange: $("thOrange"), thTrack: $("thTrack"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showGray: $("showGray"), showLines: $("showLines"),
     search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nGray: $("nGray"), nTotal: $("nTotal"),
     pairs: $("pairs"), showTrack: $("showTrack"), trackStatus: $("trackStatus")
@@ -233,7 +233,7 @@
     baseLayer = L.tileLayer(BASES[k].url, BASES[k].o).addTo(map);
     baseLayer.bringToBack();
   }
-  setBase("calles"); // Iniciado en calles por defecto
+  setBase("calles");
   document.getElementById("basemap").addEventListener("change", e => setBase(e.target.value));
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
@@ -243,14 +243,20 @@
   const trackLayer = L.layerGroup().addTo(map);
   let trackLine = null, trackLoaded = false, trackLoading = false;
   let trackGrid = new Map();
-  const GRID_SIZE = 0.1;
+  const GRID_SIZE = 0.15; // ~16 km por celda para cubrir márgenes amplios sin perder tramos
+  const TRACK_CACHE_KEY = "avTrack_v2"; // Nueva clave para invalidar la caché incompleta anterior
 
   const OVERPASS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter"
   ];
-  const OQ = '[out:json][timeout:90];area["ISO3166-1"="ES"][admin_level=2]->.a;way["railway"="rail"]["highspeed"="yes"][!"service"](area.a);out skel geom qt;';
+  // Incluye highspeed=yes, ancho internacional UIC (1435) y tramos de velocidad >= 200 km/h (incluyendo accesos a estaciones)
+  const OQ = '[out:json][timeout:90];area["ISO3166-1"="ES"][admin_level=2]->.a;(' +
+    'way["railway"="rail"]["highspeed"="yes"](area.a);' +
+    'way["railway"="rail"]["gauge"~"1435"](area.a);' +
+    'way["railway"="rail"]["maxspeed"~"^(2[0-9]{2}|3[0-9]{2})"](area.a);' +
+    ');out skel geom qt;';
   const setTrack = msg => { el.trackStatus.textContent = msg; };
 
   function buildTrackIndex(ways) {
@@ -292,8 +298,9 @@
     return Math.hypot(x - nearX, y - nearY);
   }
 
-  function isOnHighSpeedTrack(lat, lon) {
-    if (!trackLoaded) return true;
+  // Devuelve la distancia mínima en km a la vía AV más cercana
+  function minTrackDistKm(lat, lon) {
+    if (!trackLoaded) return 0;
     const r0 = Math.floor(lat / GRID_SIZE);
     const c0 = Math.floor(lon / GRID_SIZE);
     let minD = Infinity;
@@ -304,24 +311,29 @@
         for (let i = 0; i < segs.length; i++) {
           const s = segs[i];
           const d = distToSegmentKm(lat, lon, s[0], s[1], s[2], s[3]);
-          if (d <= TRACK_TOLERANCE_KM) return true;
-          if (d < minD) minD = d;
+          if (d < minD) {
+            minD = d;
+            if (minD < 0.05) return minD; // A menos de 50m ya está claramente en la vía
+          }
         }
       }
     }
-    return minD <= TRACK_TOLERANCE_KM;
+    return minD;
   }
 
   function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
   async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } }
   async function idbSet(k, v) { try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }
-  async function loadTrack() {
-    if (trackLoaded || trackLoading) return;
-    trackLoading = true; setTrack("Cargando vía de alta velocidad… (la primera vez puede tardar un minuto)");
+  async function loadTrack(forceReload = false) {
+    if (trackLoading) return;
+    if (trackLoaded && !forceReload) return;
+    trackLoading = true; setTrack("Cargando red de alta velocidad completa… (puede tardar 20-40 s)");
     try {
       let ways = null;
-      const c = await idbGet("avTrack");
-      if (c && c.ways && Date.now() - c.t < 30 * 864e5) ways = c.ways;
+      if (!forceReload) {
+        const c = await idbGet(TRACK_CACHE_KEY);
+        if (c && c.ways && Date.now() - c.t < 30 * 864e5) ways = c.ways;
+      }
       if (!ways) {
         let lastErr;
         for (const ep of OVERPASS) {
@@ -334,13 +346,14 @@
           } catch (e) { lastErr = e; }
         }
         if (!ways || !ways.length) throw lastErr || new Error("sin datos");
-        idbSet("avTrack", { t: Date.now(), ways });
+        idbSet(TRACK_CACHE_KEY, { t: Date.now(), ways });
       }
       buildTrackIndex(ways);
+      if (trackLine) trackLayer.removeLayer(trackLine);
       trackLine = L.polyline(ways, { renderer: trackCanvas, color: "#7b1fa2", weight: 3, opacity: 0.85, interactive: false });
       trackLoaded = true;
       if (el.showTrack.checked) trackLine.addTo(trackLayer);
-      setTrack(ways.length + " tramos de vía de alta velocidad (datos de OpenStreetMap)");
+      setTrack(ways.length + " tramos de vía AV / UIC (OpenStreetMap)");
       if (trains.length) {
         computeProximity();
         render();
@@ -468,7 +481,7 @@
   }
 
   function normalize(item, idx) {
-    const v = item.vehicle && typeof item.vehicle === "object" && item.vehicle.position ? item.vehicle : null; // GTFS-RT
+    const v = item.vehicle && typeof item.vehicle === "object" && item.vehicle.position ? item.vehicle : null;
     const pos = v ? v.position : item;
     const findKey = (o, re) => { for (const k of Object.keys(o)) if (re.test(k) && o[k] !== null && o[k] !== "" && typeof o[k] !== "object") return o[k]; };
     const lat = toNum(pos.latitud ?? pos.lat ?? pos.latitude ?? pos.Latitud ?? findKey(pos, /^lat/i));
@@ -518,7 +531,6 @@
     const numTecnico = r.codTren ?? r.numTren ?? t.id;
     const numero = String(numComercial || numTecnico || t.label).trim();
 
-    // Nombres o códigos de estación
     const origRaw = r.desOrigen ?? r.nomOrigen ?? r.descOrigen ?? r.origen ?? r.codOrigen ?? get(/orig/i);
     const destRaw = r.desDestino ?? r.nomDestino ?? r.descDestino ?? r.destino ?? r.codDestino ?? get(/dest/i);
     const sigRaw  = r.desEstSig ?? r.nomEstSig ?? r.estacionSiguiente ?? r.codEstSig ?? r.paradaSig ?? get(/(sig|prox|next)/i);
@@ -624,10 +636,13 @@
   function computeProximity() {
     const tR = Math.max(0, toNum(el.thRed.value) || 3);
     const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
+    const tolKm = Math.max(0.1, toNum(el.thTrack.value) || 1.5);
+
     trains.forEach(t => {
       t.d = Infinity;
       t.nearTrain = null;
-      t.offTrack = !isOnHighSpeedTrack(t.lat, t.lon);
+      t.trackDist = minTrackDistKm(t.lat, t.lon);
+      t.offTrack = trackLoaded ? (t.trackDist > tolKm) : false;
       t._info = trainInfo(t);
     });
     const onTrackTrains = trains.filter(t => !t.offTrack);
@@ -675,7 +690,8 @@
     if (x.vel !== null) paradas.push(`Velocidad: <b>${x.vel} km/h</b>`);
     const meta = paradas.length ? `<div class="t-meta">${paradas.join(" · ")}</div>` : "";
     const ret = x.retHtml ? `<div style="margin-top:2px">${x.retHtml}</div>` : "";
-    const off = t.offTrack ? `<div style="color:var(--gray);font-weight:600;margin-top:2px">Fuera de vía de alta velocidad</div>` : "";
+    const offDist = isFinite(t.trackDist) ? ` (a ${fmtKm(t.trackDist)} de vía AV)` : "";
+    const off = t.offTrack ? `<div style="color:var(--gray);font-weight:600;margin-top:2px">Fuera de vía AV${esc(offDist)}</div>` : "";
     const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "otro tren";
     const near = (!t.offTrack && isFinite(t.d))
       ? `<div style="color:${t.color === "red" ? "#e53935" : "#fb8c00"};font-weight:700;margin-top:3px">⚠ A ${fmtKm(t.d)} de ${esc(nearName)}</div>`
@@ -698,7 +714,8 @@
     if (x.retHtml) mainRows.push(["Puntualidad", x.retHtml, true]);
     if (x.corredor) mainRows.push(["Corredor / Línea", x.corredor]);
     if (x.mat) mainRows.push(["Material / Serie", x.mat]);
-    mainRows.push(["Vía Alta Velocidad", t.offTrack ? "No (fuera de trazado AV)" : "Sí (en trazado AV)"]);
+    const distStr = isFinite(t.trackDist) ? ` (${fmtKm(t.trackDist)})` : "";
+    mainRows.push(["Vía Alta Velocidad", t.offTrack ? `No · Fuera de trazado${distStr}` : `Sí · En trazado AV${distStr}`]);
     if (!t.offTrack && isFinite(t.d)) {
       const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "";
       mainRows.push(["Tren más cercano", `${fmtKm(t.d)} (${nearName})`]);
@@ -709,7 +726,6 @@
       `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`
     ).join("");
 
-    // Desplegable opcional con los campos crudos de Renfe por si se requiere inspección técnica
     const rawRows = Object.entries(t.raw || {})
       .filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object")
       .map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
@@ -859,7 +875,7 @@
   });
   el.customUrl.addEventListener("change", refresh);
   el.proxy.addEventListener("change", refresh);
-  [el.thRed, el.thOrange].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
+  [el.thRed, el.thOrange, el.thTrack].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
   [el.showRed, el.showOrange, el.showGreen, el.showGray, el.showLines].forEach(c => c.addEventListener("change", render));
   el.search.addEventListener("input", render);
   el.pairs.addEventListener("click", e => {
