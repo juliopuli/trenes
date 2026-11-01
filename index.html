@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.10</title>
+<title>Trenes Renfe en tiempo real · v1.11</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -50,7 +50,7 @@
   .tm.gray .b{background:var(--gray);opacity:0.88}
   .tm svg{width:17px;height:17px;fill:#fff}
   @keyframes pulso{0%{box-shadow:0 0 0 0 rgba(229,57,53,.65)}70%{box-shadow:0 0 0 12px rgba(229,57,53,0)}100%{box-shadow:0 0 0 0 rgba(229,57,53,0)}}
-  
+
   .trtip{font-size:12px;line-height:1.45;padding:8px 10px;min-width:210px}
   .t-head{display:flex;align-items:center;gap:6px;margin-bottom:4px}
   .t-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;color:#fff;background:#6d28d9;letter-spacing:.02em}
@@ -75,7 +75,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.10</span></h1>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.11</span></h1>
       <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
     </div>
 
@@ -133,12 +133,12 @@
     <fieldset>
       <legend>Capas de vías</legend>
       <label class="chk"><input type="checkbox" id="showTrackAV" checked>Vía Alta Velocidad<span class="n" style="color:#7b1fa2;font-weight:700">▬▬</span></label>
-      <label class="chk"><input type="checkbox" id="showTrackMD">Vía convencional (MD / Cercanías)<span class="n" style="color:#0284c7;font-weight:700">▬▬</span></label>
+      <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía convencional (MD / Cercanías)<span class="n" style="color:#0284c7;font-weight:700">▬▬</span></label>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px">
         <div class="help" id="trackStatus" style="margin:0">Cargando trazados…</div>
-        <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías">Recargar</button>
+        <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías de OpenStreetMap">Recargar</button>
       </div>
-      <div class="help">Datos de OpenStreetMap. La alta velocidad carga en segundos; la convencional es mucho más pesada y puede tardar 1–2 minutos la primera vez (después queda guardada en el navegador).</div>
+      <div class="help">Muestra al instante el trazado base y descarga en segundo plano la geometría detallada de OpenStreetMap (guardada en caché).</div>
     </fieldset>
 
     <fieldset>
@@ -178,7 +178,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.10";
+  const VERSION = "1.11";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -211,7 +211,12 @@
     [40.0780, -2.1380], // Cuenca-Fernando Zóbel
     [38.9950, -1.8550], // Albacete-Los Llanos
     [39.9800, -0.0500], // Castelló
-    [41.1189, 1.2445]   // Camp de Tarragona
+    [41.1189, 1.2445],  // Camp de Tarragona
+    [42.3411, -7.8647], // Ourense
+    [42.8705, -8.5446], // Santiago
+    [42.5960, -5.5786], // León
+    [43.3662, -5.8536], // Oviedo
+    [37.9746, -1.1301]  // Murcia del Carmen
   ];
 
   function isInStationArea(lat, lon, thresholdKm = 2.5) {
@@ -221,9 +226,62 @@
     return false;
   }
 
+  /* ---------- Trazado Base Integrado Instantáneo (Respaldo inmediato mientras carga OSM) ---------- */
+  const FALLBACK_AV_WAYS = [
+    // Madrid - Zaragoza - Lleida - Tarragona - Barcelona - Girona - Figueres
+    [[40.4065,-3.6896],[40.5567,-3.1670],[40.9250,-2.4500],[41.3410,-1.6440],[41.6587,-0.9114],[41.5200,0.0500],[41.6208,0.6327],[41.3900,1.0200],[41.1992,1.2690],[41.3791,2.1401],[41.9793,2.8169],[42.2654,2.9436]],
+    // Madrid - Ciudad Real - Puertollano - Córdoba - Sevilla
+    [[40.4065,-3.6896],[39.8900,-3.9200],[38.9830,-3.9160],[38.6850,-4.1070],[38.1500,-4.4500],[37.8884,-4.7892],[37.6500,-5.4000],[37.3919,-5.9753]],
+    // Córdoba - Puente Genil - Antequera - Málaga
+    [[37.8884,-4.7892],[37.3980,-4.7060],[37.0672,-4.6869],[36.7115,-4.4316]],
+    // Antequera - Loja - Granada
+    [[37.0672,-4.6869],[37.0180,-4.5570],[37.1670,-4.1480],[37.1841,-3.6091]],
+    // Madrid - Cuenca - Requena - Valencia
+    [[40.4065,-3.6896],[40.0300,-3.0100],[40.0442,-2.1380],[39.5890,-1.1740],[39.4601,-0.3816]],
+    // Cuenca - Albacete - Villena - Alicante / Elche - Orihuela - Murcia
+    [[40.0442,-2.1380],[39.4200,-1.9600],[38.9997,-1.8490],[38.6064,-0.9234],[38.3446,-0.4951]],
+    [[38.6064,-0.9234],[38.2480,-0.7420],[38.0830,-0.9460],[37.9746,-1.1301]],
+    // Madrid - Segovia - Valladolid - Palencia - León - Oviedo
+    [[40.4722,-3.6822],[40.8884,-4.0958],[41.3200,-4.4800],[41.6416,-4.7289],[42.0110,-4.5390],[42.5960,-5.5786],[43.1600,-5.8280],[43.3662,-5.8536]],
+    // Palencia - Burgos
+    [[42.0110,-4.5390],[42.3712,-3.6657]],
+    // Olmedo - Zamora - Sanabria - Ourense - Santiago - A Coruña / Vigo
+    [[41.2850,-4.6850],[41.5126,-5.7369],[42.0289,-6.6214],[42.3411,-7.8647],[42.8705,-8.5446],[43.3526,-8.4098]],
+    [[42.8705,-8.5446],[42.5960,-8.7610],[42.4227,-8.6345],[42.2351,-8.7118]],
+    // Plasencia - Cáceres - Mérida - Badajoz
+    [[39.9678,-6.1030],[39.4650,-6.3840],[38.9218,-6.3426],[38.8878,-6.9822]],
+    // Madrid - Toledo
+    [[40.1500,-3.8200],[39.8624,-4.0113]]
+  ];
+
+  const FALLBACK_MD_WAYS = [
+    // Valencia - Castellón - Tarragona
+    [[39.4601,-0.3816],[39.9870,-0.0528],[40.4500,0.4400],[40.8000,0.5200],[41.1120,1.2550]],
+    // Sevilla - Jerez - Cádiz
+    [[37.3919,-5.9753],[37.1700,-5.9200],[36.6796,-6.1268],[36.5290,-6.2869]],
+    // Sevilla - Huelva
+    [[37.3919,-5.9753],[37.3300,-6.5400],[37.2518,-6.9447]],
+    // Córdoba - Linares - Alcázar - Madrid
+    [[37.8884,-4.7892],[38.0694,-3.5931],[38.7610,-3.3850],[39.3880,-3.2180],[40.0320,-3.6060],[40.4065,-3.6896]],
+    // Burgos - Miranda - Vitoria - San Sebastián - Irún / Bilbao
+    [[42.3712,-3.6657],[42.6844,-2.9480],[42.8415,-2.6716],[43.0400,-2.2000],[43.3177,-1.9765],[43.3396,-1.7890]],
+    [[42.6844,-2.9480],[43.1400,-2.9600],[43.2614,-2.9277]],
+    // Zaragoza - Pamplona / Logroño - Miranda
+    [[41.6587,-0.9114],[42.0610,-1.6040],[42.8025,-1.6622],[42.8415,-2.6716]],
+    [[42.0610,-1.6040],[42.4567,-2.4439],[42.6844,-2.9480]],
+    // Palencia - Santander
+    [[42.0110,-4.5390],[42.8000,-4.2600],[43.3389,-4.0531],[43.4586,-3.8115]],
+    // León - Ponferrada - Monforte - Ourense / Lugo
+    [[42.5960,-5.5786],[42.6100,-6.0500],[42.5458,-6.6025],[42.4100,-7.2000],[42.5269,-7.5028],[42.3411,-7.8647]],
+    [[42.5269,-7.5028],[43.0145,-7.5516],[43.3526,-8.4098]],
+    // Medina - Salamanca / Ávila - Madrid
+    [[41.3186,-4.9089],[40.9765,-5.6496]],
+    [[41.3186,-4.9089],[40.6596,-4.6869],[40.4722,-3.6822]]
+  ];
+
   /* ---------- Diccionario Maestro de Estaciones ---------- */
   const DEFAULT_STATIONS = {
-    "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío", 
+    "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío",
     "18000": "Madrid-Atocha Cercanías", "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "60001": "Madrid-Puerta de Atocha",
     "10100": "Madrid-Nuevos Ministerios", "10101": "Madrid-Sol", "10102": "Madrid-Recoletos", "92102": "Toledo",
     "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia", "79400": "Barcelona-Estació de França",
@@ -288,30 +346,44 @@
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
-  /* ---------- Capas de Vías (OpenStreetMap vía Overpass) ---------- */
+  /* ---------- Capas de Vías (Instantáneas + OpenStreetMap vía Overpass con bbox rápido) ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
   const GRID_SIZE = 0.15;
+
+  // Usamos [bbox:35.8,-9.5,43.8,3.4] en vez de area["ISO3166-1"="ES"] porque en Overpass es 10x más rápido y no da timeout
   const TRACKS = {
-    av: { name: "AV", color: "#7b1fa2", weight: 3.2, opacity: 0.9, minKm: 0.06, key: "avTrack2",
-          query: '[out:json][timeout:120];area["ISO3166-1"="ES"][admin_level=2]->.a;way["railway"="rail"]["highspeed"="yes"][!"service"](area.a);out skel geom qt;',
-          loaded: false, loading: false, err: "", n: 0, poly: null, grid: new Map() },
-    md: { name: "Conv.", color: "#0284c7", weight: 2.2, opacity: 0.75, minKm: 0.2, key: "mdTrack2",
-          query: '[out:json][timeout:180];area["ISO3166-1"="ES"][admin_level=2]->.a;way["railway"="rail"]["highspeed"!="yes"][!"service"]["usage"~"^(main|branch)$"](area.a);out skel geom qt;',
-          loaded: false, loading: false, err: "", n: 0, poly: null, grid: new Map() }
+    av: {
+      name: "AV", color: "#7b1fa2", weight: 3.2, opacity: 0.9, minKm: 0.08, key: "avTrack_v11",
+      fallback: FALLBACK_AV_WAYS,
+      query: '[out:json][timeout:35][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;',
+      loaded: false, osmLoaded: false, loading: false, err: "", n: 0, poly: null, grid: new Map()
+    },
+    md: {
+      name: "Conv.", color: "#0284c7", weight: 2.2, opacity: 0.75, minKm: 0.25, key: "mdTrack_v11",
+      fallback: FALLBACK_MD_WAYS,
+      query: '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"="main"][!"service"];out skel geom qt;',
+      loaded: false, osmLoaded: false, loading: false, err: "", n: 0, poly: null, grid: new Map()
+    }
   };
+
   const OVERPASS = [
-    "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
     "https://overpass.private.coffee/api/interpreter"
   ];
 
   function updateTrackStatus() {
-    const part = st => st.loading ? `${st.name}: cargando…` : st.loaded ? `${st.name}: ${st.n} tramos` : st.err ? `${st.name}: error (${st.err})` : `${st.name}: sin cargar`;
-    const parts = [part(TRACKS.av)];
-    const md = TRACKS.md;
-    if (el.showTrackMD.checked || md.loaded || md.loading || md.err) parts.push(part(md));
-    el.trackStatus.textContent = parts.join(" · ");
+    const part = st => {
+      if (st.loading) return `${st.name}: actualizando OSM…`;
+      if (st.osmLoaded) return `${st.name}: ${st.n} tramos OSM`;
+      if (st.loaded) return `${st.name}: trazado base (${st.n} ejes)`;
+      return `${st.name}: sin cargar`;
+    };
+    const parts = [];
+    if (el.showTrackAV.checked) parts.push(part(TRACKS.av));
+    if (el.showTrackMD.checked) parts.push(part(TRACKS.md));
+    el.trackStatus.textContent = parts.length ? parts.join(" · ") : "Capas de vías desactivadas";
   }
 
   function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
@@ -323,8 +395,14 @@
     for (const ep of OVERPASS) {
       try {
         const ctl = new AbortController();
-        const to = setTimeout(() => ctl.abort(), 200000);
-        const r = await fetch(ep, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "data=" + encodeURIComponent(query), signal: ctl.signal });
+        // Timeout corto de 25 s por servidor para saltar rápido al siguiente si uno está lento
+        const to = setTimeout(() => ctl.abort(), 25000);
+        const r = await fetch(ep, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: "data=" + encodeURIComponent(query),
+          signal: ctl.signal
+        });
         clearTimeout(to);
         if (!r.ok) throw new Error("HTTP " + r.status);
         const j = await r.json();
@@ -336,7 +414,6 @@
     throw lastErr || new Error("sin datos");
   }
 
-  // Reduce puntos: conserva uno cada minKm (los trazados de OSM llevan un punto cada pocos metros)
   function decimate(pts, minKm) {
     const out = [pts[0]]; let last = pts[0];
     for (let i = 1; i < pts.length - 1; i++) {
@@ -406,7 +483,6 @@
     return minD;
   }
 
-  // Devuelve la distancia (km) a la vía activa más cercana, o null si no hay ninguna capa cargada y marcada
   function minTrackDistKm(lat, lon) {
     let d = Infinity, any = false;
     if (el.showTrackAV.checked && TRACKS.av.loaded) { any = true; d = Math.min(d, minDistInGrid(TRACKS.av.grid, lat, lon)); }
@@ -417,12 +493,29 @@
   function syncTrackVisibility() {
     trackLayer.clearLayers();
     if (el.showTrackMD.checked && TRACKS.md.poly) TRACKS.md.poly.addTo(trackLayer);
-    if (el.showTrackAV.checked && TRACKS.av.poly) TRACKS.av.poly.addTo(trackLayer);   // la AV queda encima
+    if (el.showTrackAV.checked && TRACKS.av.poly) TRACKS.av.poly.addTo(trackLayer);
+  }
+
+  function applyTrackWays(st, ways, isOsm) {
+    addWaysToGrid(st.grid, ways);
+    st.poly = L.polyline(ways, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
+    st.n = ways.length;
+    st.loaded = true;
+    st.osmLoaded = !!isOsm;
+    syncTrackVisibility();
+    updateTrackStatus();
+    if (trains.length) { computeProximity(); render(); }
   }
 
   async function loadTrackLayer(kind, force) {
     const st = TRACKS[kind];
-    if (st.loaded || st.loading) return;
+    if (st.loading) return;
+    // 1. Pintar de inmediato el trazado base integrado si aún no hay nada pintado
+    if (!st.loaded && st.fallback) {
+      applyTrackWays(st, st.fallback, false);
+    }
+    if (st.osmLoaded && !force) return;
+
     st.loading = true; st.err = ""; updateTrackStatus();
     try {
       let ways = null;
@@ -435,12 +528,7 @@
         ways = raw.map(w => decimate(w, st.minKm));
         idbSet(st.key, { t: Date.now(), ways });
       }
-      addWaysToGrid(st.grid, ways);
-      st.poly = L.polyline(ways, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
-      st.n = ways.length;
-      st.loaded = true;
-      syncTrackVisibility();
-      if (trains.length) { computeProximity(); render(); }
+      applyTrackWays(st, ways, true);
     } catch (e) {
       st.err = (e && e.name === "AbortError") ? "tiempo agotado" : (e.message || String(e));
     } finally {
@@ -450,7 +538,7 @@
   }
 
   function onTrackToggle(kind, chk) {
-    if (chk.checked && !TRACKS[kind].loaded) loadTrackLayer(kind);
+    if (chk.checked && !TRACKS[kind].osmLoaded) loadTrackLayer(kind);
     syncTrackVisibility();
     updateTrackStatus();
     if (trains.length) { computeProximity(); render(); }
@@ -458,15 +546,8 @@
   el.showTrackAV.addEventListener("change", () => onTrackToggle("av", el.showTrackAV));
   el.showTrackMD.addEventListener("change", () => onTrackToggle("md", el.showTrackMD));
   el.btnReloadTrack.addEventListener("click", () => {
-    for (const kind of ["av", "md"]) {
-      const st = TRACKS[kind];
-      if (st.loading) continue;
-      st.loaded = false; st.poly = null; st.n = 0; st.grid.clear(); st.err = "";
-    }
-    syncTrackVisibility();
     if (el.showTrackAV.checked) loadTrackLayer("av", true);
     if (el.showTrackMD.checked) loadTrackLayer("md", true);
-    updateTrackStatus();
   });
 
   /* ---------- Estado de Trenes con Historial Vectorial ---------- */
@@ -697,14 +778,14 @@
       t.d = Infinity;
       t.nearTrain = null;
       t.trackDist = minTrackDistKm(t.lat, t.lon);
-      // Solo se marca "fuera de vía" si hay alguna capa de vía cargada y activa
-      t.offTrack = (t.trackDist !== null) ? (t.trackDist > tolKm) : false;
-      // Si el tren está en inmediaciones de estación, lo eximimos de alertas
+      // Si se usa el trazado base aún no detallado por OSM, damos margen extra de 6 km para las curvas
+      const bothOsm = (!el.showTrackAV.checked || TRACKS.av.osmLoaded) && (!el.showTrackMD.checked || TRACKS.md.osmLoaded);
+      const effectiveTol = bothOsm ? tolKm : Math.max(tolKm, 6.0);
+      t.offTrack = (t.trackDist !== null) ? (t.trackDist > effectiveTol) : false;
       t.inStation = isInStationArea(t.lat, t.lon, 2.5);
       t._info = trainInfo(t);
     });
 
-    // Solo entran en cálculo de proximidad los que están en ruta y fuera de área de estación
     const activeTrains = trains.filter(t => !t.offTrack && !t.inStation);
     const sorted = [...activeTrains].sort((a, b) => a.lat - b.lat);
     const maxDLat = tO / 111.19;
@@ -716,7 +797,7 @@
         const b = sorted[j];
         if (b.lat - a.lat > maxDLat) break;
         const d = haversine(a.lat, a.lon, b.lat, b.lon);
-        
+
         if (d < tO) {
           let opuestos = false;
           if (a.hasVector && b.hasVector) {
@@ -738,7 +819,7 @@
 
     trains.forEach(t => {
       if (t.offTrack) t.color = "gray";
-      else if (t.inStation) t.color = "green"; // En estación se muestran en verde estable sin alertas
+      else if (t.inStation) t.color = "green";
       else t.color = t.d < tR ? "red" : t.d < tO ? "orange" : "green";
     });
     pairs.sort((x, y) => x.d - y.d);
@@ -906,7 +987,6 @@
   el.source.addEventListener("change", () => {
     el.customWrap.style.display = el.source.value === "custom" ? "block" : "none";
     const isCerc = el.source.value === "visor" || el.source.value === "gtfsrt";
-    // Cercanías circula por vía convencional: activarla (y cargarla si hace falta)
     if (isCerc && !el.showTrackMD.checked) { el.showTrackMD.checked = true; onTrackToggle("md", el.showTrackMD); }
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     stationsTried = false;
@@ -930,7 +1010,8 @@
   }
   el.proxy.addEventListener("change", () => { try { localStorage.setItem("proxyRenfe", el.proxy.value.trim()); } catch (e) {} });
 
-  loadTrackLayer("av");
+  if (el.showTrackAV.checked) loadTrackLayer("av");
+  if (el.showTrackMD.checked) loadTrackLayer("md");
   updateTrackStatus();
   refresh();
   schedule();
