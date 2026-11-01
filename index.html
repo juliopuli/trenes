@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.15</title>
+<title>Trenes Renfe en tiempo real · v1.16</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -15,35 +15,63 @@
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
-  #app{display:grid;grid-template-columns:340px 1fr;height:100%}
-  #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:14px 14px 24px;display:flex;flex-direction:column;gap:14px}
+  #app{display:grid;grid-template-columns:320px 1fr;height:100%}
+  #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:12px 12px 20px;display:flex;flex-direction:column;gap:12px}
   #mapWrap{position:relative;height:100%;width:100%}
   #map{height:100%;width:100%;background:#cfd8e3}
-  h1{font-size:17px;margin:0 0 2px;display:flex;align-items:center;justify-content:space-between}
+  h1{font-size:16px;margin:0 0 2px;display:flex;align-items:center;justify-content:space-between}
   .ver{font-size:11px;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line)}
   .sub{font-size:12px;color:var(--muted)}
-  fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
-  legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
-  label{display:block;font-size:12px;margin:6px 0 3px}
-  input[type=text],input[type=number],select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px}
-  .row{display:flex;gap:8px}
+  fieldset{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0}
+  legend{font-size:11px;font-weight:600;color:var(--muted);padding:0 4px;text-transform:uppercase;letter-spacing:.04em}
+  label{display:block;font-size:12px;margin:4px 0 2px}
+  input[type=text],input[type=number],select{width:100%;padding:6px 7px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font-size:12.5px}
+  .row{display:flex;gap:6px}
   .row>*{flex:1}
-  .chk{display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0;cursor:pointer}
-  .dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25)}
+  .chk{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:4px 0;cursor:pointer}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25)}
   .chk .n{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
-  button{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;cursor:pointer}
+  button{padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:12.5px;cursor:pointer}
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-  button.sm{padding:4px 8px;font-size:11px;border-radius:6px}
+  button.sm{padding:4px 7px;font-size:11px;border-radius:5px}
   button:hover{filter:brightness(.96)}
-  #status{font-size:12px;color:var(--muted);line-height:1.4}
+  #status{font-size:11.5px;color:var(--muted);line-height:1.35}
   #status.err{color:var(--red)}
-  #pairs{max-height:240px;overflow-y:auto;font-size:12px}
-  .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+  #pairs{max-height:220px;overflow-y:auto;font-size:12px}
+  .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 3px;border-bottom:1px solid var(--line);cursor:pointer}
   .pair:hover{background:var(--bg)}
   .pair .d{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
-  .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
+  .help{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.35}
 
-  /* Panel flotante superior izquierdo en el mapa para Alertas Rojas */
+  /* Controles flotantes en el mapa */
+  #topRightControls{
+    position:absolute;
+    top:12px;
+    right:12px;
+    z-index:1000;
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+  .map-btn{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    width:36px;
+    height:36px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 2px 6px rgba(0,0,0,.2);
+    cursor:pointer;
+    color:var(--text);
+  }
+  .map-btn:hover{background:var(--bg)}
+  .map-btn svg{width:18px;height:18px;fill:currentColor}
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  .map-btn.spinning svg { animation: spin 1s linear infinite; }
+
+  /* Panel flotante superior izquierdo para Alertas Rojas */
   #redOverlay{
     position:absolute;
     top:12px;
@@ -51,54 +79,71 @@
     z-index:1000;
     background:var(--panel);
     border:2px solid var(--red);
-    border-radius:10px;
+    border-radius:8px;
     box-shadow:0 4px 16px rgba(0,0,0,.28);
-    min-width:290px;
-    max-width:410px;
-    max-height:260px;
+    min-width:280px;
+    max-width:380px;
+    max-height:240px;
     display:flex;
     flex-direction:column;
     overflow:hidden;
-    pointer-events:auto;
   }
-  #redOverlay.empty{
-    border-color:var(--line);
-    opacity:0.9;
-  }
+  #redOverlay.empty{ border-color:var(--line); opacity:0.85; }
   .ro-head{
-    background:var(--red);
-    color:#fff;
-    font-size:12px;
-    font-weight:700;
-    padding:6px 10px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    letter-spacing:.02em;
+    background:var(--red); color:#fff; font-size:11.5px; font-weight:700; padding:5px 8px;
+    display:flex; align-items:center; justify-content:space-between; letter-spacing:.02em;
   }
-  #redOverlay.empty .ro-head{
-    background:var(--bg);
-    color:var(--muted);
-    border-bottom:1px solid var(--line);
-  }
-  #redList{
-    padding:6px 8px;
-    overflow-y:auto;
-    font-size:12px;
-  }
+  #redOverlay.empty .ro-head{ background:var(--bg); color:var(--muted); border-bottom:1px solid var(--line); }
+  #redList{ padding:4px 6px; overflow-y:auto; font-size:11.5px; }
   .ro-item{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:8px;
-    padding:5px 4px;
-    border-bottom:1px solid var(--line);
-    cursor:pointer;
-    font-weight:600;
+    display:flex; justify-content:space-between; align-items:center; gap:6px; padding:4px 3px;
+    border-bottom:1px solid var(--line); cursor:pointer; font-weight:600;
   }
   .ro-item:last-child{border-bottom:0}
   .ro-item:hover{background:var(--bg)}
-  .ro-item .ro-d{color:var(--red);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ro-item .ro-d{color:var(--red); font-variant-numeric:tabular-nums; white-space:nowrap}
+
+  /* Barra de herramientas flotante inferior izquierda en el mapa */
+  #bottomLeftToolbar{
+    position:absolute;
+    bottom:24px;
+    left:12px;
+    z-index:1000;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .tool-group{position:relative}
+  .tool-btn{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    width:40px;
+    height:40px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,.22);
+    cursor:pointer;
+    color:var(--text);
+  }
+  .tool-btn:hover{background:var(--bg);border-color:var(--accent)}
+  .tool-btn svg{width:20px;height:20px;fill:currentColor}
+  .tool-popup{
+    position:absolute;
+    bottom:0;
+    left:48px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    box-shadow:0 4px 16px rgba(0,0,0,.25);
+    padding:10px;
+    width:220px;
+    display:none;
+    z-index:1001;
+  }
+  .tool-popup.active{display:block}
+  .tool-popup h4{margin:0 0 6px 0;font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
 
   .tm{background:none;border:0}
   .tm .b{width:28px;height:28px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.45);transition:transform .15s}
@@ -130,7 +175,7 @@
   @media (max-width:760px){
     #app{grid-template-columns:1fr;grid-template-rows:46% 54%}
     #side{order:2;border-right:0;border-top:1px solid var(--line)}
-    #redOverlay{left:48px;right:10px;max-width:none}
+    #redOverlay{left:44px;right:10px;max-width:none}
   }
 </style>
 </head>
@@ -138,98 +183,40 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.15</span></h1>
-      <div class="sub">Mapa de España · alerta por alcance y misma vía</div>
+      <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.16</span></h1>
+      <div class="sub">Control de tráfico y seguridad</div>
     </div>
 
     <fieldset>
-      <legend>Datos</legend>
-      <label for="source">Fuente</label>
-      <select id="source">
-        <option value="ld" selected>Renfe · Largo recorrido / Alta velocidad (flotaLD.json)</option>
-        <option value="visor">Renfe · Cercanías (flota.json)</option>
-        <option value="gtfsrt">Renfe · GTFS-RT (vehicle_positions.json)</option>
-        <option value="custom">URL personalizada (JSON)</option>
-        <option value="demo">Demo (trenes simulados)</option>
-      </select>
-      <div id="customWrap" style="display:none">
-        <label for="customUrl">URL JSON</label>
-        <input type="text" id="customUrl" placeholder="https://...">
-      </div>
-      <label for="proxy">Proxy CORS (opcional)</label>
-      <input type="text" id="proxy" placeholder="https://mi-proxy/?url={url}">
-      <div class="row" style="margin-top:8px">
-        <div>
-          <label for="interval" style="margin-top:0">Actualizar cada (para medir vel.)</label>
-          <select id="interval">
-            <option value="3">3 s</option>
-            <option value="5">5 s</option>
-            <option value="10" selected>10 s (recomendado)</option>
-            <option value="15">15 s</option>
-            <option value="30">30 s</option>
-          </select>
-        </div>
-      </div>
-      <label for="basemap">Mapa base</label>
-      <select id="basemap">
-        <option value="gris">Claro (gris)</option>
-        <option value="calles" selected>Calles</option>
-        <option value="sat">Satélite</option>
-      </select>
-      <div class="row" style="margin-top:10px">
-        <button class="primary" id="btnRefresh">Actualizar ahora</button>
-        <button id="btnPause">Pausar</button>
-      </div>
-      <div id="status" style="margin-top:8px">Iniciando…</div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Reglas de alerta (mismo sentido y vía)</legend>
+      <legend>Reglas de Alerta</legend>
       <div class="row">
-        <div><label for="thOrange" title="Distancia de seguridad entre dos trenes en el mismo sentido y mismo tipo de vía">Distancia &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.5" step="0.5"></div>
-        <div><label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
+        <div><label for="thOrange">Distancia &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.5" step="0.5"></div>
+        <div><label for="thSpeed">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
       </div>
       <div class="help">
-        • <b>Misma vía:</b> solo compara trenes compatibles (AVE/AVLO/AVANT no se mezclan con MD/Regional/Cercanías).<br>
-        • <b>Mismo sentido:</b> verificado por vector GPS y rumbo geográfico de las estaciones.<br>
-        • <b>Rojo:</b> el tren trasero va a &gt; 100 km/h y más rápido que el delantero.
+        • <b>Amarillo/Naranja:</b> mismo sentido a &lt; 5 km.<br>
+        • <b>Rojo:</b> alcance a &gt; 100 km/h.
       </div>
     </fieldset>
 
     <fieldset>
-      <legend>Capas de vías</legend>
-      <label class="chk"><input type="checkbox" id="showTrackAV" checked>Vía Alta Velocidad<span class="n" style="color:#7b1fa2;font-weight:700">▬▬</span></label>
-      <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía Media Distancia / Conv.<span class="n" style="color:#0066cc;font-weight:700">▬▬</span></label>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px">
-        <div class="help" id="trackStatus" style="margin:0">Cargando trazados…</div>
-        <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías de OpenStreetMap">Recargar</button>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Tipo de tren</legend>
-      <div id="types"><div class="sub">Aparecerán al cargar los datos.</div></div>
-      <div class="help">Todos marcados por defecto. La proximidad se calcula entre los tipos marcados y compatibles en vía.</div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Mostrar</legend>
-      <label class="chk"><input type="checkbox" id="showRed" checked><span class="dot" style="background:var(--red)"></span>Alerta roja (alcance)<span class="n" id="nRed">0</span></label>
-      <label class="chk"><input type="checkbox" id="showOrange" checked><span class="dot" style="background:var(--orange)"></span>Precaución (&lt;5 km)<span class="n" id="nOrange">0</span></label>
-      <label class="chk"><input type="checkbox" id="showGreen" checked><span class="dot" style="background:var(--green)"></span>Normal (verde)<span class="n" id="nGreen">0</span></label>
-      <label class="chk"><input type="checkbox" id="showLines" checked>Unir con línea los trenes cercanos</label>
-      <label for="search">Buscar tren / origen / destino</label>
-      <input type="text" id="search" placeholder="p. ej. 02112, ALVIA, Málaga, Madrid…">
+      <legend>Filtros y Búsqueda</legend>
+      <label class="chk"><input type="checkbox" id="showLines" checked>Unir trenes cercanos con línea</label>
+      <label for="search" style="margin-top:6px">Buscar tren / destino</label>
+      <input type="text" id="search" placeholder="p. ej. AVE, Málaga, Madrid…">
       <div class="sub" style="margin-top:6px">Trenes en pantalla: <b id="nTotal">0</b></div>
     </fieldset>
 
     <fieldset>
-      <legend>Trenes en precaución (amarillo/naranja)</legend>
+      <legend>Trenes en precaución</legend>
       <div id="pairs"><div class="sub">Sin datos todavía.</div></div>
     </fieldset>
+
+    <div id="status" style="margin-top:auto">Iniciando sistema…</div>
   </aside>
 
   <main id="mapWrap">
+    <!-- Panel flotante superior izquierdo: Alertas Rojas -->
     <div id="redOverlay" class="empty">
       <div class="ro-head">
         <span>🚨 ALERTAS ROJAS POR ALCANCE</span>
@@ -239,6 +226,75 @@
         <div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>
       </div>
     </div>
+
+    <!-- Botón flotante superior derecho: Actualizar -->
+    <div id="topRightControls">
+      <button class="map-btn" id="btnRefresh" title="Actualizar datos ahora">
+        <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      </button>
+    </div>
+
+    <!-- Barra de herramientas flotante inferior izquierda -->
+    <div id="bottomLeftToolbar">
+      <!-- 1. Fuente de datos (Icono de Vía) -->
+      <div class="tool-group">
+        <div class="tool-btn" id="toolBtnSource" title="Seleccionar fuente de datos">
+          <svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>
+        </div>
+        <div class="tool-popup" id="popupSource">
+          <h4>Fuente de Datos</h4>
+          <select id="source">
+            <option value="ld" selected>Largo Recorrido / AV (flotaLD.json)</option>
+            <option value="visor">Cercanías (flota.json)</option>
+            <option value="gtfsrt">GTFS-RT (vehicle_positions.json)</option>
+            <option value="demo">Modo Demo (simulado)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 2. Mapa Base (Icono de Mapa) -->
+      <div class="tool-group">
+        <div class="tool-btn" id="toolBtnBasemap" title="Cambiar mapa base">
+          <svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.1V5l6 2.1V19z"/></svg>
+        </div>
+        <div class="tool-popup" id="popupBasemap">
+          <h4>Mapa Base</h4>
+          <select id="basemap">
+            <option value="gris">Claro (Gris)</option>
+            <option value="calles" selected>Calles (Esri)</option>
+            <option value="sat">Satélite</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 3. Capas de Vías (Icono de Red Ferroviaria) -->
+      <div class="tool-group">
+        <div class="tool-btn" id="toolBtnTracks" title="Capas de vías">
+          <svg viewBox="0 0 24 24"><path d="M4 3h2v18H4V3zm14 0h2v18h-2V3zM7 8l10-3v2L7 10V8zm0 7l10-3v2L7 17v-2z"/></svg>
+        </div>
+        <div class="tool-popup" id="popupTracks" style="width:230px;">
+          <h4>Capas de Vías</h4>
+          <label class="chk"><input type="checkbox" id="showTrackAV" checked>Alta Velocidad <span style="color:#7b1fa2;font-weight:700">▬▬</span></label>
+          <label class="chk"><input type="checkbox" id="showTrackMD" checked>Convencional / MD <span style="color:#0066cc;font-weight:700">▬▬</span></label>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:6px;">
+            <span class="sub" id="trackStatus" style="font-size:10px;">Cargando…</span>
+            <button class="sm" id="btnReloadTrack">Recargar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Tipos de Tren (Icono de Filtro / Trenes) -->
+      <div class="tool-group">
+        <div class="tool-btn" id="toolBtnTypes" title="Filtrar tipos de tren">
+          <svg viewBox="0 0 24 24"><path d="M3 4h18v2H3V4zm3 7h12v2H6v-2zm4 7h4v2h-4v-2z"/></svg>
+        </div>
+        <div class="tool-popup" id="popupTypes" style="max-height:220px;overflow-y:auto;">
+          <h4>Tipos de Tren</h4>
+          <div id="types"><div class="sub">Cargando tipos…</div></div>
+        </div>
+      </div>
+    </div>
+
     <div id="map"></div>
   </main>
 </div>
@@ -248,8 +304,7 @@
 (() => {
   "use strict";
 
-  /* ---------- Configuración ---------- */
-  const VERSION = "1.15";
+  const VERSION = "1.16";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -264,7 +319,6 @@
   };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
 
-  /* ---------- Traductor Oficial de Códigos Numéricos de Producto de Renfe ---------- */
   const PRODUCT_CODES = {
     "1": "AVE", "2": "AVANT", "3": "ALVIA", "4": "EUROMED", "5": "ALTARIA",
     "6": "TALGO", "7": "INTERCITY", "8": "MD", "9": "REG.EXP", "10": "REGIONAL",
@@ -289,7 +343,22 @@
     return "AVE";
   }
 
-  /* ---------- Coordenadas Geográficas de Estaciones/Ciudades para Vector de Rumbo y Filtro de Estación ---------- */
+  const STATION_COORDS = [
+    [40.4065, -3.6896], [40.4722, -3.6822], [41.3791, 2.1401],  [39.4601, -0.3816],
+    [37.3919, -5.9753], [36.7115, -4.4316], [41.6587, -0.9114], [43.2614, -2.9277],
+    [41.6416, -4.7289], [37.8884, -4.7892], [38.3446, -0.4951], [42.2351, -8.7118],
+    [37.1841, -3.6091], [40.0780, -2.1380], [38.9950, -1.8550], [39.9800, -0.0500],
+    [41.1189, 1.2445],  [42.3411, -7.8647], [42.8705, -8.5446], [42.5960, -5.5786],
+    [43.3662, -5.8536], [37.9746, -1.1301]
+  ];
+
+  function isInStationArea(lat, lon, thresholdKm = 2.2) {
+    for (const [stLat, stLon] of STATION_COORDS) {
+      if (haversine(lat, lon, stLat, stLon) <= thresholdKm) return true;
+    }
+    return false;
+  }
+
   const CITY_GEO = [
     { keys: ["atocha", "madrid-puerta", "madrid atocha", "principe pio", "príncipe pío"], lat: 40.4065, lon: -3.6896, main: true },
     { keys: ["chamartin", "chamartín", "madrid-chamartin", "madrid"], lat: 40.4722, lon: -3.6822, main: true },
@@ -314,62 +383,7 @@
     { keys: ["leon", "león"], lat: 42.5960, lon: -5.5786, main: true },
     { keys: ["oviedo"], lat: 43.3662, lon: -5.8536, main: true },
     { keys: ["gijon", "gijón"], lat: 43.5390, lon: -5.6760, main: true },
-    { keys: ["murcia"], lat: 37.9746, lon: -1.1301, main: true },
-    { keys: ["lleida", "lerida"], lat: 41.6208, lon: 0.6327, main: true },
-    { keys: ["girona", "gerona"], lat: 41.9793, lon: 2.8169, main: false },
-    { keys: ["figueres", "vilafant"], lat: 42.2654, lon: 2.9436, main: true },
-    { keys: ["calatayud"], lat: 41.3410, lon: -1.6440, main: false },
-    { keys: ["guadalajara", "yebes"], lat: 40.5567, lon: -3.1670, main: false },
-    { keys: ["ciudad real"], lat: 38.9830, lon: -3.9160, main: false },
-    { keys: ["puertollano"], lat: 38.6850, lon: -4.1070, main: false },
-    { keys: ["antequera"], lat: 37.0672, lon: -4.6869, main: false },
-    { keys: ["puente genil"], lat: 37.3980, lon: -4.7060, main: false },
-    { keys: ["ronda"], lat: 36.7420, lon: -5.1660, main: false },
-    { keys: ["algeciras"], lat: 36.1270, lon: -5.4470, main: true },
-    { keys: ["cadiz", "cádiz"], lat: 36.5290, lon: -6.2869, main: true },
-    { keys: ["jerez"], lat: 36.6796, lon: -6.1268, main: false },
-    { keys: ["huelva"], lat: 37.2518, lon: -6.9447, main: true },
-    { keys: ["jaen", "jaén"], lat: 37.7780, lon: -3.7890, main: true },
-    { keys: ["linares", "baeza"], lat: 38.0694, lon: -3.5931, main: false },
-    { keys: ["almeria", "almería"], lat: 36.8380, lon: -2.4590, main: true },
-    { keys: ["toledo"], lat: 39.8624, lon: -4.0113, main: true },
-    { keys: ["segovia", "guiomar"], lat: 40.8884, lon: -4.0958, main: false },
-    { keys: ["palencia"], lat: 42.0110, lon: -4.5390, main: false },
-    { keys: ["burgos"], lat: 42.3712, lon: -3.6657, main: false },
-    { keys: ["miranda"], lat: 42.6844, lon: -2.9480, main: false },
-    { keys: ["vitoria", "gasteiz"], lat: 42.8415, lon: -2.6716, main: false },
-    { keys: ["san sebastian", "san sebastián", "donostia"], lat: 43.3177, lon: -1.9765, main: true },
-    { keys: ["irun", "irún"], lat: 43.3396, lon: -1.7890, main: true },
-    { keys: ["pamplona", "iruña"], lat: 42.8025, lon: -1.6622, main: true },
-    { keys: ["logroño", "logrono"], lat: 42.4567, lon: -2.4439, main: true },
-    { keys: ["huesca"], lat: 42.1350, lon: -0.4080, main: true },
-    { keys: ["santander"], lat: 43.4586, lon: -3.8115, main: true },
-    { keys: ["torrelavega"], lat: 43.3389, lon: -4.0531, main: false },
-    { keys: ["ponferrada"], lat: 42.5458, lon: -6.6025, main: false },
-    { keys: ["monforte"], lat: 42.5269, lon: -7.5028, main: false },
-    { keys: ["lugo"], lat: 43.0145, lon: -7.5516, main: false },
-    { keys: ["ferrol"], lat: 43.4850, lon: -8.2250, main: true },
-    { keys: ["pontevedra"], lat: 42.4227, lon: -8.6345, main: false },
-    { keys: ["vilagarcia", "vilagarcía"], lat: 42.5960, lon: -8.7610, main: false },
-    { keys: ["zamora"], lat: 41.5126, lon: -5.7369, main: false },
-    { keys: ["sanabria"], lat: 42.0289, lon: -6.6214, main: false },
-    { keys: ["medina"], lat: 41.3186, lon: -4.9089, main: false },
-    { keys: ["salamanca"], lat: 40.9765, lon: -5.6496, main: true },
-    { keys: ["avila", "ávila"], lat: 40.6596, lon: -4.6869, main: false },
-    { keys: ["caceres", "cáceres"], lat: 39.4650, lon: -6.3840, main: false },
-    { keys: ["merida", "mérida"], lat: 38.9218, lon: -6.3426, main: false },
-    { keys: ["badajoz"], lat: 38.8878, lon: -6.9822, main: true },
-    { keys: ["plasencia"], lat: 39.9678, lon: -6.1030, main: false },
-    { keys: ["requena", "utiel"], lat: 39.5890, lon: -1.1740, main: false },
-    { keys: ["villena"], lat: 38.6064, lon: -0.9234, main: false },
-    { keys: ["elx", "elche"], lat: 38.2480, lon: -0.7420, main: false },
-    { keys: ["orihuela"], lat: 38.0830, lon: -0.9460, main: false },
-    { keys: ["cartagena"], lat: 37.6050, lon: -0.9860, main: true },
-    { keys: ["alcazar", "alcázar"], lat: 39.3880, lon: -3.2180, main: false },
-    { keys: ["aranjuez"], lat: 40.0320, lon: -3.6060, main: false },
-    { keys: ["teruel"], lat: 40.3420, lon: -1.1120, main: false },
-    { keys: ["vinaros", "vinaròs", "benicarlo", "benicarló"], lat: 40.4700, lon: 0.4730, main: false },
-    { keys: ["tortosa"], lat: 40.8120, lon: 0.5210, main: false }
+    { keys: ["murcia"], lat: 37.9746, lon: -1.1301, main: true }
   ];
 
   function findStationCoords(name) {
@@ -383,14 +397,6 @@
     return null;
   }
 
-  function isInStationArea(lat, lon, thresholdKm = 2.2) {
-    for (const c of CITY_GEO) {
-      if (c.main && haversine(lat, lon, c.lat, c.lon) <= thresholdKm) return true;
-    }
-    return false;
-  }
-
-  /* ---------- Trazados Base Detallados (AV y Media Distancia / Convencional) ---------- */
   const FALLBACK_AV_WAYS = [
     [[40.4065,-3.6896],[40.5567,-3.1670],[40.9250,-2.4500],[41.3410,-1.6440],[41.6587,-0.9114],[41.5200,0.0500],[41.6208,0.6327],[41.3900,1.0200],[41.1992,1.2690],[41.3791,2.1401],[41.9793,2.8169],[42.2654,2.9436]],
     [[40.4065,-3.6896],[39.8900,-3.9200],[38.9830,-3.9160],[38.6850,-4.1070],[38.1500,-4.4500],[37.8884,-4.7892],[37.6500,-5.4000],[37.3919,-5.9753]],
@@ -411,88 +417,42 @@
     [[41.3791,2.1401],[41.2240,1.7250],[41.1120,1.2550],[40.8120,0.5210],[40.4700,0.4730],[39.9870,-0.0528],[39.6800,-0.2700],[39.4601,-0.3816],[39.1500,-0.4350],[38.9900,-0.5200],[38.8700,-0.7800],[38.6100,-0.8700],[38.3446,-0.4951],[38.2650,-0.6980],[38.0830,-0.9460],[37.9746,-1.1301],[37.6050,-0.9860]],
     [[40.4065,-3.6896],[40.0320,-3.6060],[39.6100,-3.5000],[39.3880,-3.2180],[39.2000,-2.6500],[38.9997,-1.8490],[38.8680,-1.0970],[38.8700,-0.7800]],
     [[39.3880,-3.2180],[38.9950,-3.3700],[38.7610,-3.3850],[38.3800,-3.5050],[38.0694,-3.5931],[38.0180,-3.8600],[38.0300,-4.0500],[37.8884,-4.7892],[37.7500,-5.0500],[37.6180,-5.2800],[37.3919,-5.9753],[37.1750,-5.9220],[36.9150,-6.0700],[36.6796,-6.1268],[36.5930,-6.2250],[36.5290,-6.2869]],
-    [[38.0180,-3.8600],[37.7780,-3.7890]],
-    [[38.0694,-3.5931],[37.6500,-3.2600],[37.3100,-3.1350],[37.1300,-2.6500],[36.8380,-2.4590]],
-    [[37.3100,-3.1350],[37.3500,-3.4800],[37.1841,-3.6091]],
-    [[37.3919,-5.9753],[37.3800,-6.2500],[37.3300,-6.5400],[37.2518,-6.9447]],
-    [[37.1750,-5.9220],[37.2300,-5.1000],[37.0420,-4.7250],[36.7420,-5.1660],[36.4500,-5.3600],[36.1270,-5.4470]],
-    [[37.0420,-4.7250],[36.9000,-4.6500],[36.7115,-4.4316]],
-    [[40.4065,-3.6896],[40.1300,-4.2600],[39.9650,-4.8300],[39.8950,-5.5400],[39.9678,-6.1030],[39.4650,-6.3840],[38.9218,-6.3426],[38.8878,-6.9822]],
-    [[39.4650,-6.3840],[39.5000,-7.0500]],
-    [[38.9218,-6.3426],[38.4250,-6.4150],[37.9200,-6.1500],[37.3919,-5.9753]],
-    [[38.9218,-6.3426],[38.8650,-5.8700],[38.6850,-4.1070]],
     [[40.4722,-3.6822],[40.6350,-4.0100],[40.6596,-4.6869],[41.0500,-4.7800],[41.3186,-4.9089],[41.6416,-4.7289],[41.9200,-4.4500],[42.1200,-4.1000],[42.3712,-3.6657],[42.5400,-3.3100],[42.6844,-2.9480],[42.8415,-2.6716],[42.8900,-2.3000],[43.0400,-2.2000],[43.1350,-2.0750],[43.3177,-1.9765],[43.3396,-1.7890]],
-    [[41.3186,-4.9089],[40.9765,-5.6496],[40.6050,-6.8150]],
-    [[41.3186,-4.9089],[41.5126,-5.7369]],
     [[42.0110,-4.5390],[42.4500,-4.3800],[42.8000,-4.2600],[43.0000,-4.1300],[43.3389,-4.0531],[43.4586,-3.8115]],
-    [[42.0110,-4.5390],[42.3200,-4.9800],[42.5960,-5.5786],[42.9800,-5.6500],[43.1600,-5.8280],[43.3662,-5.8536],[43.5390,-5.6760]],
-    [[42.5960,-5.5786],[42.4550,-6.0550],[42.5458,-6.6025],[42.4100,-7.0100],[42.5269,-7.5028],[42.3411,-7.8647],[42.2600,-8.1500],[42.1600,-8.5200],[42.2351,-8.7118]],
-    [[42.5269,-7.5028],[42.7900,-7.4200],[43.0145,-7.5516],[43.1800,-7.8900],[43.2800,-8.2200],[43.3526,-8.4098],[43.4850,-8.2250]],
-    [[42.6844,-2.9480],[43.0100,-2.9800],[43.1400,-2.9600],[43.2614,-2.9277]],
-    [[42.6844,-2.9480],[42.4567,-2.4439],[42.2200,-1.9800],[42.0610,-1.6040],[41.9100,-1.3500],[41.6587,-0.9114],[41.2700,-0.4300],[41.2380,-0.0400],[41.0900,0.6300],[41.1500,1.1050],[41.1120,1.2550]],
-    [[42.0610,-1.6040],[42.4500,-1.6500],[42.8025,-1.6622],[42.8900,-2.3000]],
-    [[41.6587,-0.9114],[41.8900,-0.7800],[42.1350,-0.4080],[42.5200,-0.3600]],
-    [[41.6587,-0.9114],[41.8800,-0.1500],[41.9050,0.1900],[41.6208,0.6327],[41.6500,1.1400],[41.7200,1.8250],[41.5450,2.1100],[41.3791,2.1401]],
-    [[40.4065,-3.6896],[40.6280,-3.1800],[41.0700,-2.6400],[41.2850,-2.1300],[41.3410,-1.6440],[41.6587,-0.9114]],
-    [[41.3410,-1.6440],[40.8650,-1.3100],[40.3420,-1.1120],[39.9000,-0.6500],[39.6800,-0.2700]],
-    [[40.0320,-3.6060],[40.0050,-3.0100],[40.0720,-2.1400],[39.5650,-1.2050],[39.4601,-0.3816]]
+    [[41.6587,-0.9114],[41.8800,-0.1500],[41.9050,0.1900],[41.6208,0.6327],[41.6500,1.1400],[41.7200,1.8250],[41.5450,2.1100],[41.3791,2.1401]]
   ];
 
-  /* ---------- Diccionario Maestro de Estaciones ---------- */
   const DEFAULT_STATIONS = {
-    "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío",
-    "18000": "Madrid-Atocha Cercanías", "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "60001": "Madrid-Puerta de Atocha",
-    "10100": "Madrid-Nuevos Ministerios", "10101": "Madrid-Sol", "10102": "Madrid-Recoletos", "92102": "Toledo",
-    "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia", "79400": "Barcelona-Estació de França",
-    "71800": "Barcelona-Catalunya", "71805": "Barcelona-Arc de Triomf", "71806": "Barcelona-Sagrera",
-    "79300": "Girona", "79303": "Figueres-Vilafant", "71500": "Camp de Tarragona", "78400": "Lleida-Pirineus",
-    "79100": "Mataró", "79200": "Granollers", "71400": "Vic", "71200": "Manresa", "78200": "Tortosa",
-    "04040": "Zaragoza-Delicias", "04001": "Zaragoza-Portillo", "04002": "Zaragoza-Goya", "70600": "Calatayud",
-    "04104": "Huesca", "04007": "Tardienta", "81100": "Logroño", "81202": "Miranda de Ebro",
-    "13200": "Bilbao-Abando", "13000": "Bilbao-La Concordia", "11200": "Vitoria/Gasteiz", "11511": "San Sebastián/Donostia",
-    "11600": "Irun", "80100": "Pamplona/Iruña", "13100": "Barakaldo", "13300": "Durango",
-    "14223": "Santander", "14202": "Torrelavega", "15211": "Oviedo", "15212": "Gijón-Sanz Crespo",
-    "15205": "Mieres-Puente", "15200": "Pola de Lena", "15100": "León", "15400": "Ponferrada",
-    "10600": "Valladolid-Campo Grande", "10605": "Valladolid-Universidad", "14100": "Palencia", "11014": "Burgos-Rosa Manzano",
-    "12100": "Segovia-Guiomar", "10200": "Ávila", "10300": "Medina del Campo", "10500": "Medina del Campo AV",
-    "30100": "Zamora", "30200": "Sanabria AV", "32008": "Salamanca",
-    "31200": "Ourense", "31400": "Santiago de Compostela", "31412": "A Coruña", "31300": "Ferrol",
-    "22100": "Lugo", "22300": "Monforte de Lemos", "23004": "Pontevedra", "23005": "Vigo-Urzáiz",
-    "23100": "Vigo-Guixar", "23002": "Vilagarcía de Arousa",
-    "35002": "Cáceres", "35109": "Mérida", "37606": "Badajoz", "35010": "Plasencia",
-    "60200": "Ciudad Real", "60400": "Puertollano", "60600": "Albacete-Los Llanos", "60911": "Cuenca-Fernando Zóbel",
-    "60913": "Requena-Utiel", "70200": "Guadalajara-Yebes", "60700": "Villena", "60905": "Villena AV",
-    "50500": "Córdoba", "51003": "Sevilla-Santa Justa", "51001": "Sevilla-San Bernardo", "51002": "Sevilla-Virgen del Rocío",
-    "51405": "Cádiz", "51300": "Jerez de la Frontera", "51400": "El Puerto de Santa María", "51402": "San Fernando-Bahía Sur",
-    "43003": "Huelva", "54413": "Málaga-María Zambrano", "54405": "Antequera-Santa Ana", "54415": "Antequera AV",
-    "05482": "Puente Genil-Herrera", "55020": "Ronda", "55104": "Algeciras", "05000": "Granada", "05475": "Loja",
-    "50300": "Linares-Baeza", "50411": "Jaén", "56312": "Almería", "56106": "Guadix",
-    "65000": "València-Joaquín Sorolla", "65001": "València-Estació del Nord", "65005": "València-Cabanyal",
-    "65300": "Castelló", "65402": "Vinaròs", "65400": "Benicarló-Peñíscola", "61200": "Alacant-Terminal",
-    "62109": "Elx AV / Elche AV", "62103": "Orihuela-Miguel Hernández", "61307": "Murcia del Carmen", "61300": "Cartagena",
-    "39000": "Palma de Mallorca", "07000": "Eivissa", "00000": "Estación Central", "99999": "En ruta"
+    "10000": "Madrid-Chamartín-Clara Campoamor", "18000": "Madrid-Atocha Cercanías", "60000": "Madrid-Puerta de Atocha-Almudena Grandes",
+    "71801": "Barcelona-Sants", "79400": "Barcelona-Estació de França", "04040": "Zaragoza-Delicias",
+    "13200": "Bilbao-Abando", "10600": "Valladolid-Campo Grande", "50500": "Córdoba", "51003": "Sevilla-Santa Justa",
+    "54413": "Málaga-María Zambrano", "65000": "València-Joaquín Sorolla", "61200": "Alacant-Terminal", "32008": "Salamanca"
   };
 
-  /* ---------- Elementos ---------- */
   const $ = id => document.getElementById(id);
   const el = {
-    source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
-    interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
+    source: $("source"),
     thOrange: $("thOrange"), thSpeed: $("thSpeed"),
     showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
-    showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
+    showLines: $("showLines"),
     search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nTotal: $("nTotal"),
-    pairs: $("pairs"), redOverlay: $("redOverlay"), roCount: $("roCount"), redList: $("redList")
+    pairs: $("pairs"), redOverlay: $("redOverlay"), roCount: $("roCount"), redList: $("redList"),
+    btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"), basemap: $("basemap"),
+    toolBtnSource: $("toolBtnSource"), popupSource: $("popupSource"),
+    toolBtnBasemap: $("toolBtnBasemap"), popupBasemap: $("popupBasemap"),
+    toolBtnTracks: $("toolBtnTracks"), popupTracks: $("popupTracks"),
+    toolBtnTypes: $("toolBtnTypes"), popupTypes: $("popupTypes"),
+    typesBox: $("types")
   };
 
   /* ---------- Mapa ---------- */
   const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const BASES = {
-    gris:   { url: ESRI + "Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 16, maxZoom: 18, attribution: "Tiles &copy; Esri" } },
-    calles: { url: ESRI + "World_Street_Map/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 19, maxZoom: 19, attribution: "Tiles &copy; Esri" } },
-    sat:    { url: ESRI + "World_Imagery/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 18, maxZoom: 19, attribution: "Tiles &copy; Esri, Maxar, Earthstar Geographics" } }
+    gris:   { url: ESRI + "Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 16, maxZoom: 18 } },
+    calles: { url: ESRI + "World_Street_Map/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 19, maxZoom: 19 } },
+    sat:    { url: ESRI + "World_Imagery/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 18, maxZoom: 19 } }
   };
   let baseLayer = null;
   function setBase(k) {
@@ -501,42 +461,18 @@
     baseLayer.bringToBack();
   }
   setBase("calles");
-  document.getElementById("basemap").addEventListener("change", e => setBase(e.target.value));
+  el.basemap.addEventListener("change", e => setBase(e.target.value));
+
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
-
-  /* ---------- Capas de Vías e Índice Espacial (para saber en qué vía va un tren híbrido) ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
   const GRID_SIZE = 0.15;
 
-  const SPAIN_QUADRANTS = [
-    "35.8,-9.5,40.2,-3.2",
-    "35.8,-3.2,40.2,3.4",
-    "40.2,-9.5,43.8,-3.2",
-    "40.2,-3.2,43.8,3.4"
-  ];
-
   const TRACKS = {
-    av: {
-      name: "AV", color: "#7b1fa2", weight: 3.3, opacity: 0.92, minKm: 0.08, key: "avTrack_v12",
-      fallback: FALLBACK_AV_WAYS,
-      queries: ['[out:json][timeout:30][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'],
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map()
-    },
-    md: {
-      name: "MD/Conv", color: "#0066cc", weight: 2.6, opacity: 0.85, minKm: 0.18, key: "mdTrack_v12",
-      fallback: FALLBACK_MD_WAYS,
-      queries: SPAIN_QUADRANTS.map(b => `[out:json][timeout:25][bbox:${b}];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;`),
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map()
-    }
+    av: { name: "AV", color: "#7b1fa2", weight: 3.3, opacity: 0.92, minKm: 0.08, key: "avTrack_v12", fallback: FALLBACK_AV_WAYS, loaded: false, osmLoaded: false, loading: false, poly: null, grid: new Map() },
+    md: { name: "MD/Conv", color: "#0066cc", weight: 2.6, opacity: 0.85, minKm: 0.18, key: "mdTrack_v12", fallback: FALLBACK_MD_WAYS, loaded: false, osmLoaded: false, loading: false, poly: null, grid: new Map() }
   };
-
-  const OVERPASS = [
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter"
-  ];
 
   function addWaysToGrid(grid, lines) {
     grid.clear();
@@ -596,54 +532,10 @@
   }
 
   function updateTrackStatus() {
-    const part = st => {
-      if (st.loading) return `${st.name}: detallando OSM…`;
-      if (st.osmLoaded) return `${st.name}: ${st.n} tramos OSM`;
-      if (st.loaded) return `${st.name}: red base activa`;
-      return `${st.name}: sin cargar`;
-    };
     const parts = [];
-    if (el.showTrackAV.checked) parts.push(part(TRACKS.av));
-    if (el.showTrackMD.checked) parts.push(part(TRACKS.md));
-    el.trackStatus.textContent = parts.length ? parts.join(" · ") : "Capas de vías ocultas";
-  }
-
-  function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
-  async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } }
-  async function idbSet(k, v) { try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }
-
-  async function overpassSingle(query) {
-    let lastErr;
-    for (const ep of OVERPASS) {
-      try {
-        const ctl = new AbortController();
-        const to = setTimeout(() => ctl.abort(), 22000);
-        const r = await fetch(ep, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: "data=" + encodeURIComponent(query),
-          signal: ctl.signal
-        });
-        clearTimeout(to);
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        const j = await r.json();
-        const ways = (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => e.geometry.map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]));
-        if (ways.length) return ways;
-        throw new Error("vacío");
-      } catch (e) { lastErr = e; }
-    }
-    throw lastErr || new Error("sin datos");
-  }
-
-  function decimate(pts, minKm) {
-    const out = [pts[0]]; let last = pts[0];
-    for (let i = 1; i < pts.length - 1; i++) {
-      const p = pts[i];
-      const dy = (p[0] - last[0]) * 111.19, dx = (p[1] - last[1]) * 111.19 * Math.cos(p[0] * Math.PI / 180);
-      if (dx * dx + dy * dy >= minKm * minKm) { out.push(p); last = p; }
-    }
-    out.push(pts[pts.length - 1]);
-    return out;
+    if (el.showTrackAV.checked) parts.push("AV");
+    if (el.showTrackMD.checked) parts.push("Conv.");
+    el.trackStatus.textContent = parts.length ? parts.join(" · ") : "Ocultas";
   }
 
   function syncTrackVisibility() {
@@ -652,65 +544,38 @@
     if (el.showTrackAV.checked && TRACKS.av.poly) TRACKS.av.poly.addTo(trackLayer);
   }
 
-  function applyTrackWays(st, ways, isOsm) {
-    const combined = isOsm ? [...st.fallback, ...ways] : ways;
-    addWaysToGrid(st.grid, combined);
-    st.poly = L.polyline(combined, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
-    st.n = combined.length;
+  function applyTrackWays(st, ways) {
+    addWaysToGrid(st.grid, ways);
+    st.poly = L.polyline(ways, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
     st.loaded = true;
-    st.osmLoaded = !!isOsm;
     syncTrackVisibility();
     updateTrackStatus();
   }
 
-  async function loadTrackLayer(kind, force) {
+  function loadTrackLayer(kind) {
     const st = TRACKS[kind];
-    if (st.loading) return;
-    if (!st.loaded && st.fallback) {
-      applyTrackWays(st, st.fallback, false);
-    }
-    if (st.osmLoaded && !force) return;
-
-    st.loading = true; updateTrackStatus();
-    try {
-      let ways = null;
-      if (!force) {
-        const c = await idbGet(st.key);
-        if (c && c.ways && Date.now() - c.t < 30 * 864e5) ways = c.ways;
-      }
-      if (!ways) {
-        const allWays = [];
-        for (const q of st.queries) {
-          try {
-            const raw = await overpassSingle(q);
-            const dec = raw.map(w => decimate(w, st.minKm));
-            allWays.push(...dec);
-            if (allWays.length) applyTrackWays(st, allWays, true);
-          } catch (e) {}
-        }
-        if (!allWays.length) throw new Error("sin respuesta OSM");
-        ways = allWays;
-        idbSet(st.key, { t: Date.now(), ways });
-      }
-      applyTrackWays(st, ways, true);
-    } catch (e) {
-    } finally {
-      st.loading = false;
-      updateTrackStatus();
-    }
+    if (st.loaded && st.poly) return;
+    applyTrackWays(st, st.fallback);
   }
 
-  function onTrackToggle(kind, chk) {
-    if (chk.checked && !TRACKS[kind].osmLoaded) loadTrackLayer(kind);
-    syncTrackVisibility();
-    updateTrackStatus();
+  el.showTrackAV.addEventListener("change", () => { syncTrackVisibility(); updateTrackStatus(); });
+  el.showTrackMD.addEventListener("change", () => { syncTrackVisibility(); updateTrackStatus(); });
+  el.btnReloadTrack.addEventListener("click", () => { loadTrackLayer("av"); loadTrackLayer("md"); });
+
+  /* ---------- Popups de la Barra Flotante Inferior Izquierda ---------- */
+  function togglePopup(targetId) {
+    ["popupSource", "popupBasemap", "popupTracks", "popupTypes"].forEach(id => {
+      const p = $(id);
+      if (id === targetId) p.classList.toggle("active");
+      else p.classList.remove("active");
+    });
   }
-  el.showTrackAV.addEventListener("change", () => onTrackToggle("av", el.showTrackAV));
-  el.showTrackMD.addEventListener("change", () => onTrackToggle("md", el.showTrackMD));
-  el.btnReloadTrack.addEventListener("click", () => {
-    if (el.showTrackAV.checked) loadTrackLayer("av", true);
-    if (el.showTrackMD.checked) loadTrackLayer("md", true);
-  });
+  el.toolBtnSource.addEventListener("click", e => { e.stopPropagation(); togglePopup("popupSource"); });
+  el.toolBtnBasemap.addEventListener("click", e => { e.stopPropagation(); togglePopup("popupBasemap"); });
+  el.toolBtnTracks.addEventListener("click", e => { e.stopPropagation(); togglePopup("popupTracks"); });
+  el.toolBtnTypes.addEventListener("click", e => { e.stopPropagation(); togglePopup("popupTypes"); });
+  document.addEventListener("click", () => togglePopup(""));
+  document.querySelectorAll(".tool-popup").forEach(p => p.addEventListener("click", e => e.stopPropagation()));
 
   /* ---------- Estado de Trenes ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
@@ -747,10 +612,7 @@
   }
 
   let stationsTried = false;
-  function proxify(url) {
-    const p = el.proxy.value.trim();
-    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
-  }
+  function proxify(url) { return url; }
   async function loadStations() {
     if (stationsTried || el.source.value !== "ld") return;
     stationsTried = true;
@@ -943,16 +805,10 @@
     };
   }
 
-  /* ---------- Clasificación de Vía Activa por Tren (Evita cruzar MD con AVE) ---------- */
   function getTrainTrackGroup(t) {
     const tipo = (t.tipo || "").toUpperCase();
-    // 1. Alta Velocidad pura (ancho internacional UIC exclusivo)
     if (tipo === "AVE" || tipo === "AVLO" || tipo === "AVANT") return "AV";
-    // 2. Convencional pura (ancho ibérico / cercanías / media distancia convencional)
     if (tipo === "MD" || tipo === "REGIONAL" || tipo === "REG.EXP" || tipo === "CERCANÍAS") return "CONV";
-
-    // 3. Trenes híbridos / cambio de ancho (ALVIA, EUROMED, INTERCITY, ALTARIA, TALGO):
-    // Determinamos en qué vía están circulando realmente ahora mismo según su velocidad o cercanía a los trazados AV vs MD
     if (isFinite(t.calcSpeed) && t.calcSpeed > 205) return "AV";
     const dAV = TRACKS.av.loaded ? minDistInGrid(TRACKS.av.grid, t.lat, t.lon) : Infinity;
     const dMD = TRACKS.md.loaded ? minDistInGrid(TRACKS.md.grid, t.lat, t.lon) : Infinity;
@@ -964,12 +820,10 @@
   function isSameTrackGroup(a, b) {
     const gA = a.trackGroup || getTrainTrackGroup(a);
     const gB = b.trackGroup || getTrainTrackGroup(b);
-    // Un tren AV puro (AVE/AVLO/AVANT) NUNCA comparte vía con un CONV puro (MD/REGIONAL/CERCANÍAS)
     if ((gA === "AV" && gB === "CONV") || (gA === "CONV" && gB === "AV")) return false;
     return true;
   }
 
-  /* ---------- Vector de Rumbo Geográfico por Estaciones (Origen/Anterior -> Próxima/Destino) ---------- */
   function getRouteVector(t) {
     const x = t._info || trainInfo(t);
     const cOrig = findStationCoords(x.orig);
@@ -977,22 +831,10 @@
     const cSig  = findStationCoords(x.sig);
     const cAnt  = findStationCoords(x.ant);
 
-    // Prioridad 1: Desde posición actual del tren hacia la próxima parada (si está a más de 3 km)
-    if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 3.0) {
-      return [cSig[0] - t.lat, cSig[1] - t.lon];
-    }
-    // Prioridad 2: Desde estación anterior hacia estación siguiente
-    if (cAnt && cSig && (cAnt[0] !== cSig[0] || cAnt[1] !== cSig[1])) {
-      return [cSig[0] - cAnt[0], cSig[1] - cAnt[1]];
-    }
-    // Prioridad 3: Desde posición actual hacia el destino final (si está a más de 5 km)
-    if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 5.0) {
-      return [cDest[0] - t.lat, cDest[1] - t.lon];
-    }
-    // Prioridad 4: Desde estación de origen hacia estación de destino
-    if (cOrig && cDest && (cOrig[0] !== cDest[0] || cOrig[1] !== cDest[1])) {
-      return [cDest[0] - cOrig[0], cDest[1] - cOrig[1]];
-    }
+    if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 3.0) return [cSig[0] - t.lat, cSig[1] - t.lon];
+    if (cAnt && cSig && (cAnt[0] !== cSig[0] || cAnt[1] !== cSig[1])) return [cSig[0] - cAnt[0], cSig[1] - cAnt[1]];
+    if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 5.0) return [cDest[0] - t.lat, cDest[1] - t.lon];
+    if (cOrig && cDest && (cOrig[0] !== cDest[0] || cOrig[1] !== cDest[1])) return [cDest[0] - cOrig[0], cDest[1] - cOrig[1]];
     return null;
   }
 
@@ -1005,34 +847,28 @@
     return (x1 * x2 + y1 * y2) / (m1 * m2);
   }
 
-  /* ---------- Verificación Estricta de Mismo Sentido ---------- */
   function areMovingSameDirection(a, b) {
     const infoA = a._info, infoB = b._info;
     const refLat = (a.lat + b.lat) / 2;
 
-    // 1. Si el origen de uno es exactamente el destino del otro (o comparten estación cruzada), van en sentido opuesto
     if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
       if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return false;
       if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return false;
       if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return false;
     }
 
-    // 2. Comprobar vectores de ruta geográficos (Estaciones de Origen/Próxima/Destino)
     const rA = a.routeVec, rB = b.routeVec;
     if (rA && rB) {
       const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
-      // Si sus rutas geográficas forman un ángulo > 60° (cos < 0.5), NO van en el mismo sentido
       if (cosRoute !== null && cosRoute < 0.5) return false;
     }
 
-    // 3. Comprobar vectores GPS reales de movimiento
     if (a.hasVector && b.hasVector) {
       const cosGps = cosBetweenVectors(a.dLat, a.dLon, b.dLat, b.dLon, refLat);
       if (cosGps !== null && cosGps < 0.5) return false;
       return true;
     }
 
-    // 4. Si solo uno tiene vector GPS y el otro tiene vector de ruta, compararlos entre sí
     if (a.hasVector && rB) {
       const cosMix = cosBetweenVectors(a.dLat, a.dLon, rB[0], rB[1], refLat);
       if (cosMix !== null && cosMix < 0.5) return false;
@@ -1042,7 +878,6 @@
       if (cosMix !== null && cosMix < 0.5) return false;
     }
 
-    // 5. Si aún no hay vectores GPS en ambos, exigir que ambos tengan vector de ruta claramente paralelo (cos > 0.65)
     if (rA && rB) {
       const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
       return cosRoute !== null && cosRoute > 0.65;
@@ -1051,7 +886,6 @@
     return false;
   }
 
-  // Determina quién va detrás (trailing) y quién delante (leading) usando el vector GPS o el vector de ruta
   function getTrailingAndLeading(a, b) {
     let vLat = 0, vLon = 0;
     if (a.hasVector) { vLat += a.dLat; vLon += a.dLon; }
@@ -1074,13 +908,12 @@
   }
 
   function buildUrl() {
-    let url = el.source.value === "custom" ? el.customUrl.value.trim() : SOURCES[el.source.value];
-    if (!url) throw new Error("Indica una URL.");
+    let url = SOURCES[el.source.value];
+    if (!url) throw new Error("Fuente no válida.");
     if (el.source.value === "ld") url += "?v=" + Date.now();
-    const p = el.proxy.value.trim();
-    if (p) url = p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url);
     return url;
   }
+
   async function fetchTrains() {
     if (el.source.value === "demo") return demoTrains();
     const res = await fetch(buildUrl(), { cache: "no-store" });
@@ -1091,51 +924,6 @@
     const seen = new Map();
     list.forEach(t => seen.set(t.id, t));
     return [...seen.values()];
-  }
-
-  const CITIES = {
-    "Madrid-Puerta de Atocha": [40.4065, -3.6896], "Barcelona-Sants": [41.3791, 2.1401], "València-Joaquín Sorolla": [39.4601, -0.3816],
-    "Sevilla-Santa Justa": [37.3919, -5.9753], "Málaga-María Zambrano": [36.7115, -4.4316], "Zaragoza-Delicias": [41.6587, -0.9114],
-    "Bilbao-Abando": [43.2614, -2.9277], "Valladolid-Campo Grande": [41.6416, -4.7289], "Córdoba": [37.8884, -4.7892],
-    "Alacant-Terminal": [38.3446, -0.4951], "Vigo-Urzáiz": [42.2351, -8.7118], "Granada": [37.1841, -3.6091]
-  };
-  let demoFleet = null;
-  function makeDemoFleet() {
-    const names = Object.keys(CITIES), tipos = ["AVE", "AVLO", "ALVIA", "AVANT", "MD", "INTERCITY", "REG.EXP"], fleet = [];
-    const rnd = (a, b) => a + Math.random() * (b - a);
-    for (let i = 0; i < 110; i++) {
-      let a = names[Math.floor(Math.random() * names.length)], b;
-      do { b = names[Math.floor(Math.random() * names.length)]; } while (b === a);
-      const km = haversine(...CITIES[a], ...CITIES[b]);
-      const speed = rnd(40, 260), phase = Math.random(), tipo = tipos[i % tipos.length];
-      fleet.push({ id: "0" + (2100 + i), tipo, a, b, km, speed, phase });
-      if (i % 10 === 0) {
-        fleet.push({ id: "0" + (3100 + i), tipo, a, b, km, speed: speed * 1.15, phase: phase - 0.008 });
-      }
-    }
-    return fleet;
-  }
-  function demoTrains() {
-    if (!demoFleet) demoFleet = makeDemoFleet();
-    const now = Date.now() / 3600000;
-    return demoFleet.map(f => {
-      let p = (now * f.speed / f.km + f.phase) % 2; if (p > 1) p = 2 - p;
-      const [la1, lo1] = CITIES[f.a], [la2, lo2] = CITIES[f.b];
-      const item = { id: f.id, codTren: f.id, desProducto: f.tipo, desOrigen: f.a, desDestino: f.b, latitud: la1 + (la2 - la1) * p, longitud: lo1 + (lo2 - lo1) * p, velocidad: Math.round(f.speed), retraso: 0 };
-      return normalize(item, 0);
-    });
-  }
-
-  /* ---------- Lógica de Proximidad (Misma Vía + Mismo Sentido + Velocidad de Alcance) ---------- */
-  function isConfirmedHighSpeed(t, minSpeedKmh) {
-    if (t.speedsList && t.speedsList.length >= 2) {
-      const avg = (t.speedsList[0] + t.speedsList[1]) / 2;
-      return avg > minSpeedKmh && t.speedsList[1] > minSpeedKmh * 0.85;
-    }
-    if (t.speedMeasures >= 2 && isFinite(t.calcSpeed)) {
-      return t.calcSpeed > minSpeedKmh;
-    }
-    return false;
   }
 
   function computeProximity() {
@@ -1165,12 +953,10 @@
         const b = sorted[j];
         if (b.lat - a.lat > maxDLat) break;
 
-        // 1. FILTRO DE TIPO DE VÍA: un AVE/AVLO/AVANT nunca puede entrar en alerta con un MD/Regional/Cercanías
         if (!isSameTrackGroup(a, b)) continue;
 
         const d = haversine(a.lat, a.lon, b.lat, b.lon);
         if (d < tO) {
-          // 2. FILTRO ESTRICTO DE SENTIDO DE LA MARCHA (Ruta geográfica + GPS)
           if (!areMovingSameDirection(a, b)) continue;
 
           const order = getTrailingAndLeading(a, b);
@@ -1183,8 +969,6 @@
             const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
             const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
 
-            // 3. REGLA DE ALCANCE:
-            // Solo es alerta roja si el tren que va detrás supera el umbral (>100 km/h) y va más rápido o igual que el de delante
             if (trailing.isFast && vTrail >= vLead) {
               pairSeverity = "red";
             } else {
@@ -1217,10 +1001,7 @@
     });
 
     pairs.sort((x, y) => x.d - y.d);
-    return { tO, minSpeed };
   }
-
-  function badgeColor(tipo) { return BADGE_COLORS[tipo] || "#475569"; }
 
   function tipHtml(t) {
     const x = t._info || trainInfo(t);
@@ -1255,11 +1036,9 @@
     const x = t._info || trainInfo(t);
     const vGrp = t.trackGroup === "AV" ? "Alta Velocidad (UIC)" : (t.trackGroup === "CONV" ? "Convencional (Ibérico)" : "Ancho Variable / Mixto");
     const mainRows = [
-      ["Tipo de servicio", x.tipo],
-      ["Infraestructura", vGrp],
+      ["Tipo de servicio", x.tipo], ["Infraestructura", vGrp],
       ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
-      ["Origen", x.orig || "—"],
-      ["Destino", x.dest || "—"]
+      ["Origen", x.orig || "—"], ["Destino", x.dest || "—"]
     ];
     if (x.ant) mainRows.push(["Estación anterior", x.ant]);
     if (x.sig) mainRows.push(["Próxima estación", x.sig]);
@@ -1304,7 +1083,7 @@
 
   function render() {
     const q = el.search.value.trim().toLowerCase();
-    const show = { red: el.showRed.checked, orange: el.showOrange.checked, green: el.showGreen.checked };
+    const show = { red: true, orange: true, green: true };
     const counts = { red: 0, orange: 0, green: 0 };
     const alive = new Set();
     let visible = 0;
@@ -1356,24 +1135,19 @@
       else orangePairs.push({ p, idx });
     });
 
-    // 1. Recuadro superior izquierdo del mapa (Solo Alertas Rojas por alcance)
     el.roCount.textContent = redPairs.length;
     if (!redPairs.length) {
       el.redOverlay.classList.add("empty");
-      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
+      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance.</div>';
     } else {
       el.redOverlay.classList.remove("empty");
       el.redList.innerHTML = redPairs.map(({ p, idx }) => {
-        return `<div class="ro-item" data-i="${idx}">` +
-          `<span>🔴 ${formatPairText(p)}</span>` +
-          `<span class="ro-d">${fmtKm(p.d)}</span>` +
-          `</div>`;
+        return `<div class="ro-item" data-i="${idx}"><span>🔴 ${formatPairText(p)}</span><span class="ro-d">${fmtKm(p.d)}</span></div>`;
       }).join("");
     }
 
-    // 2. Banda lateral izquierda (Solo Amarillos/Naranjas en precaución o alejándose)
     if (!orangePairs.length) {
-      el.pairs.innerHTML = '<div class="sub">Ningún par en precaución (amarillo/naranja).</div>';
+      el.pairs.innerHTML = '<div class="sub">Ningún par en precaución.</div>';
     } else {
       el.pairs.innerHTML = orangePairs.slice(0, 100).map(({ p, idx }) => {
         return `<div class="pair" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
@@ -1386,17 +1160,17 @@
     allTrains.forEach(t => { if (t.tipo) counts[t.tipo] = (counts[t.tipo] || 0) + 1; });
     const keys = Object.keys(counts).sort();
     keys.forEach(k => { if (!(k in typeSel)) typeSel[k] = true; });
-    const box = $("types");
-    if (!keys.length) { box.innerHTML = '<div class="sub">Sin tipos específicos.</div>'; typesKey = ""; return; }
+    if (!keys.length) { el.typesBox.innerHTML = '<div class="sub">Sin tipos.</div>'; typesKey = ""; return; }
     const key = keys.join("|");
     if (key !== typesKey) {
       typesKey = key;
-      box.innerHTML = keys.map(k => `<label class="chk"><input type="checkbox" data-t="${esc(k)}" ${typeSel[k] ? "checked" : ""}><span>${esc(k)}</span><span class="n" data-c="${esc(k)}"></span></label>`).join("");
+      el.typesBox.innerHTML = keys.map(k => `<label class="chk"><input type="checkbox" data-t="${esc(k)}" ${typeSel[k] ? "checked" : ""}><span>${esc(k)}</span><span class="n" data-c="${esc(k)}"></span></label>`).join("");
     }
-    keys.forEach(k => { const n = box.querySelector(`[data-c="${CSS.escape(k)}"]`); if (n) n.textContent = counts[k]; });
+    keys.forEach(k => { const n = el.typesBox.querySelector(`[data-c="${CSS.escape(k)}"]`); if (n) n.textContent = counts[k]; });
   }
+
   const inTypes = t => !t.tipo || typeSel[t.tipo] !== false;
-  $("types").addEventListener("change", e => {
+  el.typesBox.addEventListener("change", e => {
     const k = e.target.dataset && e.target.dataset.t; if (k === undefined) return;
     typeSel[k] = e.target.checked;
     trains = allTrains.filter(inTypes);
@@ -1406,7 +1180,7 @@
   async function refresh() {
     if (loading) return;
     loading = true;
-    el.btnRefresh.disabled = true;
+    el.btnRefresh.classList.add("spinning");
     try {
       await loadStations();
       allTrains = await fetchTrains();
@@ -1414,17 +1188,18 @@
       trains = allTrains.filter(inTypes);
       computeProximity();
       render();
-      setStatus(`${trains.length} trenes · ${pairs.length} pares cercanos · actualizado ${new Date().toLocaleTimeString("es-ES")}`);
+      setStatus(`Actualizado ${new Date().toLocaleTimeString("es-ES")}`);
     } catch (e) {
-      setStatus("Error al descargar trenes: " + e.message, true);
+      setStatus("Error: " + e.message, true);
     } finally {
       loading = false;
-      el.btnRefresh.disabled = false;
+      el.btnRefresh.classList.remove("spinning");
     }
   }
+
   function schedule() {
     clearInterval(timer);
-    if (!paused) timer = setInterval(refresh, Math.max(3, +el.interval.value) * 1000);
+    if (!paused) timer = setInterval(refresh, 10000); // Fijo a 10 segundos
   }
 
   function flyToPairIndex(idx) {
@@ -1440,20 +1215,14 @@
     schedule();
     if (!paused) refresh();
   });
-  el.interval.addEventListener("change", schedule);
   el.source.addEventListener("change", () => {
-    el.customWrap.style.display = el.source.value === "custom" ? "block" : "none";
-    const isCerc = el.source.value === "visor" || el.source.value === "gtfsrt";
-    if (isCerc && !el.showTrackMD.checked) { el.showTrackMD.checked = true; onTrackToggle("md", el.showTrackMD); }
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     trainHistory.clear();
     stationsTried = false;
     refresh();
   });
-  el.customUrl.addEventListener("change", refresh);
-  el.proxy.addEventListener("change", refresh);
   [el.thOrange, el.thSpeed].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
-  [el.showRed, el.showOrange, el.showGreen, el.showLines].forEach(c => c.addEventListener("change", render));
+  el.showLines.addEventListener("change", render);
   el.search.addEventListener("input", render);
   el.pairs.addEventListener("click", e => {
     const row = e.target.closest(".pair"); if (!row) return;
@@ -1464,15 +1233,8 @@
     flyToPairIndex(+row.dataset.i);
   });
 
-  const DEFAULT_PROXY = "https://trenes.juliopuli.workers.dev/?url={url}";
-  try { el.proxy.value = localStorage.getItem("proxyRenfe") || DEFAULT_PROXY; } catch (e) { el.proxy.value = DEFAULT_PROXY; }
-  if (/^https?:$/.test(location.protocol) && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && !el.proxy.value) {
-    el.proxy.value = "/api?url={url}";
-  }
-  el.proxy.addEventListener("change", () => { try { localStorage.setItem("proxyRenfe", el.proxy.value.trim()); } catch (e) {} });
-
-  if (el.showTrackAV.checked) loadTrackLayer("av");
-  if (el.showTrackMD.checked) loadTrackLayer("md");
+  loadTrackLayer("av");
+  loadTrackLayer("md");
   updateTrackStatus();
   refresh();
   schedule();
