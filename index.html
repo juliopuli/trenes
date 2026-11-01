@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.8</title>
+<title>Trenes Renfe en tiempo real · v1.9</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -75,7 +75,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.8</span></h1>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.9</span></h1>
       <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
     </div>
 
@@ -127,7 +127,7 @@
         <div><label for="thOrange">Naranja &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.2" step="0.5"></div>
         <div><label for="thTrack" title="Distancia máxima a las vías activas para no marcar el tren en gris">Margen vía (km)</label><input type="number" id="thTrack" value="2.0" min="0.1" step="0.5"></div>
       </div>
-      <div class="help">Filtro vectorial avanzado: se ignoran cruces frontales en sentido contrario.</div>
+      <div class="help">Se omiten alertas por proximidad en las inmediaciones de estaciones y cruces en sentido opuesto.</div>
     </fieldset>
 
     <fieldset>
@@ -178,7 +178,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.8";
+  const VERSION = "1.9";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -192,6 +192,34 @@
     "CERCANÍAS": "#ea580c"
   };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
+
+  /* ---------- Coordenadas de Estaciones Principales (para filtro de inmediaciones) ---------- */
+  const STATION_COORDS = [
+    [40.4065, -3.6896], // Madrid-Puerta de Atocha
+    [40.4722, -3.6822], // Madrid-Chamartín
+    [41.3791, 2.1401],  // Barcelona-Sants
+    [39.4601, -0.3816], // València-Joaquín Sorolla
+    [37.3919, -5.9753], // Sevilla-Santa Justa
+    [36.7115, -4.4316], // Málaga-María Zambrano
+    [41.6587, -0.9114], // Zaragoza-Delicias
+    [43.2614, -2.9277], // Bilbao-Abando
+    [41.6416, -4.7289], // Valladolid-Campo Grande
+    [37.8884, -4.7892], // Córdoba
+    [38.3446, -0.4951], // Alacant-Terminal
+    [42.2351, -8.7118], // Vigo-Urzáiz
+    [37.1841, -3.6091], // Granada
+    [40.0780, -2.1380], // Cuenca-Fernando Zóbel
+    [38.9950, -1.8550], // Albacete-Los Llanos
+    [39.9800, -0.0500], // Castelló
+    [41.1189, 1.2445]   // Camp de Tarragona
+  ];
+
+  function isInStationArea(lat, lon, thresholdKm = 2.5) {
+    for (const [stLat, stLon] of STATION_COORDS) {
+      if (haversine(lat, lon, stLat, stLon) <= thresholdKm) return true;
+    }
+    return false;
+  }
 
   /* ---------- Diccionario Maestro de Estaciones ---------- */
   const DEFAULT_STATIONS = {
@@ -414,7 +442,7 @@
 
   /* ---------- Estado de Trenes con Historial Vectorial ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
-  const trainHistory = new Map(); // id -> { lat, lon, time }
+  const trainHistory = new Map();
 
   const toNum = v => (v === null || v === undefined || v === "") ? NaN : parseFloat(String(v).replace(",", "."));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -533,7 +561,6 @@
 
     const trainObj = { id: String(id).trim(), label: String(label).trim(), lat, lon, raw, tipo };
 
-    // Actualizar historial vectorial de movimiento
     const now = Date.now();
     const prev = trainHistory.get(trainObj.id);
     if (prev) {
@@ -631,7 +658,7 @@
     });
   }
 
-  /* ---------- Cálculo de Proximidad con Filtro Vectorial de Sentido Real ---------- */
+  /* ---------- Cálculo de Proximidad con Filtro de Estaciones y Vectorial ---------- */
   function computeProximity() {
     const tR = Math.max(0, toNum(el.thRed.value) || 3);
     const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
@@ -643,11 +670,14 @@
       t.nearTrain = null;
       t.trackDist = minTrackDistKm(t.lat, t.lon);
       t.offTrack = (trackLoaded && anyTrackChecked) ? (t.trackDist > tolKm) : false;
+      // Si el tren está en inmediaciones de estación, lo eximimos de alertas (offTrack temporal o zona neutra)
+      t.inStation = isInStationArea(t.lat, t.lon, 2.5);
       t._info = trainInfo(t);
     });
 
-    const onTrackTrains = trains.filter(t => !t.offTrack);
-    const sorted = [...onTrackTrains].sort((a, b) => a.lat - b.lat);
+    // Solo entran en cálculo de proximidad los que están en ruta y fuera de área de estación
+    const activeTrains = trains.filter(t => !t.offTrack && !t.inStation);
+    const sorted = [...activeTrains].sort((a, b) => a.lat - b.lat);
     const maxDLat = tO / 111.19;
     pairs = [];
 
@@ -660,25 +690,12 @@
         
         if (d < tO) {
           let opuestos = false;
-          
-          // FILTRO VECTORIAL BASADO EN MOVIMIENTO REAL:
-          // Si ambos trenes tienen vector de desplazamiento registrado y se mueven, 
-          // comprobamos el producto escalar de sus vectores. Si es negativo (apuntan en direcciones contrarias), se ignoran.
           if (a.hasVector && b.hasVector) {
             const dotProduct = (a.dLat * b.dLat) + (a.dLon * b.dLon);
-            if (dotProduct < -0.00000001) {
-              opuestos = true; // Van en sentidos estrictamente opuestos
-            }
+            if (dotProduct < -0.00000001) opuestos = true;
           } else {
-            // Respaldo por texto de ruta si aún no hay suficiente historial vectorial
             const infoA = a._info, infoB = b._info;
-            if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
-              const strA = (infoA.orig + " " + infoA.dest).toLowerCase();
-              const strB = (infoB.orig + " " + infoB.dest).toLowerCase();
-              if (infoA.orig === infoB.dest && infoA.dest === infoB.orig) {
-                opuestos = true;
-              }
-            }
+            if (infoA.orig === infoB.dest && infoA.dest === infoB.orig) opuestos = true;
           }
 
           if (!opuestos) {
@@ -692,6 +709,7 @@
 
     trains.forEach(t => {
       if (t.offTrack) t.color = "gray";
+      else if (t.inStation) t.color = "green"; // En estación se muestran en verde estable sin alertas
       else t.color = t.d < tR ? "red" : t.d < tO ? "orange" : "green";
     });
     pairs.sort((x, y) => x.d - y.d);
@@ -709,10 +727,11 @@
     if (x.vel !== null) paradas.push(`Velocidad: <b>${x.vel} km/h</b>`);
     const meta = paradas.length ? `<div class="t-meta">${paradas.join(" · ")}</div>` : "";
     const ret = x.retHtml ? `<div style="margin-top:2px">${x.retHtml}</div>` : "";
+    const statNote = t.inStation ? `<div style="color:#0284c7;font-weight:600;margin-top:2px">En zona de estación (exento de alertas)</div>` : "";
     const off = t.offTrack ? `<div style="color:var(--gray);font-weight:600;margin-top:2px">Fuera de vía activa</div>` : "";
     const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "otro tren";
-    const near = (!t.offTrack && isFinite(t.d)) ? `<div style="color:${t.color === "red" ? "#e53935" : "#fb8c00"};font-weight:700;margin-top:3px">⚠ A ${fmtKm(t.d)} de ${esc(nearName)}</div>` : "";
-    return head + ruta + meta + ret + off + near;
+    const near = (!t.offTrack && !t.inStation && isFinite(t.d)) ? `<div style="color:${t.color === "red" ? "#e53935" : "#fb8c00"};font-weight:700;margin-top:3px">⚠ A ${fmtKm(t.d)} de ${esc(nearName)}</div>` : "";
+    return head + ruta + meta + ret + statNote + off + near;
   }
 
   function popupHtml(t) {
@@ -726,8 +745,8 @@
     if (x.horaSal || x.horaLleg) mainRows.push(["Horario Sal. / Lleg.", `${x.horaSal || "—"} → ${x.horaLleg || "—"}`]);
     if (x.vel !== null) mainRows.push(["Velocidad", `${x.vel} km/h`]);
     if (x.retHtml) mainRows.push(["Puntualidad", x.retHtml, true]);
-    mainRows.push(["En vía activa", t.offTrack ? "No · Fuera de vía" : "Sí · En vía"]);
-    if (!t.offTrack && isFinite(t.d)) mainRows.push(["Tren más cercano", `${fmtKm(t.d)}`]);
+    mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.offTrack ? "Fuera de vía" : "En ruta vigilada")]);
+    if (!t.offTrack && !t.inStation && isFinite(t.d)) mainRows.push(["Tren más cercano", `${fmtKm(t.d)}`]);
 
     const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
     const rawRows = Object.entries(t.raw || {}).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
@@ -791,7 +810,7 @@
     el.nTotal.textContent = visible + " / " + trains.length;
 
     if (!pairs.length) {
-      el.pairs.innerHTML = '<div class="sub">Ningún par de trenes por debajo del umbral.</div>';
+      el.pairs.innerHTML = '<div class="sub">Ningún par de trenes por debajo del umbral en ruta.</div>';
     } else {
       const tR = toNum(el.thRed.value) || 3;
       el.pairs.innerHTML = pairs.slice(0, 100).map((p, i) => {
