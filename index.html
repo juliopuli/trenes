@@ -39,6 +39,16 @@
   .pair:hover{background:var(--bg)}
   .pair .d{font-weight:600;font-variant-numeric:tabular-nums}
   .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
+  .tm{background:none;border:0}
+  .tm .b{width:28px;height:28px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.45);transition:transform .15s}
+  .tm:hover .b{transform:scale(1.25)}
+  .tm.red .b{background:#e53935;width:32px;height:32px;margin:-2px;animation:pulso 1.4s infinite}
+  .tm.orange .b{background:#fb8c00;width:30px;height:30px;margin:-1px}
+  .tm.green .b{background:#43a047}
+  .tm svg{width:17px;height:17px;fill:#fff}
+  @keyframes pulso{0%{box-shadow:0 0 0 0 rgba(229,57,53,.65)}70%{box-shadow:0 0 0 12px rgba(229,57,53,0)}100%{box-shadow:0 0 0 0 rgba(229,57,53,0)}}
+  .trtip{font-size:12px;line-height:1.4;padding:7px 9px}
+  .trtip b.t{font-size:13px}
   @media (max-width:760px){
     #app{grid-template-columns:1fr;grid-template-rows:46% 54%}
     #side{order:2;border-right:0;border-top:1px solid var(--line)}
@@ -218,6 +228,10 @@
     }
     return [];
   }
+  function valueTipo(o) {
+    const re = /^(AVE|AVLO|AVANT|AVMD|AV|ALVIA|ALTARIA|EUROMED|INTERCITY|IC|MD|LD|REG|REGIONAL|REGIONAL EXPRESS|TRD|TALGO|IRYO|OUIGO)$/i;
+    for (const k of Object.keys(o)) if (typeof o[k] === "string" && re.test(o[k].trim())) return o[k];
+  }
   function normalize(item, idx) {
     const v = item.vehicle && typeof item.vehicle === "object" && item.vehicle.position ? item.vehicle : null; // GTFS-RT
     const pos = v ? v.position : item;
@@ -236,8 +250,31 @@
       label = item.codComercial ?? item.nombre ?? item.label ?? id;
       raw = item;
     }
-    const tipoRaw = v ? "" : (item.tipoTren ?? item.tipo ?? item.codProducto ?? item.producto ?? findKey(item, /^(tipo|tip_|product|clase|servicio)/i) ?? "");
+    const tipoRaw = v ? "" : (item.tipoTren ?? item.tipo ?? item.codProducto ?? item.producto ?? findKey(item, /(tipo|prod|clase|servicio)/i) ?? valueTipo(item) ?? "");
     return { id: String(id), label: String(label), lat, lon, raw, tipo: String(tipoRaw).trim() };
+  }
+
+  /* ---------- Estaciones (nombres) ---------- */
+  const stations = new Map();
+  let stationsTried = false;
+  function proxify(url) {
+    const p = el.proxy.value.trim();
+    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
+  }
+  async function loadStations() {
+    if (stationsTried || el.source.value !== "ld") return;
+    stationsTried = true;
+    try {
+      const r = await fetch(proxify(SOURCES.ld.replace("flotaLD.json", "estaciones.geojson")));
+      if (!r.ok) return;
+      const g = await r.json();
+      (g.features || []).forEach(f => {
+        const pr = f.properties || {};
+        const kc = Object.keys(pr).find(k => /^(cod|codigo|id)/i.test(k));
+        const kn = Object.keys(pr).find(k => /^(nom|name|desc)/i.test(k));
+        if (kc && kn && pr[kc] != null && pr[kn]) { const c = String(pr[kc]).trim(); stations.set(c, pr[kn]); stations.set(c.replace(/^0+/, ""), pr[kn]); }
+      });
+    } catch (e) { /* sin nombres: se mostrarán los códigos */ }
   }
 
   /* ---------- Descarga ---------- */
@@ -322,11 +359,36 @@
   }
 
   /* ---------- Pintado ---------- */
+  function trainInfo(t) {
+    const r = t.raw || {};
+    const get = re => { for (const k of Object.keys(r)) if (re.test(k) && r[k] !== "" && r[k] !== null && typeof r[k] !== "object") return r[k]; };
+    const nm = c => { if (c === undefined) return ""; const x = String(c).trim(); return stations.get(x) || stations.get(x.replace(/^0+/, "")) || x; };
+    const orig = nm(get(/^(origen|desc.*orig|nom.*orig)/i) ?? get(/orig/i));
+    const dest = nm(get(/^(destino|desc.*dest|nom.*dest)/i) ?? get(/dest/i));
+    const sig = nm(get(/^(sig|prox|next).*(parada|est)/i) ?? get(/^(codEstSig|paradaSig)/i) ?? get(/sig/i));
+    const ret = toNum(get(/^retraso/i));
+    let retHtml = "";
+    if (isFinite(ret)) retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32">En hora</span>`;
+    return { orig, dest, sig, retHtml };
+  }
+  function tipHtml(t) {
+    const x = trainInfo(t);
+    const head = `<b class="t">${t.tipo ? esc(t.tipo) + " · " : ""}${esc(t.label)}</b>`;
+    const ruta = x.orig || x.dest ? `<br>${esc(x.orig || "?")} → ${esc(x.dest || "?")}` : "";
+    const prox = x.sig ? `<br>Próxima: ${esc(x.sig)}` : "";
+    const ret = x.retHtml ? `<br>${x.retHtml}` : "";
+    const near = isFinite(t.d) ? `<br><span style="color:${t.color === "red" ? "#e53935" : "#fb8c00"}">⚠ Otro tren a ${fmtKm(t.d)}</span>` : "";
+    return head + ruta + prox + ret + near;
+  }
   function popupHtml(t) {
-    const rows = Object.entries(t.raw).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").slice(0, 14)
+    const rows = Object.entries(t.raw).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").slice(0, 24)
       .map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
-    const near = isFinite(t.d) ? `Tren más cercano: <b>${fmtKm(t.d)}</b>` : "Sin trenes cercanos";
-    return `<div style="font-size:12px"><b>${esc(t.label)}</b><br>${near}<table style="margin-top:4px">${rows}</table></div>`;
+    return `<div style="font-size:12px">${tipHtml(t)}<table style="margin-top:6px">${rows}</table></div>`;
+  }
+
+  const TRAIN_SVG = '<svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>';
+  function makeIcon(color) {
+    return L.divIcon({ className: "tm " + color, html: '<div class="b">' + TRAIN_SVG + '</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
   }
 
   function render() {
@@ -345,16 +407,18 @@
       visible++;
       alive.add(t.id);
       let m = markers.get(t.id);
-      const style = { renderer: canvas, radius: t.color === "green" ? 4.5 : 6.5, fillColor: COLORS[t.color], color: "#fff", weight: 1, fillOpacity: 0.95 };
+      const z = t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0;
       if (!m) {
-        m = L.circleMarker([t.lat, t.lon], style).addTo(map);
+        m = L.marker([t.lat, t.lon], { icon: makeIcon(t.color), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
+        m.bindTooltip(() => tipHtml(m._train), { direction: "top", offset: [0, -16], className: "trtip" });
         m.bindPopup(() => popupHtml(m._train));
+        m._color = t.color;
         markers.set(t.id, m);
       } else {
-        m.setLatLng([t.lat, t.lon]); m.setStyle(style);
+        m.setLatLng([t.lat, t.lon]);
+        if (m._color !== t.color) { m.setIcon(makeIcon(t.color)); m.setZIndexOffset(z); m._color = t.color; }
       }
       m._train = t;
-      if (t.color !== "green") m.bringToFront();
     });
     for (const [id, m] of markers) if (!alive.has(id)) { map.removeLayer(m); markers.delete(id); }
 
@@ -389,7 +453,11 @@
     const keys = Object.keys(counts).sort();
     keys.forEach(k => { if (!(k in typeSel)) typeSel[k] = isHighSpeed(k); });
     const box = $("types");
-    if (!keys.length) { box.innerHTML = '<div class="sub">No se ha encontrado el campo de tipo de tren; se muestran todos.</div>'; typesKey = ""; return; }
+    if (!keys.length) {
+      const campos = allTrains[0] ? Object.keys(allTrains[0].raw).filter(k => typeof allTrains[0].raw[k] !== "object").join(", ") : "";
+      box.innerHTML = '<div class="sub">No se ha encontrado el campo de tipo de tren; se muestran todos.' + (campos ? '<br><br>Campos recibidos: ' + esc(campos) : '') + '</div>';
+      typesKey = ""; return;
+    }
     const key = keys.join("|");
     if (key !== typesKey) {
       typesKey = key;
@@ -411,6 +479,7 @@
     loading = true;
     el.btnRefresh.disabled = true;
     try {
+      await loadStations();
       allTrains = await fetchTrains();
       updateTypes();
       trains = allTrains.filter(inTypes);
@@ -445,6 +514,7 @@
   el.source.addEventListener("change", () => {
     el.customWrap.style.display = el.source.value === "custom" ? "block" : "none";
     markers.forEach(m => map.removeLayer(m)); markers.clear();
+    stationsTried = false;
     refresh();
   });
   el.customUrl.addEventListener("change", refresh);
