@@ -3,22 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real</title>
+<title>Trenes Renfe en tiempo real · v1.1</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
     --bg:#f6f7f9; --panel:#ffffff; --text:#1b1f24; --muted:#667085; --line:#e3e6ea;
-    --accent:#1d4ed8; --red:#e53935; --orange:#fb8c00; --green:#43a047;
+    --accent:#1d4ed8; --red:#e53935; --orange:#fb8c00; --green:#43a047; --gray:#64748b;
   }
   @media (prefers-color-scheme: dark){
-    :root{ --bg:#14171b; --panel:#1c2026; --text:#e8eaed; --muted:#9aa3ad; --line:#2d333b; --accent:#6ea0ff; }
+    :root{ --bg:#14171b; --panel:#1c2026; --text:#e8eaed; --muted:#9aa3ad; --line:#2d333b; --accent:#6ea0ff; --gray:#7c899b; }
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
   #app{display:grid;grid-template-columns:340px 1fr;height:100%}
   #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:14px 14px 24px;display:flex;flex-direction:column;gap:14px}
   #map{height:100%;width:100%;background:#cfd8e3}
-  h1{font-size:17px;margin:0 0 2px}
+  h1{font-size:17px;margin:0 0 2px;display:flex;align-items:center;justify-content:space-between}
+  .ver{font-size:11px;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line)}
   .sub{font-size:12px;color:var(--muted)}
   fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
   legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
@@ -45,6 +46,7 @@
   .tm.red .b{background:#e53935;width:32px;height:32px;margin:-2px;animation:pulso 1.4s infinite}
   .tm.orange .b{background:#fb8c00;width:30px;height:30px;margin:-1px}
   .tm.green .b{background:#43a047}
+  .tm.gray .b{background:var(--gray);opacity:0.88}
   .tm svg{width:17px;height:17px;fill:#fff}
   @keyframes pulso{0%{box-shadow:0 0 0 0 rgba(229,57,53,.65)}70%{box-shadow:0 0 0 12px rgba(229,57,53,0)}100%{box-shadow:0 0 0 0 rgba(229,57,53,0)}}
   .trtip{font-size:12px;line-height:1.4;padding:7px 9px}
@@ -59,7 +61,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1>🚆 Trenes Renfe en tiempo real</h1>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.1</span></h1>
       <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
     </div>
 
@@ -110,7 +112,7 @@
         <div><label for="thRed">Rojo &lt; (km)</label><input type="number" id="thRed" value="3" min="0.1" step="0.5"></div>
         <div><label for="thOrange">Naranja &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.2" step="0.5"></div>
       </div>
-      <div class="help">Más lejos del umbral naranja → verde. Cada tren se colorea según el tren más cercano.</div>
+      <div class="help">Más lejos del umbral naranja → verde. Los trenes fuera del trazado de alta velocidad se muestran en gris.</div>
     </fieldset>
 
     <fieldset>
@@ -124,6 +126,7 @@
       <label class="chk"><input type="checkbox" id="showRed" checked><span class="dot" style="background:var(--red)"></span>Peligro (rojo)<span class="n" id="nRed">0</span></label>
       <label class="chk"><input type="checkbox" id="showOrange" checked><span class="dot" style="background:var(--orange)"></span>Cerca (naranja)<span class="n" id="nOrange">0</span></label>
       <label class="chk"><input type="checkbox" id="showGreen" checked><span class="dot" style="background:var(--green)"></span>Sin cercanos (verde)<span class="n" id="nGreen">0</span></label>
+      <label class="chk"><input type="checkbox" id="showGray" checked><span class="dot" style="background:var(--gray)"></span>Fuera de vía AV (gris)<span class="n" id="nGray">0</span></label>
       <label class="chk"><input type="checkbox" id="showLines" checked>Unir con línea los trenes cercanos</label>
       <label class="chk"><input type="checkbox" id="showTrack" checked>Vía de alta velocidad<span class="n" style="color:#7b1fa2">▬▬</span></label>
       <div class="help" id="trackStatus" style="margin:0 0 6px"></div>
@@ -151,13 +154,15 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
+  const VERSION = "1.1";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
     gtfsrt: "https://gtfsrt.renfe.com/vehicle_positions.json"
   };
-  const COLORS = { red: "#e53935", orange: "#fb8c00", green: "#43a047" };
+  const COLORS = { red: "#e53935", orange: "#fb8c00", green: "#43a047", gray: "#64748b" };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 }; // incluye Canarias
+  const TRACK_TOLERANCE_KM = 0.5; // Distancia máxima (500 m) para considerar que un tren está dentro de la vía AV
 
   /* ---------- Elementos ---------- */
   const $ = id => document.getElementById(id);
@@ -165,8 +170,8 @@
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
     interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
     thRed: $("thRed"), thOrange: $("thOrange"),
-    showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
-    search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nTotal: $("nTotal"),
+    showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showGray: $("showGray"), showLines: $("showLines"),
+    search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nGray: $("nGray"), nTotal: $("nTotal"),
     pairs: $("pairs"), showTrack: $("showTrack"), trackStatus: $("trackStatus")
   };
 
@@ -189,10 +194,13 @@
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
-  /* ---------- Vía de alta velocidad (OpenStreetMap / Overpass) ---------- */
+  /* ---------- Vía de alta velocidad e índice espacial (OpenStreetMap / Overpass) ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
   let trackLine = null, trackLoaded = false, trackLoading = false;
+  let trackGrid = new Map();
+  const GRID_SIZE = 0.1; // ~11 km por celda para búsqueda rápida de segmentos
+
   const OVERPASS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -200,6 +208,67 @@
   ];
   const OQ = '[out:json][timeout:90];area["ISO3166-1"="ES"][admin_level=2]->.a;way["railway"="rail"]["highspeed"="yes"][!"service"](area.a);out skel geom qt;';
   const setTrack = msg => { el.trackStatus.textContent = msg; };
+
+  function buildTrackIndex(ways) {
+    trackGrid.clear();
+    for (const w of ways) {
+      for (let i = 0; i < w.length - 1; i++) {
+        const la1 = w[i][0], lo1 = w[i][1];
+        const la2 = w[i + 1][0], lo2 = w[i + 1][1];
+        const seg = [la1, lo1, la2, lo2];
+        const rMin = Math.floor(Math.min(la1, la2) / GRID_SIZE);
+        const rMax = Math.floor(Math.max(la1, la2) / GRID_SIZE);
+        const cMin = Math.floor(Math.min(lo1, lo2) / GRID_SIZE);
+        const cMax = Math.floor(Math.max(lo1, lo2) / GRID_SIZE);
+        for (let r = rMin; r <= rMax; r++) {
+          for (let c = cMin; c <= cMax; c++) {
+            const k = r + "," + c;
+            let list = trackGrid.get(k);
+            if (!list) { list = []; trackGrid.set(k, list); }
+            list.push(seg);
+          }
+        }
+      }
+    }
+  }
+
+  // Distancia perpendicular en km desde un punto (lat, lon) a un segmento [la1, lo1, la2, lo2]
+  function distToSegmentKm(lat, lon, la1, lo1, la2, lo2) {
+    const cosLat = Math.cos(lat * Math.PI / 180);
+    const kLat = 111.19;
+    const kLon = 111.19 * cosLat;
+    const x = (lon - lo1) * kLon, y = (lat - la1) * kLat;
+    const dx = (lo2 - lo1) * kLon, dy = (la2 - la1) * kLat;
+    const lenSq = dx * dx + dy * dy;
+    let t = 0;
+    if (lenSq > 0) {
+      t = (x * dx + y * dy) / lenSq;
+      if (t < 0) t = 0; else if (t > 1) t = 1;
+    }
+    const nearX = t * dx, nearY = t * dy;
+    return Math.hypot(x - nearX, y - nearY);
+  }
+
+  function isOnHighSpeedTrack(lat, lon) {
+    if (!trackLoaded) return true; // Mientras carga la vía, no penalizar trenes a gris
+    const r0 = Math.floor(lat / GRID_SIZE);
+    const c0 = Math.floor(lon / GRID_SIZE);
+    let minD = Infinity;
+    for (let r = r0 - 1; r <= r0 + 1; r++) {
+      for (let c = c0 - 1; c <= c0 + 1; c++) {
+        const segs = trackGrid.get(r + "," + c);
+        if (!segs) continue;
+        for (let i = 0; i < segs.length; i++) {
+          const s = segs[i];
+          const d = distToSegmentKm(lat, lon, s[0], s[1], s[2], s[3]);
+          if (d <= TRACK_TOLERANCE_KM) return true;
+          if (d < minD) minD = d;
+        }
+      }
+    }
+    return minD <= TRACK_TOLERANCE_KM;
+  }
+
   function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
   async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } }
   async function idbSet(k, v) { try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }
@@ -224,10 +293,15 @@
         if (!ways || !ways.length) throw lastErr || new Error("sin datos");
         idbSet("avTrack", { t: Date.now(), ways });
       }
+      buildTrackIndex(ways);
       trackLine = L.polyline(ways, { renderer: trackCanvas, color: "#7b1fa2", weight: 3, opacity: 0.85, interactive: false });
       trackLoaded = true;
       if (el.showTrack.checked) trackLine.addTo(trackLayer);
       setTrack(ways.length + " tramos de vía de alta velocidad (datos de OpenStreetMap)");
+      if (trains.length) {
+        computeProximity();
+        render();
+      }
     } catch (e) {
       setTrack("No se pudo cargar la vía (" + (e.message || e) + "). Desmarca y vuelve a marcar la casilla para reintentar.");
     } finally { trackLoading = false; }
@@ -239,7 +313,7 @@
 
   /* ---------- Estado ---------- */
   let allTrains = [];         // todos los trenes descargados
-  let trains = [];            // [{id,label,lat,lon,raw,d,color}] (solo tipos marcados)
+  let trains = [];            // [{id,label,lat,lon,raw,d,color,offTrack}] (solo tipos marcados)
   const typeSel = {};         // tipo -> true/false
   let typesKey = "";
   const markers = new Map();  // id -> L.marker
@@ -271,7 +345,6 @@
     if (data && Array.isArray(data.entity)) return data.entity;
     if (data && Array.isArray(data.vehicles)) return data.vehicles;
     if (data && Array.isArray(data.data)) return data.data;
-    // último recurso: primer array de objetos que encuentre
     if (data && typeof data === "object") {
       for (const k of Object.keys(data)) if (Array.isArray(data[k]) && data[k].length && typeof data[k][0] === "object") return data[k];
     }
@@ -342,7 +415,6 @@
     const data = await res.json();
     const list = extractList(data).map(normalize).filter(Boolean);
     if (!list.length) throw new Error("La respuesta no contiene trenes con posición.");
-    // eliminar duplicados por id
     const seen = new Map();
     list.forEach(t => seen.set(t.id, t));
     return [...seen.values()];
@@ -366,13 +438,13 @@
       const speed = rnd(70, 290);
       const phase = Math.random();
       fleet.push({ id: "D" + (10000 + i), a, b, km, speed, phase });
-      if (i % 9 === 0) fleet.push({ id: "D" + (20000 + i), a, b, km, speed: speed * rnd(0.95, 1.05), phase: phase + rnd(0.002, 0.03) }); // trenes en la misma ruta
+      if (i % 9 === 0) fleet.push({ id: "D" + (20000 + i), a, b, km, speed: speed * rnd(0.95, 1.05), phase: phase + rnd(0.002, 0.03) });
     }
     return fleet;
   }
   function demoTrains() {
     if (!demoFleet) demoFleet = makeDemoFleet();
-    const now = Date.now() / 3600000; // horas
+    const now = Date.now() / 3600000;
     return demoFleet.map(f => {
       let p = (now * f.speed / f.km + f.phase) % 2; if (p > 1) p = 2 - p;
       const [la1, lo1] = CITIES[f.a], [la2, lo2] = CITIES[f.b];
@@ -385,9 +457,14 @@
   function computeProximity() {
     const tR = Math.max(0, toNum(el.thRed.value) || 3);
     const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
-    trains.forEach(t => { t.d = Infinity; });
-    const sorted = [...trains].sort((a, b) => a.lat - b.lat);
-    const maxDLat = tO / 111.19; // grados de latitud equivalentes al umbral
+    trains.forEach(t => {
+      t.d = Infinity;
+      t.offTrack = !isOnHighSpeedTrack(t.lat, t.lon);
+    });
+    // Solo se calcula proximidad entre trenes que están dentro del trazado de alta velocidad
+    const onTrackTrains = trains.filter(t => !t.offTrack);
+    const sorted = [...onTrackTrains].sort((a, b) => a.lat - b.lat);
+    const maxDLat = tO / 111.19;
     pairs = [];
     for (let i = 0; i < sorted.length; i++) {
       const a = sorted[i];
@@ -402,7 +479,10 @@
         }
       }
     }
-    trains.forEach(t => { t.color = t.d < tR ? "red" : t.d < tO ? "orange" : "green"; });
+    trains.forEach(t => {
+      if (t.offTrack) t.color = "gray";
+      else t.color = t.d < tR ? "red" : t.d < tO ? "orange" : "green";
+    });
     pairs.sort((x, y) => x.d - y.d);
     return { tR, tO };
   }
@@ -426,8 +506,9 @@
     const ruta = x.orig || x.dest ? `<br>${esc(x.orig || "?")} → ${esc(x.dest || "?")}` : "";
     const prox = x.sig ? `<br>Próxima: ${esc(x.sig)}` : "";
     const ret = x.retHtml ? `<br>${x.retHtml}` : "";
-    const near = isFinite(t.d) ? `<br><span style="color:${t.color === "red" ? "#e53935" : "#fb8c00"}">⚠ Otro tren a ${fmtKm(t.d)}</span>` : "";
-    return head + ruta + prox + ret + near;
+    const off = t.offTrack ? `<br><span style="color:var(--gray)">Fuera de vía de alta velocidad</span>` : "";
+    const near = (!t.offTrack && isFinite(t.d)) ? `<br><span style="color:${t.color === "red" ? "#e53935" : "#fb8c00"}">⚠ Otro tren a ${fmtKm(t.d)}</span>` : "";
+    return head + ruta + prox + ret + off + near;
   }
   function popupHtml(t) {
     const rows = Object.entries(t.raw).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").slice(0, 24)
@@ -442,8 +523,8 @@
 
   function render() {
     const q = el.search.value.trim().toLowerCase();
-    const show = { red: el.showRed.checked, orange: el.showOrange.checked, green: el.showGreen.checked };
-    const counts = { red: 0, orange: 0, green: 0 };
+    const show = { red: el.showRed.checked, orange: el.showOrange.checked, green: el.showGreen.checked, gray: el.showGray.checked };
+    const counts = { red: 0, orange: 0, green: 0, gray: 0 };
     const alive = new Set();
     let visible = 0;
 
@@ -456,7 +537,7 @@
       visible++;
       alive.add(t.id);
       let m = markers.get(t.id);
-      const z = t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0;
+      const z = t.color === "red" ? 1000 : t.color === "orange" ? 500 : t.color === "green" ? 100 : 0;
       if (!m) {
         m = L.marker([t.lat, t.lon], { icon: makeIcon(t.color), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
         m.bindTooltip(() => tipHtml(m._train), { direction: "top", offset: [0, -16], className: "trtip" });
@@ -481,7 +562,7 @@
       });
     }
 
-    el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
+    el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green; el.nGray.textContent = counts.gray;
     el.nTotal.textContent = visible + " / " + trains.length;
 
     // lista de pares
@@ -569,7 +650,7 @@
   el.customUrl.addEventListener("change", refresh);
   el.proxy.addEventListener("change", refresh);
   [el.thRed, el.thOrange].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
-  [el.showRed, el.showOrange, el.showGreen, el.showLines].forEach(c => c.addEventListener("change", render));
+  [el.showRed, el.showOrange, el.showGreen, el.showGray, el.showLines].forEach(c => c.addEventListener("change", render));
   el.search.addEventListener("input", render);
   el.pairs.addEventListener("click", e => {
     const row = e.target.closest(".pair"); if (!row) return;
@@ -578,16 +659,15 @@
   });
 
   // Si la página se sirve desde servidor.py (http://localhost), usar su proxy integrado
-  // Pega aquí la URL de tu Cloudflare Worker, p. ej. "https://trenes.miusuario.workers.dev/?url={url}"
   const DEFAULT_PROXY = "https://trenes.juliopuli.workers.dev/?url={url}";
   try { el.proxy.value = localStorage.getItem("proxyRenfe") || DEFAULT_PROXY; } catch (e) { el.proxy.value = DEFAULT_PROXY; }
   if (/^https?:$/.test(location.protocol) && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && !el.proxy.value) {
     el.proxy.value = "/api?url={url}";
   }
   el.proxy.addEventListener("change", () => { try { localStorage.setItem("proxyRenfe", el.proxy.value.trim()); } catch (e) {} });
+  loadTrack();
   refresh();
   schedule();
-  if (el.showTrack.checked) loadTrack();
 })();
 </script>
 </body>
