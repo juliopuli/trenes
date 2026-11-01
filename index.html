@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.7</title>
+<title>Trenes Renfe en tiempo real · v1.8</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -75,7 +75,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.7</span></h1>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.8</span></h1>
       <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
     </div>
 
@@ -127,7 +127,7 @@
         <div><label for="thOrange">Naranja &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.2" step="0.5"></div>
         <div><label for="thTrack" title="Distancia máxima a las vías activas para no marcar el tren en gris">Margen vía (km)</label><input type="number" id="thTrack" value="2.0" min="0.1" step="0.5"></div>
       </div>
-      <div class="help">Se descartan cruces en sentido contrario. Solo avisa si van en la misma dirección o detenidos.</div>
+      <div class="help">Filtro vectorial avanzado: se ignoran cruces frontales en sentido contrario.</div>
     </fieldset>
 
     <fieldset>
@@ -178,7 +178,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.7";
+  const VERSION = "1.8";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -412,8 +412,9 @@
   });
   el.btnReloadTrack.addEventListener("click", () => { trackLoaded = false; loadTrack(); });
 
-  /* ---------- Estado de Trenes ---------- */
+  /* ---------- Estado de Trenes con Historial Vectorial ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
+  const trainHistory = new Map(); // id -> { lat, lon, time }
 
   const toNum = v => (v === null || v === undefined || v === "") ? NaN : parseFloat(String(v).replace(",", "."));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -530,8 +531,23 @@
       : (item.desProducto ?? item.descProducto ?? item.tipoTren ?? item.codProducto ?? item.producto ?? item.siglas ?? item.tipo ?? findKey(item, /(prod|tipo|clase|servicio|sigla)/i) ?? (isCercSource ? "CERCANÍAS" : "AVE"));
     const tipo = cleanProductType(tipoCandidate);
 
-    // Calcular vector aproximado de avance si tenemos origen y destino conocidos en coordenadas
-    return { id: String(id).trim(), label: String(label).trim(), lat, lon, raw, tipo };
+    const trainObj = { id: String(id).trim(), label: String(label).trim(), lat, lon, raw, tipo };
+
+    // Actualizar historial vectorial de movimiento
+    const now = Date.now();
+    const prev = trainHistory.get(trainObj.id);
+    if (prev) {
+      trainObj.dLat = lat - prev.lat;
+      trainObj.dLon = lon - prev.lon;
+      trainObj.hasVector = (Math.abs(trainObj.dLat) > 0.0001 || Math.abs(trainObj.dLon) > 0.0001);
+    } else {
+      trainObj.dLat = 0;
+      trainObj.dLon = 0;
+      trainObj.hasVector = false;
+    }
+    trainHistory.set(trainObj.id, { lat, lon, time: now });
+
+    return trainObj;
   }
 
   function trainInfo(t) {
@@ -558,19 +574,12 @@
     const ret = toNum(r.retraso ?? r.demora ?? r.delay ?? get(/retraso|demora/i));
     const mat = r.mat ?? r.material ?? r.composicion ?? "", corredor = r.corredor ?? r.linea ?? r.nucleo ?? r.Línea ?? "";
 
-    // Vector aproximado basado en la ruta escrita o coordenadas cardinales origen->destino
-    let heading = null;
-    if (orig && dest) {
-      // Asignar un ángulo aproximado según nombres clave si se desea, o derivarlo
-      heading = (dest > orig) ? 1 : -1; 
-    }
-
     let retHtml = "";
     if (isFinite(ret)) {
       retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
     }
 
-    return { tipo: t.tipo || "AVE", numero, numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "", orig, dest, sig, ant, horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(), vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null, ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim(), heading, origRaw: String(origRaw || ""), destRaw: String(destRaw || "") };
+    return { tipo: t.tipo || "AVE", numero, numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "", orig, dest, sig, ant, horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(), vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null, ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim() };
   }
 
   function buildUrl() {
@@ -622,7 +631,7 @@
     });
   }
 
-  /* ---------- Cálculo de Proximidad con Filtro de Sentido Opuesto ---------- */
+  /* ---------- Cálculo de Proximidad con Filtro Vectorial de Sentido Real ---------- */
   function computeProximity() {
     const tR = Math.max(0, toNum(el.thRed.value) || 3);
     const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
@@ -650,19 +659,25 @@
         const d = haversine(a.lat, a.lon, b.lat, b.lon);
         
         if (d < tO) {
-          // FILTRO DE SENTIDO OPUESTO:
-          // Si ambos tienen origen/destino definidos y van en sentidos contrarios (ej: Cuenca->Barcelona vs Barcelona->Cuenca), se ignoran como cruce normal.
           let opuestos = false;
-          const infoA = a._info, infoB = b._info;
-          if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
-            const strA = (infoA.orig + " " + infoA.dest).toLowerCase();
-            const strB = (infoB.orig + " " + infoB.dest).toLowerCase();
-            // Comprobación cruzada de cabeceras inversas
-            if ((strA.includes("barcelona") && strB.includes("madrid") || strA.includes("madrid") && strB.includes("barcelona")) &&
-                (strA.includes("cuenca") || strB.includes("cuenca"))) {
-              opuestos = true;
-            } else if (infoA.orig === infoB.dest && infoA.dest === infoB.orig) {
-              opuestos = true;
+          
+          // FILTRO VECTORIAL BASADO EN MOVIMIENTO REAL:
+          // Si ambos trenes tienen vector de desplazamiento registrado y se mueven, 
+          // comprobamos el producto escalar de sus vectores. Si es negativo (apuntan en direcciones contrarias), se ignoran.
+          if (a.hasVector && b.hasVector) {
+            const dotProduct = (a.dLat * b.dLat) + (a.dLon * b.dLon);
+            if (dotProduct < -0.00000001) {
+              opuestos = true; // Van en sentidos estrictamente opuestos
+            }
+          } else {
+            // Respaldo por texto de ruta si aún no hay suficiente historial vectorial
+            const infoA = a._info, infoB = b._info;
+            if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
+              const strA = (infoA.orig + " " + infoA.dest).toLowerCase();
+              const strB = (infoB.orig + " " + infoB.dest).toLowerCase();
+              if (infoA.orig === infoB.dest && infoA.dest === infoB.orig) {
+                opuestos = true;
+              }
             }
           }
 
