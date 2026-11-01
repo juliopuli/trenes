@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.14</title>
+<title>Trenes Renfe en tiempo real · v1.15</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -54,7 +54,7 @@
     border-radius:10px;
     box-shadow:0 4px 16px rgba(0,0,0,.28);
     min-width:290px;
-    max-width:400px;
+    max-width:410px;
     max-height:260px;
     display:flex;
     flex-direction:column;
@@ -138,8 +138,8 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.14</span></h1>
-      <div class="sub">Mapa de España · alerta por alcance y velocidad</div>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.15</span></h1>
+      <div class="sub">Mapa de España · alerta por alcance y misma vía</div>
     </div>
 
     <fieldset>
@@ -184,14 +184,15 @@
     </fieldset>
 
     <fieldset>
-      <legend>Reglas de alerta (mismo sentido)</legend>
+      <legend>Reglas de alerta (mismo sentido y vía)</legend>
       <div class="row">
-        <div><label for="thOrange" title="Distancia de seguridad entre dos trenes en el mismo sentido">Distancia &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.5" step="0.5"></div>
+        <div><label for="thOrange" title="Distancia de seguridad entre dos trenes en el mismo sentido y mismo tipo de vía">Distancia &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.5" step="0.5"></div>
         <div><label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
       </div>
       <div class="help">
-        • <b>Amarillo/Naranja:</b> mismo sentido a &lt; 5 km (o cuando el tren delantero va más rápido y se aleja).<br>
-        • <b>Rojo parpadeante:</b> a &lt; 5 km en el mismo sentido, el tren trasero supera el umbral (&gt; 100 km/h) y va más rápido o igual que el delantero (peligro de alcance).
+        • <b>Misma vía:</b> solo compara trenes compatibles (AVE/AVLO/AVANT no se mezclan con MD/Regional/Cercanías).<br>
+        • <b>Mismo sentido:</b> verificado por vector GPS y rumbo geográfico de las estaciones.<br>
+        • <b>Rojo:</b> el tren trasero va a &gt; 100 km/h y más rápido que el delantero.
       </div>
     </fieldset>
 
@@ -208,7 +209,7 @@
     <fieldset>
       <legend>Tipo de tren</legend>
       <div id="types"><div class="sub">Aparecerán al cargar los datos.</div></div>
-      <div class="help">Todos marcados por defecto. La proximidad se calcula entre los tipos marcados.</div>
+      <div class="help">Todos marcados por defecto. La proximidad se calcula entre los tipos marcados y compatibles en vía.</div>
     </fieldset>
 
     <fieldset>
@@ -248,7 +249,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.14";
+  const VERSION = "1.15";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -288,19 +289,103 @@
     return "AVE";
   }
 
-  /* ---------- Coordenadas de Estaciones Principales (para filtro de inmediaciones) ---------- */
-  const STATION_COORDS = [
-    [40.4065, -3.6896], [40.4722, -3.6822], [41.3791, 2.1401],  [39.4601, -0.3816],
-    [37.3919, -5.9753], [36.7115, -4.4316], [41.6587, -0.9114], [43.2614, -2.9277],
-    [41.6416, -4.7289], [37.8884, -4.7892], [38.3446, -0.4951], [42.2351, -8.7118],
-    [37.1841, -3.6091], [40.0780, -2.1380], [38.9950, -1.8550], [39.9800, -0.0500],
-    [41.1189, 1.2445],  [42.3411, -7.8647], [42.8705, -8.5446], [42.5960, -5.5786],
-    [43.3662, -5.8536], [37.9746, -1.1301]
+  /* ---------- Coordenadas Geográficas de Estaciones/Ciudades para Vector de Rumbo y Filtro de Estación ---------- */
+  const CITY_GEO = [
+    { keys: ["atocha", "madrid-puerta", "madrid atocha", "principe pio", "príncipe pío"], lat: 40.4065, lon: -3.6896, main: true },
+    { keys: ["chamartin", "chamartín", "madrid-chamartin", "madrid"], lat: 40.4722, lon: -3.6822, main: true },
+    { keys: ["barcelona", "sants", "passeig de gracia", "frança"], lat: 41.3791, lon: 2.1401, main: true },
+    { keys: ["valencia", "valència", "sorolla", "estacio del nord"], lat: 39.4601, lon: -0.3816, main: true },
+    { keys: ["sevilla", "santa justa", "san bernardo"], lat: 37.3919, lon: -5.9753, main: true },
+    { keys: ["malaga", "málaga", "zambrano"], lat: 36.7115, lon: -4.4316, main: true },
+    { keys: ["zaragoza", "delicias", "portillo"], lat: 41.6587, lon: -0.9114, main: true },
+    { keys: ["bilbao", "abando", "concordia"], lat: 43.2614, lon: -2.9277, main: true },
+    { keys: ["valladolid", "campo grande"], lat: 41.6416, lon: -4.7289, main: true },
+    { keys: ["cordoba", "córdoba"], lat: 37.8884, lon: -4.7892, main: true },
+    { keys: ["alicante", "alacant"], lat: 38.3446, lon: -0.4951, main: true },
+    { keys: ["vigo", "urzaiz", "urzáiz", "guixar"], lat: 42.2351, lon: -8.7118, main: true },
+    { keys: ["granada"], lat: 37.1841, lon: -3.6091, main: true },
+    { keys: ["cuenca", "zobel", "zóbel"], lat: 40.0442, lon: -2.1380, main: true },
+    { keys: ["albacete", "los llanos"], lat: 38.9997, lon: -1.8490, main: true },
+    { keys: ["castellon", "castelló"], lat: 39.9870, lon: -0.0528, main: true },
+    { keys: ["tarragona", "camp de tarragona"], lat: 41.1992, lon: 1.2690, main: true },
+    { keys: ["ourense"], lat: 42.3411, lon: -7.8647, main: true },
+    { keys: ["santiago"], lat: 42.8705, lon: -8.5446, main: true },
+    { keys: ["coruña", "coruna"], lat: 43.3526, lon: -8.4098, main: true },
+    { keys: ["leon", "león"], lat: 42.5960, lon: -5.5786, main: true },
+    { keys: ["oviedo"], lat: 43.3662, lon: -5.8536, main: true },
+    { keys: ["gijon", "gijón"], lat: 43.5390, lon: -5.6760, main: true },
+    { keys: ["murcia"], lat: 37.9746, lon: -1.1301, main: true },
+    { keys: ["lleida", "lerida"], lat: 41.6208, lon: 0.6327, main: true },
+    { keys: ["girona", "gerona"], lat: 41.9793, lon: 2.8169, main: false },
+    { keys: ["figueres", "vilafant"], lat: 42.2654, lon: 2.9436, main: true },
+    { keys: ["calatayud"], lat: 41.3410, lon: -1.6440, main: false },
+    { keys: ["guadalajara", "yebes"], lat: 40.5567, lon: -3.1670, main: false },
+    { keys: ["ciudad real"], lat: 38.9830, lon: -3.9160, main: false },
+    { keys: ["puertollano"], lat: 38.6850, lon: -4.1070, main: false },
+    { keys: ["antequera"], lat: 37.0672, lon: -4.6869, main: false },
+    { keys: ["puente genil"], lat: 37.3980, lon: -4.7060, main: false },
+    { keys: ["ronda"], lat: 36.7420, lon: -5.1660, main: false },
+    { keys: ["algeciras"], lat: 36.1270, lon: -5.4470, main: true },
+    { keys: ["cadiz", "cádiz"], lat: 36.5290, lon: -6.2869, main: true },
+    { keys: ["jerez"], lat: 36.6796, lon: -6.1268, main: false },
+    { keys: ["huelva"], lat: 37.2518, lon: -6.9447, main: true },
+    { keys: ["jaen", "jaén"], lat: 37.7780, lon: -3.7890, main: true },
+    { keys: ["linares", "baeza"], lat: 38.0694, lon: -3.5931, main: false },
+    { keys: ["almeria", "almería"], lat: 36.8380, lon: -2.4590, main: true },
+    { keys: ["toledo"], lat: 39.8624, lon: -4.0113, main: true },
+    { keys: ["segovia", "guiomar"], lat: 40.8884, lon: -4.0958, main: false },
+    { keys: ["palencia"], lat: 42.0110, lon: -4.5390, main: false },
+    { keys: ["burgos"], lat: 42.3712, lon: -3.6657, main: false },
+    { keys: ["miranda"], lat: 42.6844, lon: -2.9480, main: false },
+    { keys: ["vitoria", "gasteiz"], lat: 42.8415, lon: -2.6716, main: false },
+    { keys: ["san sebastian", "san sebastián", "donostia"], lat: 43.3177, lon: -1.9765, main: true },
+    { keys: ["irun", "irún"], lat: 43.3396, lon: -1.7890, main: true },
+    { keys: ["pamplona", "iruña"], lat: 42.8025, lon: -1.6622, main: true },
+    { keys: ["logroño", "logrono"], lat: 42.4567, lon: -2.4439, main: true },
+    { keys: ["huesca"], lat: 42.1350, lon: -0.4080, main: true },
+    { keys: ["santander"], lat: 43.4586, lon: -3.8115, main: true },
+    { keys: ["torrelavega"], lat: 43.3389, lon: -4.0531, main: false },
+    { keys: ["ponferrada"], lat: 42.5458, lon: -6.6025, main: false },
+    { keys: ["monforte"], lat: 42.5269, lon: -7.5028, main: false },
+    { keys: ["lugo"], lat: 43.0145, lon: -7.5516, main: false },
+    { keys: ["ferrol"], lat: 43.4850, lon: -8.2250, main: true },
+    { keys: ["pontevedra"], lat: 42.4227, lon: -8.6345, main: false },
+    { keys: ["vilagarcia", "vilagarcía"], lat: 42.5960, lon: -8.7610, main: false },
+    { keys: ["zamora"], lat: 41.5126, lon: -5.7369, main: false },
+    { keys: ["sanabria"], lat: 42.0289, lon: -6.6214, main: false },
+    { keys: ["medina"], lat: 41.3186, lon: -4.9089, main: false },
+    { keys: ["salamanca"], lat: 40.9765, lon: -5.6496, main: true },
+    { keys: ["avila", "ávila"], lat: 40.6596, lon: -4.6869, main: false },
+    { keys: ["caceres", "cáceres"], lat: 39.4650, lon: -6.3840, main: false },
+    { keys: ["merida", "mérida"], lat: 38.9218, lon: -6.3426, main: false },
+    { keys: ["badajoz"], lat: 38.8878, lon: -6.9822, main: true },
+    { keys: ["plasencia"], lat: 39.9678, lon: -6.1030, main: false },
+    { keys: ["requena", "utiel"], lat: 39.5890, lon: -1.1740, main: false },
+    { keys: ["villena"], lat: 38.6064, lon: -0.9234, main: false },
+    { keys: ["elx", "elche"], lat: 38.2480, lon: -0.7420, main: false },
+    { keys: ["orihuela"], lat: 38.0830, lon: -0.9460, main: false },
+    { keys: ["cartagena"], lat: 37.6050, lon: -0.9860, main: true },
+    { keys: ["alcazar", "alcázar"], lat: 39.3880, lon: -3.2180, main: false },
+    { keys: ["aranjuez"], lat: 40.0320, lon: -3.6060, main: false },
+    { keys: ["teruel"], lat: 40.3420, lon: -1.1120, main: false },
+    { keys: ["vinaros", "vinaròs", "benicarlo", "benicarló"], lat: 40.4700, lon: 0.4730, main: false },
+    { keys: ["tortosa"], lat: 40.8120, lon: 0.5210, main: false }
   ];
 
+  function findStationCoords(name) {
+    if (!name) return null;
+    const s = String(name).toLowerCase();
+    for (const c of CITY_GEO) {
+      for (const k of c.keys) {
+        if (s.includes(k)) return [c.lat, c.lon];
+      }
+    }
+    return null;
+  }
+
   function isInStationArea(lat, lon, thresholdKm = 2.2) {
-    for (const [stLat, stLon] of STATION_COORDS) {
-      if (haversine(lat, lon, stLat, stLon) <= thresholdKm) return true;
+    for (const c of CITY_GEO) {
+      if (c.main && haversine(lat, lon, c.lat, c.lon) <= thresholdKm) return true;
     }
     return false;
   }
@@ -420,9 +505,10 @@
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
-  /* ---------- Capas de Vías (Visuales) ---------- */
+  /* ---------- Capas de Vías e Índice Espacial (para saber en qué vía va un tren híbrido) ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
+  const GRID_SIZE = 0.15;
 
   const SPAIN_QUADRANTS = [
     "35.8,-9.5,40.2,-3.2",
@@ -436,13 +522,13 @@
       name: "AV", color: "#7b1fa2", weight: 3.3, opacity: 0.92, minKm: 0.08, key: "avTrack_v12",
       fallback: FALLBACK_AV_WAYS,
       queries: ['[out:json][timeout:30][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'],
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null
+      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map()
     },
     md: {
       name: "MD/Conv", color: "#0066cc", weight: 2.6, opacity: 0.85, minKm: 0.18, key: "mdTrack_v12",
       fallback: FALLBACK_MD_WAYS,
       queries: SPAIN_QUADRANTS.map(b => `[out:json][timeout:25][bbox:${b}];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;`),
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null
+      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map()
     }
   };
 
@@ -451,6 +537,63 @@
     "https://overpass-api.de/api/interpreter",
     "https://overpass.private.coffee/api/interpreter"
   ];
+
+  function addWaysToGrid(grid, lines) {
+    grid.clear();
+    for (const line of lines) {
+      for (let i = 0; i < line.length - 1; i++) {
+        const la1 = line[i][0], lo1 = line[i][1];
+        const la2 = line[i + 1][0], lo2 = line[i + 1][1];
+        const seg = [la1, lo1, la2, lo2];
+        const rMin = Math.floor(Math.min(la1, la2) / GRID_SIZE);
+        const rMax = Math.floor(Math.max(la1, la2) / GRID_SIZE);
+        const cMin = Math.floor(Math.min(lo1, lo2) / GRID_SIZE);
+        const cMax = Math.floor(Math.max(lo1, lo2) / GRID_SIZE);
+        for (let r = rMin; r <= rMax; r++) {
+          for (let c = cMin; c <= cMax; c++) {
+            const k = r + "," + c;
+            let list = grid.get(k);
+            if (!list) { list = []; grid.set(k, list); }
+            list.push(seg);
+          }
+        }
+      }
+    }
+  }
+
+  function distToSegmentKm(lat, lon, la1, lo1, la2, lo2) {
+    const cosLat = Math.cos(lat * Math.PI / 180);
+    const kLat = 111.19, kLon = 111.19 * cosLat;
+    const x = (lon - lo1) * kLon, y = (lat - la1) * kLat;
+    const dx = (lo2 - lo1) * kLon, dy = (la2 - la1) * kLat;
+    const lenSq = dx * dx + dy * dy;
+    let t = 0;
+    if (lenSq > 0) {
+      t = (x * dx + y * dy) / lenSq;
+      if (t < 0) t = 0; else if (t > 1) t = 1;
+    }
+    return Math.hypot(x - t * dx, y - t * dy);
+  }
+
+  function minDistInGrid(grid, lat, lon) {
+    const r0 = Math.floor(lat / GRID_SIZE), c0 = Math.floor(lon / GRID_SIZE);
+    let minD = Infinity;
+    for (let r = r0 - 1; r <= r0 + 1; r++) {
+      for (let c = c0 - 1; c <= c0 + 1; c++) {
+        const segs = grid.get(r + "," + c);
+        if (!segs) continue;
+        for (let i = 0; i < segs.length; i++) {
+          const s = segs[i];
+          const d = distToSegmentKm(lat, lon, s[0], s[1], s[2], s[3]);
+          if (d < minD) {
+            minD = d;
+            if (minD < 0.03) return minD;
+          }
+        }
+      }
+    }
+    return minD;
+  }
 
   function updateTrackStatus() {
     const part = st => {
@@ -511,6 +654,7 @@
 
   function applyTrackWays(st, ways, isOsm) {
     const combined = isOsm ? [...st.fallback, ...ways] : ways;
+    addWaysToGrid(st.grid, combined);
     st.poly = L.polyline(combined, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
     st.n = combined.length;
     st.loaded = true;
@@ -568,7 +712,7 @@
     if (el.showTrackMD.checked) loadTrackLayer("md", true);
   });
 
-  /* ---------- Estado de Trenes con Historial de 2 Medidas de Velocidad y Rumbo ---------- */
+  /* ---------- Estado de Trenes ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
 
@@ -799,6 +943,136 @@
     };
   }
 
+  /* ---------- Clasificación de Vía Activa por Tren (Evita cruzar MD con AVE) ---------- */
+  function getTrainTrackGroup(t) {
+    const tipo = (t.tipo || "").toUpperCase();
+    // 1. Alta Velocidad pura (ancho internacional UIC exclusivo)
+    if (tipo === "AVE" || tipo === "AVLO" || tipo === "AVANT") return "AV";
+    // 2. Convencional pura (ancho ibérico / cercanías / media distancia convencional)
+    if (tipo === "MD" || tipo === "REGIONAL" || tipo === "REG.EXP" || tipo === "CERCANÍAS") return "CONV";
+
+    // 3. Trenes híbridos / cambio de ancho (ALVIA, EUROMED, INTERCITY, ALTARIA, TALGO):
+    // Determinamos en qué vía están circulando realmente ahora mismo según su velocidad o cercanía a los trazados AV vs MD
+    if (isFinite(t.calcSpeed) && t.calcSpeed > 205) return "AV";
+    const dAV = TRACKS.av.loaded ? minDistInGrid(TRACKS.av.grid, t.lat, t.lon) : Infinity;
+    const dMD = TRACKS.md.loaded ? minDistInGrid(TRACKS.md.grid, t.lat, t.lon) : Infinity;
+    if (dAV <= 1.2 && dAV < dMD * 0.8) return "AV";
+    if (dMD <= 1.2 && dMD < dAV * 0.8) return "CONV";
+    return "HYB";
+  }
+
+  function isSameTrackGroup(a, b) {
+    const gA = a.trackGroup || getTrainTrackGroup(a);
+    const gB = b.trackGroup || getTrainTrackGroup(b);
+    // Un tren AV puro (AVE/AVLO/AVANT) NUNCA comparte vía con un CONV puro (MD/REGIONAL/CERCANÍAS)
+    if ((gA === "AV" && gB === "CONV") || (gA === "CONV" && gB === "AV")) return false;
+    return true;
+  }
+
+  /* ---------- Vector de Rumbo Geográfico por Estaciones (Origen/Anterior -> Próxima/Destino) ---------- */
+  function getRouteVector(t) {
+    const x = t._info || trainInfo(t);
+    const cOrig = findStationCoords(x.orig);
+    const cDest = findStationCoords(x.dest);
+    const cSig  = findStationCoords(x.sig);
+    const cAnt  = findStationCoords(x.ant);
+
+    // Prioridad 1: Desde posición actual del tren hacia la próxima parada (si está a más de 3 km)
+    if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 3.0) {
+      return [cSig[0] - t.lat, cSig[1] - t.lon];
+    }
+    // Prioridad 2: Desde estación anterior hacia estación siguiente
+    if (cAnt && cSig && (cAnt[0] !== cSig[0] || cAnt[1] !== cSig[1])) {
+      return [cSig[0] - cAnt[0], cSig[1] - cAnt[1]];
+    }
+    // Prioridad 3: Desde posición actual hacia el destino final (si está a más de 5 km)
+    if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 5.0) {
+      return [cDest[0] - t.lat, cDest[1] - t.lon];
+    }
+    // Prioridad 4: Desde estación de origen hacia estación de destino
+    if (cOrig && cDest && (cOrig[0] !== cDest[0] || cOrig[1] !== cDest[1])) {
+      return [cDest[0] - cOrig[0], cDest[1] - cOrig[1]];
+    }
+    return null;
+  }
+
+  function cosBetweenVectors(v1Lat, v1Lon, v2Lat, v2Lon, refLat) {
+    const kLon = Math.cos((refLat || 40) * Math.PI / 180);
+    const x1 = v1Lon * kLon, y1 = v1Lat;
+    const x2 = v2Lon * kLon, y2 = v2Lat;
+    const m1 = Math.hypot(x1, y1), m2 = Math.hypot(x2, y2);
+    if (m1 < 1e-8 || m2 < 1e-8) return null;
+    return (x1 * x2 + y1 * y2) / (m1 * m2);
+  }
+
+  /* ---------- Verificación Estricta de Mismo Sentido ---------- */
+  function areMovingSameDirection(a, b) {
+    const infoA = a._info, infoB = b._info;
+    const refLat = (a.lat + b.lat) / 2;
+
+    // 1. Si el origen de uno es exactamente el destino del otro (o comparten estación cruzada), van en sentido opuesto
+    if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
+      if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return false;
+      if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return false;
+      if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return false;
+    }
+
+    // 2. Comprobar vectores de ruta geográficos (Estaciones de Origen/Próxima/Destino)
+    const rA = a.routeVec, rB = b.routeVec;
+    if (rA && rB) {
+      const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
+      // Si sus rutas geográficas forman un ángulo > 60° (cos < 0.5), NO van en el mismo sentido
+      if (cosRoute !== null && cosRoute < 0.5) return false;
+    }
+
+    // 3. Comprobar vectores GPS reales de movimiento
+    if (a.hasVector && b.hasVector) {
+      const cosGps = cosBetweenVectors(a.dLat, a.dLon, b.dLat, b.dLon, refLat);
+      if (cosGps !== null && cosGps < 0.5) return false;
+      return true;
+    }
+
+    // 4. Si solo uno tiene vector GPS y el otro tiene vector de ruta, compararlos entre sí
+    if (a.hasVector && rB) {
+      const cosMix = cosBetweenVectors(a.dLat, a.dLon, rB[0], rB[1], refLat);
+      if (cosMix !== null && cosMix < 0.5) return false;
+    }
+    if (b.hasVector && rA) {
+      const cosMix = cosBetweenVectors(rA[0], rA[1], b.dLat, b.dLon, refLat);
+      if (cosMix !== null && cosMix < 0.5) return false;
+    }
+
+    // 5. Si aún no hay vectores GPS en ambos, exigir que ambos tengan vector de ruta claramente paralelo (cos > 0.65)
+    if (rA && rB) {
+      const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
+      return cosRoute !== null && cosRoute > 0.65;
+    }
+
+    return false;
+  }
+
+  // Determina quién va detrás (trailing) y quién delante (leading) usando el vector GPS o el vector de ruta
+  function getTrailingAndLeading(a, b) {
+    let vLat = 0, vLon = 0;
+    if (a.hasVector) { vLat += a.dLat; vLon += a.dLon; }
+    if (b.hasVector) { vLat += b.dLat; vLon += b.dLon; }
+    if (vLat === 0 && vLon === 0) {
+      if (a.routeVec) { vLat += a.routeVec[0]; vLon += a.routeVec[1]; }
+      if (b.routeVec) { vLat += b.routeVec[0]; vLon += b.routeVec[1]; }
+    }
+    if (vLat === 0 && vLon === 0) return null;
+
+    const kLon = Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+    const abLat = b.lat - a.lat;
+    const abLon = (b.lon - a.lon) * kLon;
+    const proj = (abLat * vLat) + (abLon * vLon * kLon);
+    if (Math.abs(proj) < 1e-9) return null;
+
+    return proj > 0
+      ? { trailing: a, leading: b }
+      : { trailing: b, leading: a };
+  }
+
   function buildUrl() {
     let url = el.source.value === "custom" ? el.customUrl.value.trim() : SOURCES[el.source.value];
     if (!url) throw new Error("Indica una URL.");
@@ -852,7 +1126,7 @@
     });
   }
 
-  /* ---------- Lógica de Proximidad y Posición Relativa (Delantero vs Trasero) ---------- */
+  /* ---------- Lógica de Proximidad (Misma Vía + Mismo Sentido + Velocidad de Alcance) ---------- */
   function isConfirmedHighSpeed(t, minSpeedKmh) {
     if (t.speedsList && t.speedsList.length >= 2) {
       const avg = (t.speedsList[0] + t.speedsList[1]) / 2;
@@ -862,28 +1136,6 @@
       return t.calcSpeed > minSpeedKmh;
     }
     return false;
-  }
-
-  // Determina cuál de los dos trenes (a, b) va detrás (trailing) y cuál delante (leading) en el sentido de la marcha
-  function getTrailingAndLeading(a, b) {
-    // Vector de dirección de la marcha común (sumando los vectores de desplazamiento medidos)
-    let vLat = 0, vLon = 0;
-    if (a.hasVector) { vLat += a.dLat; vLon += a.dLon; }
-    if (b.hasVector) { vLat += b.dLat; vLon += b.dLon; }
-    if (vLat === 0 && vLon === 0) return null;
-
-    // Vector de posición relativa desde A hacia B: (B - A)
-    const abLat = b.lat - a.lat;
-    const abLon = (b.lon - a.lon) * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
-    const vLonScaled = vLon * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
-
-    // Producto escalar: si (B - A) · V > 0, entonces B está por delante de A en el sentido de avance
-    const proj = (abLat * vLat) + (abLon * vLonScaled);
-    if (Math.abs(proj) < 1e-9) return null;
-
-    return proj > 0
-      ? { trailing: a, leading: b } // A va detrás, B va delante
-      : { trailing: b, leading: a }; // B va detrás, A va delante
   }
 
   function computeProximity() {
@@ -898,6 +1150,8 @@
       t.inStation = isInStationArea(t.lat, t.lon, 2.2);
       t.isFast = isConfirmedHighSpeed(t, minSpeed);
       t._info = trainInfo(t);
+      t.trackGroup = getTrainTrackGroup(t);
+      t.routeVec = getRouteVector(t);
     });
 
     const activeTrains = trains.filter(t => !t.inStation);
@@ -910,64 +1164,46 @@
       for (let j = i + 1; j < sorted.length; j++) {
         const b = sorted[j];
         if (b.lat - a.lat > maxDLat) break;
+
+        // 1. FILTRO DE TIPO DE VÍA: un AVE/AVLO/AVANT nunca puede entrar en alerta con un MD/Regional/Cercanías
+        if (!isSameTrackGroup(a, b)) continue;
+
         const d = haversine(a.lat, a.lon, b.lat, b.lon);
-
         if (d < tO) {
-          let opuestos = false;
-          if (a.hasVector && b.hasVector) {
-            const magA = Math.hypot(a.dLat, a.dLon), magB = Math.hypot(b.dLat, b.dLon);
-            if (magA > 0 && magB > 0) {
-              const cosAngle = ((a.dLat * b.dLat) + (a.dLon * b.dLon)) / (magA * magB);
-              if (cosAngle < 0.25) opuestos = true;
-            }
-          } else {
-            const infoA = a._info, infoB = b._info;
-            if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
-              if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) opuestos = true;
-            }
-          }
+          // 2. FILTRO ESTRICTO DE SENTIDO DE LA MARCHA (Ruta geográfica + GPS)
+          if (!areMovingSameDirection(a, b)) continue;
 
-          if (!opuestos) {
-            const order = getTrailingAndLeading(a, b);
-            let pairSeverity = "orange";
-            let trailing = a, leading = b;
+          const order = getTrailingAndLeading(a, b);
+          let pairSeverity = "orange";
+          let trailing = a, leading = b;
 
-            if (order) {
-              trailing = order.trailing;
-              leading = order.leading;
-              const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
-              const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
+          if (order) {
+            trailing = order.trailing;
+            leading = order.leading;
+            const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
+            const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
 
-              // REGLA DE ALCANCE:
-              // Si el que va delante va más rápido que el que va detrás (vLead > vTrail), el peligro se aleja -> NARANJA (no rojo).
-              // Solo es ALERTA ROJA si el de atrás supera el umbral (>100 km/h) y va más rápido o igual que el de delante (vTrail >= vLead).
-              if (trailing.isFast && vTrail >= vLead) {
-                pairSeverity = "red";
-              } else {
-                pairSeverity = "orange";
-              }
+            // 3. REGLA DE ALCANCE:
+            // Solo es alerta roja si el tren que va detrás supera el umbral (>100 km/h) y va más rápido o igual que el de delante
+            if (trailing.isFast && vTrail >= vLead) {
+              pairSeverity = "red";
             } else {
-              // Si aún no hay vector para saber quién va delante pero alguno supera la velocidad umbral, solo marcamos rojo si el otro está parado
-              const vA = isFinite(a.calcSpeed) ? a.calcSpeed : 0;
-              const vB = isFinite(b.calcSpeed) ? b.calcSpeed : 0;
-              if ((a.isFast && vB === 0) || (b.isFast && vA === 0)) {
-                pairSeverity = "red";
-              }
+              pairSeverity = "orange";
             }
-
-            if (d < a.d) { a.d = d; a.nearTrain = b; }
-            if (d < b.d) { b.d = d; b.nearTrain = a; }
-            if (pairSeverity === "red") {
-              a.hasRedPair = true;
-              b.hasRedPair = true;
-            }
-            if (order) {
-              trailing.roleInfo = `Detrás de ${leading.tipo} ${leading.label}`;
-              leading.roleInfo  = `Delante de ${trailing.tipo} ${trailing.label}`;
-            }
-
-            pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, severity: pairSeverity });
           }
+
+          if (d < a.d) { a.d = d; a.nearTrain = b; }
+          if (d < b.d) { b.d = d; b.nearTrain = a; }
+          if (pairSeverity === "red") {
+            a.hasRedPair = true;
+            b.hasRedPair = true;
+          }
+          if (order) {
+            trailing.roleInfo = `Detrás de ${leading.tipo} ${leading.label}`;
+            leading.roleInfo  = `Delante de ${trailing.tipo} ${trailing.label}`;
+          }
+
+          pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, severity: pairSeverity });
         }
       }
     }
@@ -988,7 +1224,8 @@
 
   function tipHtml(t) {
     const x = t._info || trainInfo(t);
-    const head = `<div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Nº ${esc(x.numero)}</span></div>`;
+    const vGrp = t.trackGroup === "AV" ? "Vía AV" : (t.trackGroup === "CONV" ? "Vía Conv." : "Vía Híbrida");
+    const head = `<div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Nº ${esc(x.numero)}</span><span style="margin-left:auto;font-size:10.5px;color:#667085">${esc(vGrp)}</span></div>`;
     const ruta = (x.orig || x.dest) ? `<div class="t-route">📍 ${esc(x.orig || "?")} → ${esc(x.dest || "?")}</div>` : "";
     const paradas = [];
     if (x.sig) paradas.push(`Próxima: <b>${esc(x.sig)}</b>`);
@@ -1016,9 +1253,13 @@
 
   function popupHtml(t) {
     const x = t._info || trainInfo(t);
+    const vGrp = t.trackGroup === "AV" ? "Alta Velocidad (UIC)" : (t.trackGroup === "CONV" ? "Convencional (Ibérico)" : "Ancho Variable / Mixto");
     const mainRows = [
-      ["Tipo de servicio", x.tipo], ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
-      ["Origen", x.orig || "—"], ["Destino", x.dest || "—"]
+      ["Tipo de servicio", x.tipo],
+      ["Infraestructura", vGrp],
+      ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
+      ["Origen", x.orig || "—"],
+      ["Destino", x.dest || "—"]
     ];
     if (x.ant) mainRows.push(["Estación anterior", x.ant]);
     if (x.sig) mainRows.push(["Próxima estación", x.sig]);
