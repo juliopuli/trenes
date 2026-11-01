@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.17</title>
+<title>Trenes Renfe en tiempo real · v1.18</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -246,7 +246,7 @@
     <div>
       <div class="side-top">
         <button class="help-btn" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
-        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.17</span></h1>
+        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.18</span></h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
@@ -258,15 +258,15 @@
         <div><label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
       </div>
       <div class="help">
-        • <b>Distancia por vía:</b> calculada sobre el trazado ferroviario real.<br>
-        • <b>Misma vía y sentido:</b> verificado por infraestructura, GPS y estaciones.<br>
+        • <b>Distancia por vía:</b> medida sobre los raíles entre ambos trenes.<br>
+        • <b>Unión sobre vía:</b> el trazo naranja/rojo dibuja la vía que los separa.<br>
         • <b>Rojo:</b> el tren trasero va a &gt; 100 km/h y más rápido que el delantero.
       </div>
     </fieldset>
 
     <fieldset>
       <legend>Búsqueda y pantalla</legend>
-      <label class="chk" style="margin-top:0"><input type="checkbox" id="showLines" checked>Unir por el trazado los trenes cercanos</label>
+      <label class="chk" style="margin-top:0"><input type="checkbox" id="showLines" checked>Pintar sobre la vía el tramo entre trenes cercanos</label>
       <label for="search">Buscar tren / origen / destino</label>
       <input type="text" id="search" placeholder="p. ej. 02112, ALVIA, Málaga, Madrid…">
       <div class="stat-pills">
@@ -282,7 +282,7 @@
       <div id="pairs"><div class="sub">Sin datos todavía.</div></div>
     </fieldset>
 
-    <!-- Controles internos ocultos para mantener intacto el motor -->
+    <!-- Controles internos ocultos -->
     <div style="display:none">
       <div id="customWrap"><input type="text" id="customUrl"></div>
       <input type="text" id="proxy">
@@ -315,9 +315,9 @@
       </button>
     </div>
 
-    <!-- Barra flotante inferior izquierda: Fuente, Mapa base, Capas de vías, Tipo de tren -->
+    <!-- Barra flotante inferior izquierda -->
     <div id="bottomLeftControls">
-      <!-- 1. Fuente (Alta Velocidad/Convencional vs Cercanías) -->
+      <!-- 1. Fuente -->
       <div class="fl-wrap">
         <button class="fl-btn" data-pop="popSource" title="Cambiar fuente de trenes">
           <svg viewBox="0 0 24 24"><path d="M4 3h2v18H4V3zm14 0h2v18h-2V3zM7 6h10v2H7V6zm0 5h10v2H7v-2zm0 5h10v2H7v-2z"/></svg>
@@ -401,7 +401,7 @@
     </div>
     <div class="hm-body">
       <p style="margin:0">
-        Esta aplicación es un <b>sistema inteligente de alertas de proximidad de trenes en España</b>. Cada 10 segundos mira dónde está cada tren por GPS, lo coloca sobre la vía real y mide la distancia siguiendo las curvas del trazado ferroviario.
+        Esta aplicación es un <b>sistema inteligente de alertas de proximidad de trenes en España</b>. Cada 10 segundos mira dónde está cada tren por GPS, lo coloca exactamente sobre su vía real y mide la distancia siguiendo todas las curvas del trazado ferroviario.
       </p>
 
       <div class="hm-box" style="border-left:5px solid #43a047">
@@ -409,7 +409,7 @@
         <div>
           El tren viaja con total normalidad:
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li>No tiene ningún otro tren cerca (a menos de <b>5 km por vía</b>) en su misma vía y dirección.</li>
+            <li>No tiene ningún otro tren cerca (a menos de <b>5 km medidos por la vía</b>) en su misma vía y dirección.</li>
             <li>Si se cruza de frente con otro tren en sentido contrario, <b>sigue en verde</b> porque cada uno va por su vía paralela.</li>
             <li>Si llega a una estación grande (como Atocha, Sants o Málaga), también se pone en verde porque allí los trenes van muy despacio para aparcar en su andén.</li>
           </ul>
@@ -424,7 +424,7 @@
       <div class="hm-box" style="border-left:5px solid #f59e0b">
         <div class="hm-box-title"><span class="dot" style="background:#f59e0b;width:14px;height:14px"></span> 2. Trenes en NARANJA (Precaución, sin peligro de choque)</div>
         <div>
-          Dos trenes van por la <b>misma vía y en el mismo sentido</b> a <b>menos de 5 km</b>, pero <b>NO hay peligro inminente</b> porque:
+          Dos trenes van por la <b>misma vía y en el mismo sentido</b> a <b>menos de 5 km sobre el raíl</b>, pero <b>NO hay peligro inminente</b> porque:
           <ul style="margin:4px 0 0;padding-left:18px">
             <li>Ambos van despacito (a menos de 100 km/h) o están parados esperando señal.</li>
             <li>O bien <b>el tren que va delante corre más que el que va detrás</b>, así que cada vez se alejan más el uno del otro.</li>
@@ -442,8 +442,8 @@
         <div>
           Salta la <b>Alerta Roja</b> arriba en el mapa cuando se cumplen estas 4 cosas a la vez:
           <ol style="margin:4px 0 0;padding-left:18px">
-            <li>Los dos trenes usan el <b>mismo tipo de vía</b> (un AVE nunca puede chocar con un Media Distancia convencional aunque sus vías pasen juntas).</li>
-            <li>Van en el <b>mismo sentido de la marcha</b> a <b>menos de 5 km siguiendo el trazado de la vía</b>.</li>
+            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> (un AVE nunca puede chocar con un Media Distancia convencional aunque sus vías pasen juntas).</li>
+            <li>Van en el <b>mismo sentido de la marcha</b> a <b>menos de 5 km medidos siguiendo las curvas de la vía</b>.</li>
             <li>El tren que viene por <b>detrás va lanzado a más de 100 km/h</b>.</li>
             <li>El tren de <b>atrás va más rápido (o igual) que el de delante</b>, por lo que le está recortando distancia rápidamente.</li>
           </ol>
@@ -464,7 +464,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.17";
+  const VERSION = "1.18";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -680,23 +680,23 @@
   const canvas = L.canvas({ padding: 0.5 });
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
-  const linesLayer = L.layerGroup().addTo(map); // Por encima de trackLayer para resaltar las uniones en alerta
-  const GRID_SIZE = 0.15;
+  const linesLayer = L.layerGroup().addTo(map);
+  const GRID_SIZE = 0.08; // ~8 km por celda para indexar sub-segmentos de vía con alta precisión
 
   const TRACKS = {
     av: {
-      name: "AV", color: "#7b1fa2", weight: 3.0, opacity: 0.85, minKm: 0.02, key: "avTrack_v16",
+      name: "AV", color: "#7b1fa2", weight: 3.0, opacity: 0.85, minKm: 0.015, key: "avTrack_v18",
       queries: [
         '[out:json][timeout:40][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'
       ],
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map(), graph: null, ways: []
+      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map(), ways: []
     },
     md: {
-      name: "MD/Conv", color: "#0066cc", weight: 2.2, opacity: 0.8, minKm: 0.03, key: "mdTrack_v16",
+      name: "MD/Conv", color: "#0066cc", weight: 2.2, opacity: 0.8, minKm: 0.025, key: "mdTrack_v18",
       queries: [
-        '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"="main"][!"service"];out skel geom qt;'
+        '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;'
       ],
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map(), graph: null, ways: []
+      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map(), ways: []
     }
   };
 
@@ -717,53 +717,22 @@
   const fmtKm = d => d < 1 ? Math.round(d * 1000) + " m" : d.toFixed(2) + " km";
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Motor de Grafo y Enrutamiento por Vía (Cálculo de distancia y curva sobre raíl) ---------- */
-  function buildTrackGraph(st, lines) {
+  /* ---------- Indexación Espacial de Sub-segmentos y Enrutamiento Local Exacto sobre la Vía ---------- */
+  function indexTrackWays(st, lines) {
     st.grid.clear();
     st.ways = lines;
-    const nodes = []; // [{lat, lon, adj: [{to, w, wayIdx, dir}]}]
-    const nodeHash = new Map(); // cellKey -> [nodeId]
-    const CELL = 0.002; // ~200m para fusionar extremos de vías contiguas o agujas
-
-    function getOrCreateNode(lat, lon) {
-      const r0 = Math.floor(lat / CELL), c0 = Math.floor(lon / CELL);
-      for (let r = r0 - 1; r <= r0 + 1; r++) {
-        for (let c = c0 - 1; c <= c0 + 1; c++) {
-          const list = nodeHash.get(r + "," + c);
-          if (!list) continue;
-          for (const id of list) {
-            const n = nodes[id];
-            // Fusionar vértices a menos de 65 metros (conecta tramos OSM y doble vía paralela)
-            if (haversine(lat, lon, n.lat, n.lon) <= 0.065) return id;
-          }
-        }
-      }
-      const id = nodes.length;
-      nodes.push({ lat, lon, adj: [] });
-      const k = r0 + "," + c0;
-      let list = nodeHash.get(k);
-      if (!list) { list = []; nodeHash.set(k, list); }
-      list.push(id);
-      return id;
-    }
-
-    const wayMeta = []; // Por cada way: { cumLen: [...], startNode, endNode }
+    let segIdCounter = 0;
 
     for (let wIdx = 0; wIdx < lines.length; wIdx++) {
       const line = lines[wIdx];
-      if (!line || line.length < 2) {
-        wayMeta.push(null);
-        continue;
-      }
-      const cumLen = [0];
+      if (!line || line.length < 2) continue;
       for (let i = 0; i < line.length - 1; i++) {
         const la1 = line[i][0], lo1 = line[i][1];
         const la2 = line[i + 1][0], lo2 = line[i + 1][1];
-        const segLen = haversine(la1, lo1, la2, lo2);
-        cumLen.push(cumLen[i] + segLen);
+        const lenKm = haversine(la1, lo1, la2, lo2);
+        if (lenKm === 0) continue;
 
-        // Guardar segmento enriquecido con wayIdx y segIdx en la rejilla espacial
-        const seg = { la1, lo1, la2, lo2, wayIdx: wIdx, segIdx: i, segLen };
+        const seg = { id: segIdCounter++, la1, lo1, la2, lo2, lenKm, wayIdx: wIdx, segIdx: i };
         const rMin = Math.floor(Math.min(la1, la2) / GRID_SIZE);
         const rMax = Math.floor(Math.max(la1, la2) / GRID_SIZE);
         const cMin = Math.floor(Math.min(lo1, lo2) / GRID_SIZE);
@@ -777,24 +746,12 @@
           }
         }
       }
-
-      const totalW = cumLen[cumLen.length - 1];
-      const u = getOrCreateNode(line[0][0], line[0][1]);
-      const v = getOrCreateNode(line[line.length - 1][0], line[line.length - 1][1]);
-      wayMeta.push({ cumLen, startNode: u, endNode: v, totalW });
-
-      if (u !== v) {
-        nodes[u].adj.push({ to: v, w: totalW, wayIdx: wIdx, forward: true });
-        nodes[v].adj.push({ to: u, w: totalW, wayIdx: wIdx, forward: false });
-      }
     }
-
-    st.graph = { nodes, wayMeta };
   }
 
-  // Proyecta un punto (lat, lon) sobre el segmento más cercano de un grid
-  function snapPointToTrack(st, lat, lon) {
-    if (!st || !st.loaded || !st.graph) return null;
+  // Proyecta un punto (lat, lon) sobre el segmento más cercano de una capa de vía
+  function snapToTrackLayer(st, lat, lon) {
+    if (!st || !st.loaded) return null;
     const r0 = Math.floor(lat / GRID_SIZE), c0 = Math.floor(lon / GRID_SIZE);
     const cosLat = Math.cos(lat * Math.PI / 180);
     const kLat = 111.19, kLon = 111.19 * cosLat;
@@ -817,18 +774,12 @@
           const d = Math.hypot(x - t * dx, y - t * dy);
           if (d < minD) {
             minD = d;
-            const projLat = s.la1 + t * (s.la2 - s.la1);
-            const projLon = s.lo1 + t * (s.lo2 - s.lo1);
-            const meta = st.graph.wayMeta[s.wayIdx];
-            const distFromStart = meta ? (meta.cumLen[s.segIdx] + t * s.segLen) : 0;
             best = {
               distToTrack: d,
-              wayIdx: s.wayIdx,
-              segIdx: s.segIdx,
+              seg: s,
               t,
-              projLat,
-              projLon,
-              distFromStart
+              snapLat: s.la1 + t * (s.la2 - s.la1),
+              snapLon: s.lo1 + t * (s.lo2 - s.lo1)
             };
           }
         }
@@ -837,175 +788,183 @@
     return best;
   }
 
-  function minDistInGrid(grid, lat, lon) {
-    const r0 = Math.floor(lat / GRID_SIZE), c0 = Math.floor(lon / GRID_SIZE);
-    const cosLat = Math.cos(lat * Math.PI / 180);
-    const kLat = 111.19, kLon = 111.19 * cosLat;
-    let minD = Infinity;
-    for (let r = r0 - 1; r <= r0 + 1; r++) {
-      for (let c = c0 - 1; c <= c0 + 1; c++) {
-        const segs = grid.get(r + "," + c);
-        if (!segs) continue;
-        for (let i = 0; i < segs.length; i++) {
-          const s = segs[i];
-          const x = (lon - s.lo1) * kLon, y = (lat - s.la1) * kLat;
-          const dx = (s.lo2 - s.lo1) * kLon, dy = (s.la2 - s.la1) * kLat;
-          const lenSq = dx * dx + dy * dy;
-          let t = 0;
-          if (lenSq > 0) {
-            t = (x * dx + y * dy) / lenSq;
-            if (t < 0) t = 0; else if (t > 1) t = 1;
-          }
-          const d = Math.hypot(x - t * dx, y - t * dy);
-          if (d < minD) {
-            minD = d;
-            if (minD < 0.03) return minD;
-          }
-        }
-      }
-    }
-    return minD;
-  }
-
-  // Extrae los puntos intermedios de un way entre dos posiciones proyectadas (sA y sB)
-  function sliceWayCoords(line, segA, tA, ptA, segB, tB, ptB) {
-    const posA = segA + tA, posB = segB + tB;
-    if (posA <= posB) {
-      const pts = [ptA];
-      for (let k = segA + 1; k <= segB; k++) pts.push(line[k]);
-      pts.push(ptB);
-      return pts;
-    } else {
-      const pts = [ptA];
-      for (let k = segA; k >= segB + 1; k--) pts.push(line[k]);
-      pts.push(ptB);
-      return pts;
-    }
-  }
-
-  // Calcula la distancia real siguiendo la vía y la polilínea exacta entre los trenes A y B
-  function computeTrackRoute(a, b, maxAllowedKm) {
-    const straightD = haversine(a.lat, a.lon, b.lat, b.lon);
-    // Seleccionar la red ferroviaria sobre la que circulan (AV o MD)
+  // Construye un grafo local con todos los segmentos de vía en el entorno de los dos trenes y halla el camino exacto sobre el raíl
+  function computeLocalTrackRoute(a, b, maxAllowedKm) {
+    // Elegir las capas compatibles según el tipo de tren
     const preferAV = (a.trackGroup === "AV" || b.trackGroup === "AV");
-    const candidates = preferAV ? [TRACKS.av, TRACKS.md] : [TRACKS.md, TRACKS.av];
+    const layersToTry = preferAV ? [TRACKS.av, TRACKS.md] : [TRACKS.md, TRACKS.av];
 
-    for (const st of candidates) {
-      if (!st.loaded || !st.graph) continue;
-      const snapA = snapPointToTrack(st, a.lat, a.lon);
-      const snapB = snapPointToTrack(st, b.lat, b.lon);
-      // Si ambos trenes están cerca de esta capa de vía (<= 1.8 km del raíl)
-      if (!snapA || !snapB || snapA.distToTrack > 1.8 || snapB.distToTrack > 1.8) continue;
+    for (const st of layersToTry) {
+      if (!st.loaded) continue;
+      const snapA = snapToTrackLayer(st, a.lat, a.lon);
+      const snapB = snapToTrackLayer(st, b.lat, b.lon);
+      // Exigir que ambos trenes estén realmente sobre esta vía (a menos de 1.2 km del raíl)
+      if (!snapA || !snapB || snapA.distToTrack > 1.2 || snapB.distToTrack > 1.2) continue;
 
-      const { nodes, wayMeta } = st.graph;
-      const ptA = [snapA.projLat, snapA.projLon];
-      const ptB = [snapB.projLat, snapB.projLon];
+      const sA = snapA.seg, sB = snapB.seg;
 
-      // Caso 1: Ambos trenes están sobre el mismo tramo (way)
-      if (snapA.wayIdx === snapB.wayIdx) {
-        const trackDist = Math.abs(snapA.distFromStart - snapB.distFromStart);
-        if (trackDist <= maxAllowedKm) {
-          const line = st.ways[snapA.wayIdx];
-          const coords = sliceWayCoords(line, snapA.segIdx, snapA.t, ptA, snapB.segIdx, snapB.t, ptB);
-          return { distKm: Math.max(trackDist, straightD * 0.95), pathCoords: [[a.lat, a.lon], ...coords, [b.lat, b.lon]] };
+      // Caso 1: Ambos trenes están exactamente en el mismo sub-segmento
+      if (sA.id === sB.id) {
+        const d = haversine(snapA.snapLat, snapA.snapLon, snapB.snapLat, snapB.snapLon);
+        if (d <= maxAllowedKm) {
+          return {
+            distKm: d,
+            pathCoords: [[snapA.snapLat, snapA.snapLon], [snapB.snapLat, snapB.snapLon]],
+            snapA, snapB
+          };
         }
       }
 
-      // Caso 2: Búsqueda en grafo (Dijkstra acotado a maxAllowedKm * 1.35) entre los extremos de sus tramos
-      const metaA = wayMeta[snapA.wayIdx], metaB = wayMeta[snapB.wayIdx];
-      if (!metaA || !metaB) continue;
-
-      const limitKm = maxAllowedKm * 1.35;
-      const distMap = new Map();
-      const prevMap = new Map(); // node -> { prevNode, edge, fromStart }
-      const pq = []; // Cola de prioridad simple
-
-      const startCandidates = [
-        { node: metaA.startNode, d: snapA.distFromStart, toStart: true },
-        { node: metaA.endNode,   d: metaA.totalW - snapA.distFromStart, toStart: false }
-      ];
-
-      for (const sc of startCandidates) {
-        if (sc.d <= limitKm && (!distMap.has(sc.node) || sc.d < distMap.get(sc.node))) {
-          distMap.set(sc.node, sc.d);
-          prevMap.set(sc.node, { init: true, toStart: sc.toStart });
-          pq.push({ u: sc.node, d: sc.d });
+      // Caso 2: Ambos trenes están en el mismo `way` de OpenStreetMap -> recorrer todos sus vértices intermedios directamente
+      if (sA.wayIdx === sB.wayIdx) {
+        const wLine = st.ways[sA.wayIdx];
+        const posA = sA.segIdx + snapA.t;
+        const posB = sB.segIdx + snapB.t;
+        const coords = [[snapA.snapLat, snapA.snapLon]];
+        if (posA <= posB) {
+          for (let k = sA.segIdx + 1; k <= sB.segIdx; k++) coords.push(wLine[k]);
+        } else {
+          for (let k = sA.segIdx; k >= sB.segIdx + 1; k--) coords.push(wLine[k]);
+        }
+        coords.push([snapB.snapLat, snapB.snapLon]);
+        let totalD = 0;
+        for (let k = 0; k < coords.length - 1; k++) {
+          totalD += haversine(coords[k][0], coords[k][1], coords[k + 1][0], coords[k + 1][1]);
+        }
+        if (totalD <= maxAllowedKm) {
+          return { distKm: totalD, pathCoords: coords, snapA, snapB };
         }
       }
 
-      const targetNodes = new Set([metaB.startNode, metaB.endNode]);
-      let bestTotal = Infinity, bestTarget = null;
+      // Caso 3: Recopilar todos los sub-segmentos de vía en una caja alrededor de A y B (+0.08 grados ~ 8 km de margen)
+      const minLat = Math.min(snapA.snapLat, snapB.snapLat) - 0.08;
+      const maxLat = Math.max(snapA.snapLat, snapB.snapLat) + 0.08;
+      const minLon = Math.min(snapA.snapLon, snapB.snapLon) - 0.10;
+      const maxLon = Math.max(snapA.snapLon, snapB.snapLon) + 0.10;
+
+      const rMin = Math.floor(minLat / GRID_SIZE), rMax = Math.floor(maxLat / GRID_SIZE);
+      const cMin = Math.floor(minLon / GRID_SIZE), cMax = Math.floor(maxLon / GRID_SIZE);
+
+      const seenSegs = new Set();
+      const localSegs = [];
+      for (let r = rMin; r <= rMax; r++) {
+        for (let c = cMin; c <= cMax; c++) {
+          const list = st.grid.get(r + "," + c);
+          if (!list) continue;
+          for (let i = 0; i < list.length; i++) {
+            const sg = list[i];
+            if (!seenSegs.has(sg.id)) {
+              seenSegs.add(sg.id);
+              localSegs.push(sg);
+            }
+          }
+        }
+      }
+
+      if (!localSegs.length) continue;
+
+      // Construir grafo local fino: fusionar vértices a menos de 45 metros (une tramos consecutivos y vías paralelas de doble vía)
+      const nodes = []; // [{lat, lon, adj: [{to, w}]}]
+      const cellMap = new Map();
+      const CELL = 0.001; // ~100m
+
+      function getNode(lat, lon) {
+        const gr = Math.floor(lat / CELL), gc = Math.floor(lon / CELL);
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const arr = cellMap.get((gr + dr) + "," + (gc + dc));
+            if (!arr) continue;
+            for (const nid of arr) {
+              const nd = nodes[nid];
+              if (haversine(lat, lon, nd.lat, nd.lon) <= 0.045) return nid;
+            }
+          }
+        }
+        const id = nodes.length;
+        nodes.push({ lat, lon, adj: [] });
+        const key = gr + "," + gc;
+        let arr = cellMap.get(key);
+        if (!arr) { arr = []; cellMap.set(key, arr); }
+        arr.push(id);
+        return id;
+      }
+
+      function addEdge(u, v, w) {
+        if (u === v) return;
+        nodes[u].adj.push({ to: v, w });
+        nodes[v].adj.push({ to: u, w });
+      }
+
+      let startNode = -1, targetNode = -1;
+
+      for (let i = 0; i < localSegs.length; i++) {
+        const sg = localSegs[i];
+        const u = getNode(sg.la1, sg.lo1);
+        const v = getNode(sg.la2, sg.lo2);
+
+        if (sg.id === sA.id) {
+          startNode = nodes.length;
+          nodes.push({ lat: snapA.snapLat, lon: snapA.snapLon, adj: [] });
+          addEdge(startNode, u, haversine(snapA.snapLat, snapA.snapLon, sg.la1, sg.lo1));
+          addEdge(startNode, v, haversine(snapA.snapLat, snapA.snapLon, sg.la2, sg.lo2));
+        }
+        if (sg.id === sB.id) {
+          targetNode = nodes.length;
+          nodes.push({ lat: snapB.snapLat, lon: snapB.snapLon, adj: [] });
+          addEdge(targetNode, u, haversine(snapB.snapLat, snapB.snapLon, sg.la1, sg.lo1));
+          addEdge(targetNode, v, haversine(snapB.snapLat, snapB.snapLon, sg.la2, sg.lo2));
+        }
+        addEdge(u, v, sg.lenKm);
+      }
+
+      if (startNode === -1 || targetNode === -1) continue;
+
+      // Ejecutar Dijkstra desde startNode hasta targetNode sobre los sub-segmentos reales
+      const dist = new Float64Array(nodes.length).fill(Infinity);
+      const prev = new Int32Array(nodes.length).fill(-1);
+      dist[startNode] = 0;
+      const pq = [{ u: startNode, d: 0 }];
+      const maxSearchKm = maxAllowedKm * 1.25;
+      let found = false;
 
       while (pq.length) {
-        pq.sort((x, y) => x.d - y.d);
-        const { u, d } = pq.shift();
-        if (d > (distMap.get(u) ?? Infinity)) continue;
-        if (d > limitKm) break;
-
-        if (targetNodes.has(u)) {
-          const rem = (u === metaB.startNode) ? snapB.distFromStart : (metaB.totalW - snapB.distFromStart);
-          if (d + rem < bestTotal) {
-            bestTotal = d + rem;
-            bestTarget = u;
-          }
+        // Extraer el mínimo
+        let minIdx = 0;
+        for (let k = 1; k < pq.length; k++) {
+          if (pq[k].d < pq[minIdx].d) minIdx = k;
         }
+        const { u, d } = pq[minIdx];
+        pq[minIdx] = pq[pq.length - 1];
+        pq.pop();
 
-        const uNode = nodes[u];
-        if (!uNode) continue;
-        for (const edge of uNode.adj) {
-          const nd = d + edge.w;
-          if (nd <= limitKm && nd < (distMap.get(edge.to) ?? Infinity)) {
-            distMap.set(edge.to, nd);
-            prevMap.set(edge.to, { prevNode: u, edge });
-            pq.push({ u: edge.to, d: nd });
+        if (d > dist[u]) continue;
+        if (u === targetNode) { found = true; break; }
+        if (d > maxSearchKm) continue;
+
+        const adj = nodes[u].adj;
+        for (let k = 0; k < adj.length; k++) {
+          const ed = adj[k];
+          const nd = d + ed.w;
+          if (nd <= maxSearchKm && nd < dist[ed.to]) {
+            dist[ed.to] = nd;
+            prev[ed.to] = u;
+            pq.push({ u: ed.to, d: nd });
           }
         }
       }
 
-      if (bestTarget !== null && bestTotal <= maxAllowedKm) {
-        // Reconstruir los tramos intermedios del camino en el grafo
-        const edgesChain = [];
-        let curr = bestTarget;
-        while (curr !== undefined) {
-          const info = prevMap.get(curr);
-          if (!info || info.init) break;
-          edgesChain.push(info.edge);
-          curr = info.prevNode;
+      if (found && dist[targetNode] <= maxAllowedKm) {
+        const pathCoords = [];
+        let curr = targetNode;
+        while (curr !== -1) {
+          pathCoords.push([nodes[curr].lat, nodes[curr].lon]);
+          curr = prev[curr];
         }
-        edgesChain.reverse();
-
-        const firstInfo = prevMap.get(curr);
-        const lineA = st.ways[snapA.wayIdx];
-        const endSegA = firstInfo.toStart ? 0 : lineA.length - 2;
-        const endTA   = firstInfo.toStart ? 0 : 1;
-        const endPtA  = firstInfo.toStart ? lineA[0] : lineA[lineA.length - 1];
-        const coords = sliceWayCoords(lineA, snapA.segIdx, snapA.t, ptA, endSegA, endTA, endPtA);
-
-        for (const ed of edgesChain) {
-          const wLine = st.ways[ed.wayIdx];
-          if (ed.forward) {
-            for (let k = 1; k < wLine.length; k++) coords.push(wLine[k]);
-          } else {
-            for (let k = wLine.length - 2; k >= 0; k--) coords.push(wLine[k]);
-          }
-        }
-
-        const lineB = st.ways[snapB.wayIdx];
-        const startFromB0 = (bestTarget === metaB.startNode);
-        const startSegB = startFromB0 ? 0 : lineB.length - 2;
-        const startTB   = startFromB0 ? 0 : 1;
-        const startPtB  = startFromB0 ? lineB[0] : lineB[lineB.length - 1];
-        const coordsB = sliceWayCoords(lineB, startSegB, startTB, startPtB, snapB.segIdx, snapB.t, ptB);
-        for (let k = 1; k < coordsB.length; k++) coords.push(coordsB[k]);
-
-        return { distKm: Math.max(bestTotal, straightD * 0.95), pathCoords: [[a.lat, a.lon], ...coords, [b.lat, b.lon]] };
+        pathCoords.reverse();
+        return { distKm: dist[targetNode], pathCoords, snapA, snapB };
       }
     }
 
-    // Respaldo: si aún se está descargando la capa OSM o hay un pequeño hueco cartográfico en una vía recta
-    if (straightD <= maxAllowedKm) {
-      return { distKm: straightD, pathCoords: [[a.lat, a.lon], [b.lat, b.lon]] };
-    }
     return null;
   }
 
@@ -1091,7 +1050,7 @@
   }
 
   function applyTrackWays(st, ways) {
-    buildTrackGraph(st, ways);
+    indexTrackWays(st, ways);
     st.poly = L.polyline(ways, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
     st.n = ways.length;
     st.loaded = true;
@@ -1328,7 +1287,7 @@
     const isCercSource = el.source.value === "visor" || el.source.value === "gtfsrt";
     const tipo = isCercSource ? "CERCANÍAS" : resolveTrainType(item, label);
 
-    const trainObj = { id: String(id).trim(), label: String(label).trim(), lat, lon, raw, tipo };
+    const trainObj = { id: String(id).trim(), label: String(label).trim(), lat, lon, drawLat: lat, drawLon: lon, raw, tipo };
     updateTrainKinematics(trainObj);
     return trainObj;
   }
@@ -1374,22 +1333,51 @@
     };
   }
 
-  function getTrainTrackGroup(t) {
+  /* ---------- Clasificación de Vía Activa e Imantado del Tren al Raíl ---------- */
+  function assignTrainTrackAndSnap(t) {
     const tipo = (t.tipo || "").toUpperCase();
-    if (tipo === "AVE" || tipo === "AVLO" || tipo === "AVANT") return "AV";
-    if (tipo === "MD" || tipo === "REGIONAL" || tipo === "REG.EXP" || tipo === "CERCANÍAS") return "CONV";
+    const sAV = TRACKS.av.loaded ? snapToTrackLayer(TRACKS.av, t.lat, t.lon) : null;
+    const sMD = TRACKS.md.loaded ? snapToTrackLayer(TRACKS.md, t.lat, t.lon) : null;
+    const dAV = sAV ? sAV.distToTrack : Infinity;
+    const dMD = sMD ? sMD.distToTrack : Infinity;
 
-    if (isFinite(t.calcSpeed) && t.calcSpeed > 205) return "AV";
-    const dAV = TRACKS.av.loaded ? minDistInGrid(TRACKS.av.grid, t.lat, t.lon) : Infinity;
-    const dMD = TRACKS.md.loaded ? minDistInGrid(TRACKS.md.grid, t.lat, t.lon) : Infinity;
-    if (dAV <= 1.2 && dAV < dMD * 0.8) return "AV";
-    if (dMD <= 1.2 && dMD < dAV * 0.8) return "CONV";
-    return "HYB";
+    let group = "HYB";
+    let bestSnap = null;
+
+    if (tipo === "AVE" || tipo === "AVLO" || tipo === "AVANT") {
+      group = "AV";
+      bestSnap = sAV;
+    } else if (tipo === "MD" || tipo === "REGIONAL" || tipo === "REG.EXP" || tipo === "CERCANÍAS") {
+      group = "CONV";
+      bestSnap = sMD;
+    } else {
+      if (isFinite(t.calcSpeed) && t.calcSpeed > 205) {
+        group = "AV";
+        bestSnap = sAV;
+      } else if (dAV <= 1.2 && dAV < dMD * 0.85) {
+        group = "AV";
+        bestSnap = sAV;
+      } else if (dMD <= 1.2 && dMD < dAV * 0.85) {
+        group = "CONV";
+        bestSnap = sMD;
+      } else {
+        bestSnap = dAV <= dMD ? sAV : sMD;
+      }
+    }
+
+    t.trackGroup = group;
+    // Si el tren está a menos de 800m de su vía, lo imantamos visualmente sobre el raíl
+    if (bestSnap && bestSnap.distToTrack <= 0.8) {
+      t.drawLat = bestSnap.snapLat;
+      t.drawLon = bestSnap.snapLon;
+    } else {
+      t.drawLat = t.lat;
+      t.drawLon = t.lon;
+    }
   }
 
   function isSameTrackGroup(a, b) {
-    const gA = a.trackGroup || getTrainTrackGroup(a);
-    const gB = b.trackGroup || getTrainTrackGroup(b);
+    const gA = a.trackGroup, gB = b.trackGroup;
     if ((gA === "AV" && gB === "CONV") || (gA === "CONV" && gB === "AV")) return false;
     return true;
   }
@@ -1528,7 +1516,7 @@
       t.inStation = isInStationArea(t.lat, t.lon, 2.2);
       t.isFast = isConfirmedHighSpeed(t, minSpeed);
       t._info = trainInfo(t);
-      t.trackGroup = getTrainTrackGroup(t);
+      assignTrainTrackAndSnap(t);
       t.routeVec = getRouteVector(t);
     });
 
@@ -1546,19 +1534,27 @@
         // 1. FILTRO DE TIPO DE VÍA
         if (!isSameTrackGroup(a, b)) continue;
 
-        // Filtro rápido Haversine (la distancia por curva nunca es menor que la línea recta)
+        // Filtro rápido Haversine (la distancia por vía nunca es menor que la línea recta)
         const straightD = haversine(a.lat, a.lon, b.lat, b.lon);
         if (straightD >= tO) continue;
 
         // 2. FILTRO ESTRICTO DE SENTIDO DE LA MARCHA
         if (!areMovingSameDirection(a, b)) continue;
 
-        // 3. CÁLCULO DE DISTANCIA Y TRAZADO REAL POR LA VÍA
-        const trackRoute = computeTrackRoute(a, b, tO);
-        if (!trackRoute || trackRoute.distKm >= tO) continue;
+        // 3. CÁLCULO DE DISTANCIA Y TRAZADO REAL SOBRE LA VÍA
+        const anyLayerLoaded = TRACKS.av.loaded || TRACKS.md.loaded;
+        let d = straightD;
+        let pathCoords = null;
 
-        const d = trackRoute.distKm;
-        const pathCoords = trackRoute.pathCoords;
+        if (anyLayerLoaded) {
+          const trackRoute = computeLocalTrackRoute(a, b, tO);
+          if (!trackRoute || trackRoute.distKm >= tO) continue; // Si no están conectados por la misma vía dentro del umbral, se descarta
+          d = trackRoute.distKm;
+          pathCoords = trackRoute.pathCoords;
+        } else {
+          // Solo mientras termina la carga inicial de las vías
+          pathCoords = [[a.drawLat, a.drawLon], [b.drawLat, b.drawLon]];
+        }
 
         const order = getTrailingAndLeading(a, b);
         let pairSeverity = "orange";
@@ -1706,30 +1702,30 @@
       alive.add(t.id);
       let m = markers.get(t.id);
       const z = t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0;
+      const pos = [t.drawLat ?? t.lat, t.drawLon ?? t.lon];
       if (!m) {
-        m = L.marker([t.lat, t.lon], { icon: makeIcon(t.color), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
+        m = L.marker(pos, { icon: makeIcon(t.color), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
         m.bindTooltip(() => tipHtml(m._train), { direction: "top", offset: [0, -16], className: "trtip" });
         m.bindPopup(() => popupHtml(m._train), { maxWidth: 340 });
         m._color = t.color;
         markers.set(t.id, m);
       } else {
-        m.setLatLng([t.lat, t.lon]);
+        m.setLatLng(pos);
         if (m._color !== t.color) { m.setIcon(makeIcon(t.color)); m.setZIndexOffset(z); m._color = t.color; }
       }
       m._train = t;
     });
     for (const [id, m] of markers) if (!alive.has(id)) { map.removeLayer(m); markers.delete(id); }
 
-    // Dibujar unión siguiendo el trazado real de la vía entre los trenes en alerta
+    // Dibujar unión siguiendo exactamente los vértices de la vía entre ambos trenes
     linesLayer.clearLayers();
     if (el.showLines.checked) {
       pairs.forEach(p => {
-        if (!p.a.visible || !p.b.visible) return;
+        if (!p.a.visible || !p.b.visible || !p.pathCoords || p.pathCoords.length < 2) return;
         const col = p.severity === "red" ? COLORS.red : COLORS.orange;
-        const coords = (p.pathCoords && p.pathCoords.length >= 2) ? p.pathCoords : [[p.a.lat, p.a.lon], [p.b.lat, p.b.lon]];
-        // Halo blanco inferior para destacar el tramo de vía afectado
-        L.polyline(coords, { renderer: canvas, color: "#ffffff", weight: p.severity === "red" ? 8 : 6, opacity: 0.85, interactive: false }).addTo(linesLayer);
-        L.polyline(coords, { renderer: canvas, color: col, weight: p.severity === "red" ? 5 : 4, opacity: 0.98, interactive: false }).addTo(linesLayer);
+        // Halo blanco para que resalte sobre la línea morada/azul de la vía
+        L.polyline(p.pathCoords, { renderer: canvas, color: "#ffffff", weight: p.severity === "red" ? 9 : 7, opacity: 0.9, interactive: false }).addTo(linesLayer);
+        L.polyline(p.pathCoords, { renderer: canvas, color: col, weight: p.severity === "red" ? 5.5 : 4.5, opacity: 1.0, interactive: false }).addTo(linesLayer);
       });
     }
 
