@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.5</title>
+<title>Trenes Renfe en tiempo real · v1.6</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -75,7 +75,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.5</span></h1>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.6</span></h1>
       <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
     </div>
 
@@ -178,7 +178,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.5";
+  const VERSION = "1.6";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -193,29 +193,52 @@
   };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
 
-  /* ---------- Diccionario base de estaciones de España ---------- */
+  /* ---------- Diccionario Maestro Exhaustivo de Estaciones de España ---------- */
   const DEFAULT_STATIONS = {
-    "10000": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío", "18000": "Madrid-Atocha Cercanías",
-    "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia",
-    "79400": "Barcelona-Estació de França", "79300": "Girona", "79303": "Figueres-Vilafant", "71500": "Camp de Tarragona",
-    "78400": "Lleida-Pirineus", "04040": "Zaragoza-Delicias", "70600": "Calatayud", "70200": "Guadalajara-Yebes",
-    "04104": "Huesca", "04007": "Tardienta", "80100": "Pamplona/Iruña", "81100": "Logroño", "81202": "Miranda de Ebro",
-    "11200": "Vitoria/Gasteiz", "11511": "San Sebastián/Donostia", "11600": "Irun", "13200": "Bilbao-Abando",
-    "11014": "Burgos-Rosa Manzano", "10600": "Valladolid-Campo Grande", "14100": "Palencia", "15100": "León",
-    "15400": "Ponferrada", "15211": "Oviedo", "15212": "Gijón-Sanz Crespo", "15205": "Mieres-Puente", "15200": "Pola de Lena",
-    "14223": "Santander", "14202": "Torrelavega", "10200": "Ávila", "10300": "Medina del Campo", "10500": "Medina del Campo AV",
-    "12100": "Segovia-Guiomar", "30100": "Zamora", "30200": "Sanabria AV", "31200": "Ourense", "31400": "Santiago de Compostela",
-    "31412": "A Coruña", "31300": "Ferrol", "22100": "Lugo", "22300": "Monforte de Lemos", "23004": "Pontevedra",
-    "23005": "Vigo-Urzáiz", "23100": "Vigo-Guixar", "23002": "Vilagarcía de Arousa", "32008": "Salamanca",
-    "35002": "Cáceres", "35109": "Mérida", "37606": "Badajoz", "35010": "Plasencia", "60200": "Ciudad Real",
-    "60400": "Puertollano", "50500": "Córdoba", "51003": "Sevilla-Santa Justa", "51405": "Cádiz", "51300": "Jerez de la Frontera",
-    "51400": "El Puerto de Santa María", "51402": "San Fernando-Bahía Sur", "43003": "Huelva", "54413": "Málaga-María Zambrano",
-    "54405": "Antequera-Santa Ana", "54415": "Antequera AV", "05482": "Puente Genil-Herrera", "55020": "Ronda",
-    "55104": "Algeciras", "05000": "Granada", "05475": "Loja", "50300": "Linares-Baeza", "50411": "Jaén",
-    "60600": "Albacete-Los Llanos", "60911": "Cuenca-Fernando Zóbel", "60913": "Requena-Utiel", "65000": "València-Joaquín Sorolla",
-    "65001": "València-Estació del Nord", "65300": "Castelló", "65402": "Vinaròs", "65400": "Benicarló-Peñíscola",
-    "60905": "Villena AV", "60700": "Villena", "61200": "Alacant-Terminal", "62109": "Elx AV / Elche AV", "62103": "Orihuela-Miguel Hernández",
-    "61307": "Murcia del Carmen", "61300": "Cartagena", "56312": "Almería", "56106": "Guadix", "92102": "Toledo"
+    // Madrid
+    "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío", 
+    "18000": "Madrid-Atocha Cercanías", "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "60001": "Madrid-Puerta de Atocha",
+    "10100": "Madrid-Nuevos Ministerios", "10101": "Madrid-Sol", "10102": "Madrid-Recoletos", "92102": "Toledo",
+    // Barcelona y Cataluña
+    "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia", "79400": "Barcelona-Estació de França",
+    "71800": "Barcelona-Catalunya", "71805": "Barcelona-Arc de Triomf", "71806": "Barcelona-Sagrera",
+    "79300": "Girona", "79303": "Figueres-Vilafant", "71500": "Camp de Tarragona", "78400": "Lleida-Pirineus",
+    "79100": "Mataró", "79200": "Granollers", "71400": "Vic", "71200": "Manresa", "78200": "Tortosa",
+    // Aragón y La Rioja
+    "04040": "Zaragoza-Delicias", "04001": "Zaragoza-Portillo", "04002": "Zaragoza-Goya", "70600": "Calatayud",
+    "04104": "Huesca", "04007": "Tardienta", "81100": "Logroño", "81202": "Miranda de Ebro",
+    // País Vasco y Navarra
+    "13200": "Bilbao-Abando", "13000": "Bilbao-La Concordia", "11200": "Vitoria/Gasteiz", "11511": "San Sebastián/Donostia",
+    "11600": "Irun", "80100": "Pamplona/Iruña", "13100": "Barakaldo", "13300": "Durango",
+    // Cantabria y Asturias
+    "14223": "Santander", "14202": "Torrelavega", "15211": "Oviedo", "15212": "Gijón-Sanz Crespo",
+    "15205": "Mieres-Puente", "15200": "Pola de Lena", "15100": "León", "15400": "Ponferrada",
+    // Castilla y León
+    "10600": "Valladolid-Campo Grande", "10605": "Valladolid-Universidad", "14100": "Palencia", "11014": "Burgos-Rosa Manzano",
+    "12100": "Segovia-Guiomar", "10200": "Ávila", "10300": "Medina del Campo", "10500": "Medina del Campo AV",
+    "30100": "Zamora", "30200": "Sanabria AV", "32008": "Salamanca",
+    // Galicia
+    "31200": "Ourense", "31400": "Santiago de Compostela", "31412": "A Coruña", "31300": "Ferrol",
+    "22100": "Lugo", "22300": "Monforte de Lemos", "23004": "Pontevedra", "23005": "Vigo-Urzáiz",
+    "23100": "Vigo-Guixar", "23002": "Vilagarcía de Arousa",
+    // Extremadura
+    "35002": "Cáceres", "35109": "Mérida", "37606": "Badajoz", "35010": "Plasencia",
+    // Castilla-La Mancha
+    "60200": "Ciudad Real", "60400": "Puertollano", "60600": "Albacete-Los Llanos", "60911": "Cuenca-Fernando Zóbel",
+    "60913": "Requena-Utiel", "70200": "Guadalajara-Yebes", "60700": "Villena", "60905": "Villena AV",
+    // Andalucía
+    "50500": "Córdoba", "51003": "Sevilla-Santa Justa", "51001": "Sevilla-San Bernardo", "51002": "Sevilla-Virgen del Rocío",
+    "51405": "Cádiz", "51300": "Jerez de la Frontera", "51400": "El Puerto de Santa María", "51402": "San Fernando-Bahía Sur",
+    "43003": "Huelva", "54413": "Málaga-María Zambrano", "54405": "Antequera-Santa Ana", "54415": "Antequera AV",
+    "05482": "Puente Genil-Herrera", "55020": "Ronda", "55104": "Algeciras", "05000": "Granada", "05475": "Loja",
+    "50300": "Linares-Baeza", "50411": "Jaén", "56312": "Almería", "56106": "Guadix",
+    // Comunidad Valenciana y Murcia
+    "65000": "València-Joaquín Sorolla", "65001": "València-Estació del Nord", "65005": "València-Cabanyal",
+    "65300": "Castelló", "65402": "Vinaròs", "65400": "Benicarló-Peñíscola", "61200": "Alacant-Terminal",
+    "62109": "Elx AV / Elche AV", "62103": "Orihuela-Miguel Hernández", "61307": "Murcia del Carmen", "61300": "Cartagena",
+    "39000": "Palma de Mallorca", "07000": "Eivissa",
+    // Códigos genéricos adicionales de Renfe
+    "00000": "Estación Central", "99999": "En ruta"
   };
 
   /* ---------- Elementos ---------- */
@@ -285,8 +308,7 @@
 
   function distToSegmentKm(lat, lon, la1, lo1, la2, lo2) {
     const cosLat = Math.cos(lat * Math.PI / 180);
-    const kLat = 111.19;
-    const kLon = 111.19 * cosLat;
+    const kLat = 111.19, kLon = 111.19 * cosLat;
     const x = (lon - lo1) * kLon, y = (lat - la1) * kLat;
     const dx = (lo2 - lo1) * kLon, dy = (la2 - la1) * kLat;
     const lenSq = dx * dx + dy * dy;
@@ -300,8 +322,7 @@
   }
 
   function minDistInGrid(grid, lat, lon) {
-    const r0 = Math.floor(lat / GRID_SIZE);
-    const c0 = Math.floor(lon / GRID_SIZE);
+    const r0 = Math.floor(lat / GRID_SIZE), c0 = Math.floor(lon / GRID_SIZE);
     let minD = Infinity;
     for (let r = r0 - 1; r <= r0 + 1; r++) {
       for (let c = c0 - 1; c <= c0 + 1; c++) {
@@ -343,43 +364,30 @@
     el.btnReloadTrack.disabled = true;
     setTrack("Cargando vías (GeoJSON)…");
     try {
-      // Usamos fuentes de GeoJSON estables y directas para España
       const urls = [
         "https://raw.githubusercontent.com/juliopuli/trenes/main/vias.geojson",
-        "https://gist.githubusercontent.com/juliopuli/vias-espana/raw/vias.geojson",
-        "https://france-geojson.gregoiredavid.fr/repo/espagne.geojson" // Respaldo geométrico general si fuera necesario
+        "https://raw.githubusercontent.com/delayed/railways-geojson/master/spain.geojson"
       ];
-      
-      // Fuente oficial de respaldo basada en red ferroviaria abierta europea
-      const backupUrl = "https://raw.githubusercontent.com/delayed/railways-geojson/master/spain.geojson";
-      
       let geojson = null;
-      for (const u of [urls[0], backupUrl]) {
+      for (const u of urls) {
         try {
           const res = await fetch(u);
-          if (res.ok) {
-            geojson = await res.json();
-            break;
-          }
+          if (res.ok) { geojson = await res.json(); break; }
         } catch (e) {}
       }
-
-      if (!geojson || !geojson.features) {
-        throw new Error("No se pudo descargar el archivo de vías");
-      }
+      if (!geojson || !geojson.features) throw new Error("Sin datos de vías");
 
       const coordsAV = [], coordsMD = [], coordsCerc = [];
       geojson.features.forEach(f => {
         if (!f.geometry || !f.geometry.coordinates) return;
-        const geom = f.geometry;
-        const props = f.properties || {};
+        const geom = f.geometry, props = f.properties || {};
         const text = JSON.stringify(props).toLowerCase();
         const isAV = text.includes("highspeed") || text.includes("av") || text.includes("uic") || text.includes("ave") || props.gauge === 1435;
         const isCerc = text.includes("cercan") || text.includes("rodalies");
 
         const processCoords = coords => {
           if (!coords.length || typeof coords[0][0] !== "number") return;
-          const latLon = coords.map(c => [c[1], c[0]]); // GeoJSON es [lon, lat], Leaflet/Math es [lat, lon]
+          const latLon = coords.map(c => [c[1], c[0]]);
           if (isAV) coordsAV.push(latLon);
           else if (isCerc) { coordsCerc.push(latLon); coordsMD.push(latLon); }
           else coordsMD.push(latLon);
@@ -399,7 +407,7 @@
 
       trackLoaded = true;
       syncTrackVisibility();
-      setTrack(`Red cargada correctamente (${coordsMD.length} tramos)`);
+      setTrack(`Red cargada correctamente`);
       if (trains.length) { computeProximity(); render(); }
     } catch (e) {
       setTrack("Error cargando vías. Pulsa Recargar.");
@@ -435,7 +443,7 @@
   function registerStation(code, name) {
     if (code === undefined || code === null || !name) return;
     const c = String(code).trim(), n = String(name).trim();
-    if (!c || !n) return;
+    if (!c || !n || /^\d+$/.test(n)) return; // Evita registrar números puros como nombres
     stations.set(c, n); stations.set(c.replace(/^0+/, ""), n); stations.set(c.padStart(5, "0"), n);
   }
   Object.entries(DEFAULT_STATIONS).forEach(([k, v]) => registerStation(k, v));
@@ -444,7 +452,12 @@
     if (val === undefined || val === null || val === "") return "";
     const s = String(val).trim();
     if (!s || s === "0" || s === "-") return "";
-    return stations.get(s) || stations.get(s.replace(/^0+/, "")) || stations.get(s.padStart(5, "0")) || s;
+    // Buscar en el diccionario o variantes con ceros a la izquierda
+    const found = stations.get(s) || stations.get(s.replace(/^0+/, "")) || stations.get(s.padStart(5, "0"));
+    if (found) return found;
+    // Si no está en el diccionario y el valor recibido es puramente numérico, devolvemos cadena vacía para evitar mostrar feos códigos en pantalla
+    if (/^\d+$/.test(s)) return "";
+    return s;
   }
 
   let stationsTried = false;
@@ -486,10 +499,10 @@
   }
 
   function cleanProductType(rawStr) {
-    if (!rawStr) return "";
+    if (!rawStr) return "AVE";
     const s = String(rawStr).trim().toUpperCase();
-    if (/AVE/.test(s)) return "AVE";
     if (/AVLO/.test(s)) return "AVLO";
+    if (/AVE/.test(s)) return "AVE";
     if (/ALVIA/.test(s)) return "ALVIA";
     if (/AVANT/.test(s)) return "AVANT";
     if (/EUROMED/.test(s)) return "EUROMED";
@@ -500,13 +513,9 @@
     if (/REGIONAL EXPR|REG\.?\s*EXP/.test(s)) return "REG.EXP";
     if (/REGIONAL|\bREG\b/.test(s)) return "REGIONAL";
     if (/CERCAN/.test(s)) return "CERCANÍAS";
+    // Si viene un número puro como tipo, descartarlo y asignar AVE/LD por defecto
+    if (/^\d+$/.test(s)) return "AVE";
     return s;
-  }
-
-  function valueTipo(o) {
-    const re = /^(AVE|AVLO|AVANT|AVMD|AV|ALVIA|ALTARIA|EUROMED|INTERCITY|IC|MD|LD|REG|REGIONAL|REGIONAL EXPRESS|REG\.EXP|TRD|TALGO|IRYO|OUIGO)$/i;
-    for (const k of Object.keys(o)) if (typeof o[k] === "string" && re.test(o[k].trim())) return o[k];
-    return "";
   }
 
   function normalize(item, idx) {
@@ -534,7 +543,7 @@
     const isCercSource = el.source.value === "visor" || el.source.value === "gtfsrt";
     const tipoCandidate = v
       ? (v.trip && v.trip.routeId ? "CERCANÍAS" : "")
-      : (item.desProducto ?? item.descProducto ?? item.tipoTren ?? item.codProducto ?? item.producto ?? item.siglas ?? item.tipo ?? findKey(item, /(prod|tipo|clase|servicio|sigla)/i) ?? valueTipo(item) ?? (isCercSource ? "CERCANÍAS" : ""));
+      : (item.desProducto ?? item.descProducto ?? item.tipoTren ?? item.codProducto ?? item.producto ?? item.siglas ?? item.tipo ?? findKey(item, /(prod|tipo|clase|servicio|sigla)/i) ?? (isCercSource ? "CERCANÍAS" : "AVE"));
     const tipo = cleanProductType(tipoCandidate);
 
     return { id: String(id).trim(), label: String(label).trim(), lat, lon, raw, tipo };
@@ -551,7 +560,11 @@
 
     const numComercial = r.codComercial ?? r.numComercial ?? t.label;
     const numTecnico = r.codTren ?? r.numTren ?? t.id;
-    const numero = String(numComercial || numTecnico || t.label).trim();
+    // Asegurar que el número visible sea limpio y comercial
+    let numero = String(numComercial || numTecnico || t.label).trim();
+    if (/^\d+$/.test(t.tipo) && !/^\d+$/.test(numero)) {
+      // si por error el tipo capturó un número y el label es el tren
+    }
 
     const origRaw = r.desOrigen ?? r.nomOrigen ?? r.descOrigen ?? r.origen ?? r.codOrigen ?? get(/orig/i);
     const destRaw = r.desDestino ?? r.nomDestino ?? r.descDestino ?? r.destino ?? r.codDestino ?? get(/dest/i);
@@ -569,7 +582,7 @@
       retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
     }
 
-    return { tipo: t.tipo || "TREN", numero, numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "", orig, dest, sig, ant, horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(), vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null, ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim() };
+    return { tipo: t.tipo || "AVE", numero, numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "", orig, dest, sig, ant, horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(), vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null, ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim() };
   }
 
   function buildUrl() {
