@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trenes Renfe en tiempo real</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --text:#1b1f24; --muted:#667085; --line:#e3e6ea;
+    --accent:#1d4ed8; --red:#e53935; --orange:#fb8c00; --green:#43a047;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#14171b; --panel:#1c2026; --text:#e8eaed; --muted:#9aa3ad; --line:#2d333b; --accent:#6ea0ff; }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
+  #app{display:grid;grid-template-columns:340px 1fr;height:100%}
+  #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:14px 14px 24px;display:flex;flex-direction:column;gap:14px}
+  #map{height:100%;width:100%;background:#cfd8e3}
+  h1{font-size:17px;margin:0 0 2px}
+  .sub{font-size:12px;color:var(--muted)}
+  fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
+  legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
+  label{display:block;font-size:13px;margin:6px 0 3px}
+  input[type=text],input[type=number],select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px}
+  .row{display:flex;gap:8px}
+  .row>*{flex:1}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0;cursor:pointer}
+  .dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25)}
+  .chk .n{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
+  button{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:hover{filter:brightness(.96)}
+  #status{font-size:12px;color:var(--muted);line-height:1.4}
+  #status.err{color:var(--red)}
+  #pairs{max-height:240px;overflow-y:auto;font-size:12px}
+  .pair{display:flex;justify-content:space-between;gap:6px;padding:5px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+  .pair:hover{background:var(--bg)}
+  .pair .d{font-weight:600;font-variant-numeric:tabular-nums}
+  .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
+  @media (max-width:760px){
+    #app{grid-template-columns:1fr;grid-template-rows:46% 54%}
+    #side{order:2;border-right:0;border-top:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div>
+      <h1>🚆 Trenes Renfe en tiempo real</h1>
+      <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
+    </div>
+
+    <fieldset>
+      <legend>Datos</legend>
+      <label for="source">Fuente</label>
+      <select id="source">
+        <option value="visor">Renfe · visor de flota (flota.json)</option>
+        <option value="gtfsrt">Renfe · GTFS-RT (vehicle_positions.json)</option>
+        <option value="custom">URL personalizada (JSON)</option>
+        <option value="demo">Demo (trenes simulados)</option>
+      </select>
+      <div id="customWrap" style="display:none">
+        <label for="customUrl">URL JSON</label>
+        <input type="text" id="customUrl" placeholder="https://...">
+      </div>
+      <label for="proxy">Proxy CORS (opcional)</label>
+      <input type="text" id="proxy" placeholder="https://mi-proxy/?url={url}">
+      <div class="row" style="margin-top:8px">
+        <div>
+          <label for="interval" style="margin-top:0">Actualizar cada</label>
+          <select id="interval">
+            <option value="5">5 s</option>
+            <option value="10">10 s</option>
+            <option value="15" selected>15 s</option>
+            <option value="30">30 s</option>
+            <option value="60">60 s</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="btnRefresh">Actualizar ahora</button>
+        <button id="btnPause">Pausar</button>
+      </div>
+      <div id="status" style="margin-top:8px">Iniciando…</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Umbrales de proximidad</legend>
+      <div class="row">
+        <div><label for="thRed">Rojo &lt; (km)</label><input type="number" id="thRed" value="3" min="0.1" step="0.5"></div>
+        <div><label for="thOrange">Naranja &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.2" step="0.5"></div>
+      </div>
+      <div class="help">Más lejos del umbral naranja → verde. Cada tren se colorea según el tren más cercano.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Mostrar</legend>
+      <label class="chk"><input type="checkbox" id="showRed" checked><span class="dot" style="background:var(--red)"></span>Peligro (rojo)<span class="n" id="nRed">0</span></label>
+      <label class="chk"><input type="checkbox" id="showOrange" checked><span class="dot" style="background:var(--orange)"></span>Cerca (naranja)<span class="n" id="nOrange">0</span></label>
+      <label class="chk"><input type="checkbox" id="showGreen" checked><span class="dot" style="background:var(--green)"></span>Sin cercanos (verde)<span class="n" id="nGreen">0</span></label>
+      <label class="chk"><input type="checkbox" id="showLines" checked>Unir con línea los trenes cercanos</label>
+      <label for="search">Buscar tren / línea / núcleo</label>
+      <input type="text" id="search" placeholder="p. ej. 03123, C1, Madrid…">
+      <div class="sub" style="margin-top:6px">Trenes en pantalla: <b id="nTotal">0</b></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Trenes cercanos (más próximos primero)</legend>
+      <div id="pairs"><div class="sub">Sin datos todavía.</div></div>
+    </fieldset>
+
+    <div class="help">
+      Distancia calculada en línea recta (fórmula de Haversine) entre posiciones GPS.
+      Dos trenes parados en la misma estación o en vías paralelas también cuentan como cercanos.
+    </div>
+  </aside>
+  <main id="map"></main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  /* ---------- Configuración ---------- */
+  const SOURCES = {
+    visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
+    gtfsrt: "https://gtfsrt.renfe.com/vehicle_positions.json"
+  };
+  const COLORS = { red: "#e53935", orange: "#fb8c00", green: "#43a047" };
+  const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 }; // incluye Canarias
+
+  /* ---------- Elementos ---------- */
+  const $ = id => document.getElementById(id);
+  const el = {
+    source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
+    interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
+    thRed: $("thRed"), thOrange: $("thOrange"),
+    showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
+    search: $("search"), nRed: $("nRed"), nOrange: $("nOrange"), nGreen: $("nGreen"), nTotal: $("nTotal"),
+    pairs: $("pairs")
+  };
+
+  /* ---------- Mapa ---------- */
+  const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    maxZoom: 19, subdomains: "abcd",
+    attribution: "&copy; colaboradores de OpenStreetMap &copy; CARTO"
+  }).addTo(map);
+  const canvas = L.canvas({ padding: 0.5 });
+  const linesLayer = L.layerGroup().addTo(map);
+
+  /* ---------- Estado ---------- */
+  let trains = [];            // [{id,label,lat,lon,raw,d,color}]
+  const markers = new Map();  // id -> L.circleMarker
+  let pairs = [];
+  let timer = null;
+  let paused = false;
+  let loading = false;
+
+  /* ---------- Utilidades ---------- */
+  const toNum = v => {
+    if (v === null || v === undefined || v === "") return NaN;
+    return parseFloat(String(v).replace(",", "."));
+  };
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const R = 6371.0088;
+  const rad = x => x * Math.PI / 180;
+  function haversine(la1, lo1, la2, lo2) {
+    const dLa = rad(la2 - la1), dLo = rad(lo2 - lo1);
+    const a = Math.sin(dLa / 2) ** 2 + Math.cos(rad(la1)) * Math.cos(rad(la2)) * Math.sin(dLo / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  }
+  const fmtKm = d => d < 1 ? Math.round(d * 1000) + " m" : d.toFixed(2) + " km";
+  function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
+
+  /* ---------- Parseo de datos (admite varios formatos) ---------- */
+  function extractList(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.trenes)) return data.trenes;
+    if (data && Array.isArray(data.entity)) return data.entity;
+    if (data && Array.isArray(data.vehicles)) return data.vehicles;
+    if (data && Array.isArray(data.data)) return data.data;
+    // último recurso: primer array de objetos que encuentre
+    if (data && typeof data === "object") {
+      for (const k of Object.keys(data)) if (Array.isArray(data[k]) && data[k].length && typeof data[k][0] === "object") return data[k];
+    }
+    return [];
+  }
+  function normalize(item, idx) {
+    const v = item.vehicle && typeof item.vehicle === "object" && item.vehicle.position ? item.vehicle : null; // GTFS-RT
+    const pos = v ? v.position : item;
+    const lat = toNum(pos.latitud ?? pos.lat ?? pos.latitude ?? pos.Latitud);
+    const lon = toNum(pos.longitud ?? pos.lon ?? pos.lng ?? pos.long ?? pos.longitude ?? pos.Longitud);
+    if (!isFinite(lat) || !isFinite(lon)) return null;
+    if (lat < SPAIN_BOUNDS.latMin || lat > SPAIN_BOUNDS.latMax || lon < SPAIN_BOUNDS.lonMin || lon > SPAIN_BOUNDS.lonMax) return null;
+    let id, label, raw = {};
+    if (v) {
+      id = (v.vehicle && (v.vehicle.id || v.vehicle.label)) || item.id || ("v" + idx);
+      label = (v.vehicle && v.vehicle.label) || (v.trip && v.trip.tripId) || id;
+      raw = { Tren: label, Viaje: v.trip && v.trip.tripId, Línea: v.trip && v.trip.routeId, Velocidad: v.position.speed, Estado: v.currentStatus, Parada: v.stopId };
+    } else {
+      id = item.codTren ?? item.id ?? item.tren ?? item.trainId ?? ("t" + idx);
+      label = item.codComercial ?? item.nombre ?? item.label ?? id;
+      raw = item;
+    }
+    return { id: String(id), label: String(label), lat, lon, raw };
+  }
+
+  /* ---------- Descarga ---------- */
+  function buildUrl() {
+    let url = el.source.value === "custom" ? el.customUrl.value.trim() : SOURCES[el.source.value];
+    if (!url) throw new Error("Indica una URL.");
+    const p = el.proxy.value.trim();
+    if (p) url = p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url);
+    return url;
+  }
+  async function fetchTrains() {
+    if (el.source.value === "demo") return demoTrains();
+    const res = await fetch(buildUrl(), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    const list = extractList(data).map(normalize).filter(Boolean);
+    if (!list.length) throw new Error("La respuesta no contiene trenes con posición.");
+    // eliminar duplicados por id
+    const seen = new Map();
+    list.forEach(t => seen.set(t.id, t));
+    return [...seen.values()];
+  }
+
+  /* ---------- Demo ---------- */
+  const CITIES = {
+    Madrid: [40.4168, -3.7038], Barcelona: [41.3851, 2.1734], Valencia: [39.4699, -0.3763], Sevilla: [37.3891, -5.9845],
+    Málaga: [36.7213, -4.4214], Zaragoza: [41.6488, -0.8891], Bilbao: [43.263, -2.935], Valladolid: [41.6523, -4.7245],
+    Córdoba: [37.8882, -4.7794], Alicante: [38.3452, -0.481], Vigo: [42.2406, -8.7207], Granada: [37.1773, -3.5986],
+    Albacete: [38.9943, -1.8585], Burgos: [42.3439, -3.6969], Salamanca: [40.9701, -5.6635], Toledo: [39.8628, -4.0273]
+  };
+  let demoFleet = null;
+  function makeDemoFleet() {
+    const names = Object.keys(CITIES), fleet = [];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    for (let i = 0; i < 140; i++) {
+      let a = names[Math.floor(Math.random() * names.length)], b;
+      do { b = names[Math.floor(Math.random() * names.length)]; } while (b === a);
+      const km = haversine(...CITIES[a], ...CITIES[b]);
+      const speed = rnd(70, 290);
+      const phase = Math.random();
+      fleet.push({ id: "D" + (10000 + i), a, b, km, speed, phase });
+      if (i % 9 === 0) fleet.push({ id: "D" + (20000 + i), a, b, km, speed: speed * rnd(0.95, 1.05), phase: phase + rnd(0.002, 0.03) }); // trenes en la misma ruta
+    }
+    return fleet;
+  }
+  function demoTrains() {
+    if (!demoFleet) demoFleet = makeDemoFleet();
+    const now = Date.now() / 3600000; // horas
+    return demoFleet.map(f => {
+      let p = (now * f.speed / f.km + f.phase) % 2; if (p > 1) p = 2 - p;
+      const [la1, lo1] = CITIES[f.a], [la2, lo2] = CITIES[f.b];
+      return { id: f.id, label: f.id, lat: la1 + (la2 - la1) * p, lon: lo1 + (lo2 - lo1) * p,
+               raw: { Tren: f.id, Origen: f.a, Destino: f.b, "Velocidad (km/h)": Math.round(f.speed) } };
+    });
+  }
+
+  /* ---------- Proximidad ---------- */
+  function computeProximity() {
+    const tR = Math.max(0, toNum(el.thRed.value) || 3);
+    const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
+    trains.forEach(t => { t.d = Infinity; });
+    const sorted = [...trains].sort((a, b) => a.lat - b.lat);
+    const maxDLat = tO / 111.19; // grados de latitud equivalentes al umbral
+    pairs = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const a = sorted[i];
+      for (let j = i + 1; j < sorted.length; j++) {
+        const b = sorted[j];
+        if (b.lat - a.lat > maxDLat) break;
+        const d = haversine(a.lat, a.lon, b.lat, b.lon);
+        if (d < tO) {
+          if (d < a.d) a.d = d;
+          if (d < b.d) b.d = d;
+          pairs.push({ a, b, d });
+        }
+      }
+    }
+    trains.forEach(t => { t.color = t.d < tR ? "red" : t.d < tO ? "orange" : "green"; });
+    pairs.sort((x, y) => x.d - y.d);
+    return { tR, tO };
+  }
+
+  /* ---------- Pintado ---------- */
+  function popupHtml(t) {
+    const rows = Object.entries(t.raw).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").slice(0, 14)
+      .map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
+    const near = isFinite(t.d) ? `Tren más cercano: <b>${fmtKm(t.d)}</b>` : "Sin trenes cercanos";
+    return `<div style="font-size:12px"><b>${esc(t.label)}</b><br>${near}<table style="margin-top:4px">${rows}</table></div>`;
+  }
+
+  function render() {
+    const q = el.search.value.trim().toLowerCase();
+    const show = { red: el.showRed.checked, orange: el.showOrange.checked, green: el.showGreen.checked };
+    const counts = { red: 0, orange: 0, green: 0 };
+    const alive = new Set();
+    let visible = 0;
+
+    trains.forEach(t => {
+      counts[t.color]++;
+      let ok = show[t.color];
+      if (ok && q) ok = (t.id + " " + t.label + " " + Object.values(t.raw).filter(v => typeof v !== "object").join(" ")).toLowerCase().includes(q);
+      t.visible = ok;
+      if (!ok) return;
+      visible++;
+      alive.add(t.id);
+      let m = markers.get(t.id);
+      const style = { renderer: canvas, radius: t.color === "green" ? 4.5 : 6.5, fillColor: COLORS[t.color], color: "#fff", weight: 1, fillOpacity: 0.95 };
+      if (!m) {
+        m = L.circleMarker([t.lat, t.lon], style).addTo(map);
+        m.bindPopup(() => popupHtml(m._train));
+        markers.set(t.id, m);
+      } else {
+        m.setLatLng([t.lat, t.lon]); m.setStyle(style);
+      }
+      m._train = t;
+      if (t.color !== "green") m.bringToFront();
+    });
+    for (const [id, m] of markers) if (!alive.has(id)) { map.removeLayer(m); markers.delete(id); }
+
+    // líneas entre trenes cercanos
+    linesLayer.clearLayers();
+    if (el.showLines.checked) {
+      pairs.forEach(p => {
+        if (!p.a.visible || !p.b.visible) return;
+        const col = p.d < (toNum(el.thRed.value) || 3) ? COLORS.red : COLORS.orange;
+        L.polyline([[p.a.lat, p.a.lon], [p.b.lat, p.b.lon]], { renderer: canvas, color: col, weight: 2, opacity: 0.8 }).addTo(linesLayer);
+      });
+    }
+
+    el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
+    el.nTotal.textContent = visible + " / " + trains.length;
+
+    // lista de pares
+    if (!pairs.length) {
+      el.pairs.innerHTML = '<div class="sub">Ningún par de trenes por debajo del umbral.</div>';
+    } else {
+      const tR = toNum(el.thRed.value) || 3;
+      el.pairs.innerHTML = pairs.slice(0, 100).map((p, i) =>
+        `<div class="pair" data-i="${i}"><span><span class="dot" style="background:${p.d < tR ? COLORS.red : COLORS.orange}"></span> ${esc(p.a.label)} ↔ ${esc(p.b.label)}</span><span class="d">${fmtKm(p.d)}</span></div>`
+      ).join("") + (pairs.length > 100 ? `<div class="sub" style="padding:6px 4px">… y ${pairs.length - 100} pares más</div>` : "");
+    }
+  }
+
+  /* ---------- Ciclo de actualización ---------- */
+  async function refresh() {
+    if (loading) return;
+    loading = true;
+    el.btnRefresh.disabled = true;
+    try {
+      trains = await fetchTrains();
+      computeProximity();
+      render();
+      const hora = new Date().toLocaleTimeString("es-ES");
+      setStatus(`${trains.length} trenes · ${pairs.length} pares cercanos · actualizado ${hora}`);
+    } catch (e) {
+      const cors = e instanceof TypeError;
+      setStatus(cors
+        ? "No se pudo descargar (probablemente bloqueo CORS o sin conexión). Prueba con un proxy CORS, otra fuente o el modo Demo."
+        : "Error: " + e.message, true);
+    } finally {
+      loading = false;
+      el.btnRefresh.disabled = false;
+    }
+  }
+  function schedule() {
+    clearInterval(timer);
+    if (!paused) timer = setInterval(refresh, Math.max(3, +el.interval.value) * 1000);
+  }
+
+  /* ---------- Eventos ---------- */
+  el.btnRefresh.addEventListener("click", refresh);
+  el.btnPause.addEventListener("click", () => {
+    paused = !paused;
+    el.btnPause.textContent = paused ? "Reanudar" : "Pausar";
+    schedule();
+    if (!paused) refresh();
+  });
+  el.interval.addEventListener("change", schedule);
+  el.source.addEventListener("change", () => {
+    el.customWrap.style.display = el.source.value === "custom" ? "block" : "none";
+    markers.forEach(m => map.removeLayer(m)); markers.clear();
+    refresh();
+  });
+  el.customUrl.addEventListener("change", refresh);
+  el.proxy.addEventListener("change", refresh);
+  [el.thRed, el.thOrange].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
+  [el.showRed, el.showOrange, el.showGreen, el.showLines].forEach(c => c.addEventListener("change", render));
+  el.search.addEventListener("input", render);
+  el.pairs.addEventListener("click", e => {
+    const row = e.target.closest(".pair"); if (!row) return;
+    const p = pairs[+row.dataset.i]; if (!p) return;
+    map.flyTo([(p.a.lat + p.b.lat) / 2, (p.a.lon + p.b.lon) / 2], Math.max(map.getZoom(), 11), { duration: 0.8 });
+  });
+
+  // Si la página se sirve desde servidor.py (http://localhost), usar su proxy integrado
+  // Pega aquí la URL de tu Cloudflare Worker, p. ej. "https://trenes.miusuario.workers.dev/?url={url}"
+  const DEFAULT_PROXY = "";
+  try { el.proxy.value = localStorage.getItem("proxyRenfe") || DEFAULT_PROXY; } catch (e) { el.proxy.value = DEFAULT_PROXY; }
+  if (/^https?:$/.test(location.protocol) && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && !el.proxy.value) {
+    el.proxy.value = "/api?url={url}";
+  }
+  el.proxy.addEventListener("change", () => { try { localStorage.setItem("proxyRenfe", el.proxy.value.trim()); } catch (e) {} });
+  refresh();
+  schedule();
+})();
+</script>
+</body>
+</html>
