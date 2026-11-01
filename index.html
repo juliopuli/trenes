@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.1</title>
+<title>Trenes Renfe en tiempo real · v1.2</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -49,8 +49,22 @@
   .tm.gray .b{background:var(--gray);opacity:0.88}
   .tm svg{width:17px;height:17px;fill:#fff}
   @keyframes pulso{0%{box-shadow:0 0 0 0 rgba(229,57,53,.65)}70%{box-shadow:0 0 0 12px rgba(229,57,53,0)}100%{box-shadow:0 0 0 0 rgba(229,57,53,0)}}
-  .trtip{font-size:12px;line-height:1.4;padding:7px 9px}
-  .trtip b.t{font-size:13px}
+  
+  /* Estilos mejorados para Tooltip y Popup */
+  .trtip{font-size:12px;line-height:1.45;padding:8px 10px;min-width:210px}
+  .t-head{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+  .t-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;color:#fff;background:#6d28d9;letter-spacing:.02em}
+  .t-num{font-size:13px;font-weight:700}
+  .t-route{font-weight:600;margin:3px 0;padding:3px 0;border-top:1px solid rgba(128,128,128,.2);border-bottom:1px solid rgba(128,128,128,.2)}
+  .t-meta{font-size:11.5px;color:#555}
+  .pop-wrap{font-size:12.5px;line-height:1.45;min-width:240px;color:#1b1f24}
+  .pop-table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}
+  .pop-table td{padding:3px 4px;border-bottom:1px solid #eee;vertical-align:top}
+  .pop-table td.k{color:#667085;font-weight:500;width:42%}
+  .pop-table td.v{font-weight:600;color:#1b1f24}
+  .pop-raw{margin-top:8px;font-size:11px;color:#667085}
+  .pop-raw summary{cursor:pointer;user-select:none}
+
   @media (max-width:760px){
     #app{grid-template-columns:1fr;grid-template-rows:46% 54%}
     #side{order:2;border-right:0;border-top:1px solid var(--line)}
@@ -61,7 +75,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.1</span></h1>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.2</span></h1>
       <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
     </div>
 
@@ -96,7 +110,7 @@
       <label for="basemap">Mapa base</label>
       <select id="basemap">
         <option value="gris">Claro (gris)</option>
-        <option value="calles">Calles</option>
+        <option value="calles" selected>Calles</option>
         <option value="sat">Satélite</option>
       </select>
       <div class="row" style="margin-top:10px">
@@ -130,8 +144,8 @@
       <label class="chk"><input type="checkbox" id="showLines" checked>Unir con línea los trenes cercanos</label>
       <label class="chk"><input type="checkbox" id="showTrack" checked>Vía de alta velocidad<span class="n" style="color:#7b1fa2">▬▬</span></label>
       <div class="help" id="trackStatus" style="margin:0 0 6px"></div>
-      <label for="search">Buscar tren / línea / núcleo</label>
-      <input type="text" id="search" placeholder="p. ej. 03123, C1, Madrid…">
+      <label for="search">Buscar tren / origen / destino</label>
+      <input type="text" id="search" placeholder="p. ej. 02112, AVE, Málaga, Madrid…">
       <div class="sub" style="margin-top:6px">Trenes en pantalla: <b id="nTotal">0</b></div>
     </fieldset>
 
@@ -154,15 +168,45 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.1";
+  const VERSION = "1.2";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
     gtfsrt: "https://gtfsrt.renfe.com/vehicle_positions.json"
   };
   const COLORS = { red: "#e53935", orange: "#fb8c00", green: "#43a047", gray: "#64748b" };
-  const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 }; // incluye Canarias
-  const TRACK_TOLERANCE_KM = 0.5; // Distancia máxima (500 m) para considerar que un tren está dentro de la vía AV
+  const BADGE_COLORS = {
+    AVE: "#7b1fa2", AVLO: "#00838f", ALVIA: "#1565c0", AVANT: "#ef6c00",
+    EUROMED: "#0277bd", INTERCITY: "#2e7d32", IC: "#2e7d32", MD: "#d84315",
+    REGIONAL: "#5d4037", "REG.EXP": "#5d4037", LD: "#4527a0", TALGO: "#37474f"
+  };
+  const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
+  const TRACK_TOLERANCE_KM = 0.5;
+
+  /* ---------- Diccionario base de estaciones de España (Adif / Renfe) ---------- */
+  const DEFAULT_STATIONS = {
+    "10000": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío", "18000": "Madrid-Atocha Cercanías",
+    "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia",
+    "79400": "Barcelona-Estació de França", "79300": "Girona", "79303": "Figueres-Vilafant", "71500": "Camp de Tarragona",
+    "78400": "Lleida-Pirineus", "04040": "Zaragoza-Delicias", "70600": "Calatayud", "70200": "Guadalajara-Yebes",
+    "04104": "Huesca", "04007": "Tardienta", "80100": "Pamplona/Iruña", "81100": "Logroño", "81202": "Miranda de Ebro",
+    "11200": "Vitoria/Gasteiz", "11511": "San Sebastián/Donostia", "11600": "Irun", "13200": "Bilbao-Abando",
+    "11014": "Burgos-Rosa Manzano", "10600": "Valladolid-Campo Grande", "14100": "Palencia", "15100": "León",
+    "15400": "Ponferrada", "15211": "Oviedo", "15212": "Gijón-Sanz Crespo", "15205": "Mieres-Puente", "15200": "Pola de Lena",
+    "14223": "Santander", "14202": "Torrelavega", "10200": "Ávila", "10300": "Medina del Campo", "10500": "Medina del Campo AV",
+    "12100": "Segovia-Guiomar", "30100": "Zamora", "30200": "Sanabria AV", "31200": "Ourense", "31400": "Santiago de Compostela",
+    "31412": "A Coruña", "31300": "Ferrol", "22100": "Lugo", "22300": "Monforte de Lemos", "23004": "Pontevedra",
+    "23005": "Vigo-Urzáiz", "23100": "Vigo-Guixar", "23002": "Vilagarcía de Arousa", "32008": "Salamanca",
+    "35002": "Cáceres", "35109": "Mérida", "37606": "Badajoz", "35010": "Plasencia", "60200": "Ciudad Real",
+    "60400": "Puertollano", "50500": "Córdoba", "51003": "Sevilla-Santa Justa", "51405": "Cádiz", "51300": "Jerez de la Frontera",
+    "51400": "El Puerto de Santa María", "51402": "San Fernando-Bahía Sur", "43003": "Huelva", "54413": "Málaga-María Zambrano",
+    "54405": "Antequera-Santa Ana", "54415": "Antequera AV", "05482": "Puente Genil-Herrera", "55020": "Ronda",
+    "55104": "Algeciras", "05000": "Granada", "05475": "Loja", "50300": "Linares-Baeza", "50411": "Jaén",
+    "60600": "Albacete-Los Llanos", "60911": "Cuenca-Fernando Zóbel", "60913": "Requena-Utiel", "65000": "València-Joaquín Sorolla",
+    "65001": "València-Estació del Nord", "65300": "Castelló", "65402": "Vinaròs", "65400": "Benicarló-Peñíscola",
+    "60905": "Villena AV", "60700": "Villena", "61200": "Alacant-Terminal", "62109": "Elx AV / Elche AV", "62103": "Orihuela-Miguel Hernández",
+    "61307": "Murcia del Carmen", "61300": "Cartagena", "56312": "Almería", "56106": "Guadix", "92102": "Toledo"
+  };
 
   /* ---------- Elementos ---------- */
   const $ = id => document.getElementById(id);
@@ -175,7 +219,7 @@
     pairs: $("pairs"), showTrack: $("showTrack"), trackStatus: $("trackStatus")
   };
 
-  /* ---------- Mapa ---------- */
+  /* ---------- Mapa (Por defecto en Calles) ---------- */
   const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const BASES = {
@@ -189,7 +233,7 @@
     baseLayer = L.tileLayer(BASES[k].url, BASES[k].o).addTo(map);
     baseLayer.bringToBack();
   }
-  setBase("gris");
+  setBase("calles"); // Iniciado en calles por defecto
   document.getElementById("basemap").addEventListener("change", e => setBase(e.target.value));
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
@@ -199,7 +243,7 @@
   const trackLayer = L.layerGroup().addTo(map);
   let trackLine = null, trackLoaded = false, trackLoading = false;
   let trackGrid = new Map();
-  const GRID_SIZE = 0.1; // ~11 km por celda para búsqueda rápida de segmentos
+  const GRID_SIZE = 0.1;
 
   const OVERPASS = [
     "https://overpass-api.de/api/interpreter",
@@ -232,7 +276,6 @@
     }
   }
 
-  // Distancia perpendicular en km desde un punto (lat, lon) a un segmento [la1, lo1, la2, lo2]
   function distToSegmentKm(lat, lon, la1, lo1, la2, lo2) {
     const cosLat = Math.cos(lat * Math.PI / 180);
     const kLat = 111.19;
@@ -250,7 +293,7 @@
   }
 
   function isOnHighSpeedTrack(lat, lon) {
-    if (!trackLoaded) return true; // Mientras carga la vía, no penalizar trenes a gris
+    if (!trackLoaded) return true;
     const r0 = Math.floor(lat / GRID_SIZE);
     const c0 = Math.floor(lon / GRID_SIZE);
     let minD = Infinity;
@@ -312,11 +355,11 @@
   });
 
   /* ---------- Estado ---------- */
-  let allTrains = [];         // todos los trenes descargados
-  let trains = [];            // [{id,label,lat,lon,raw,d,color,offTrack}] (solo tipos marcados)
-  const typeSel = {};         // tipo -> true/false
+  let allTrains = [];
+  let trains = [];
+  const typeSel = {};
   let typesKey = "";
-  const markers = new Map();  // id -> L.marker
+  const markers = new Map();
   let pairs = [];
   let timer = null;
   let paused = false;
@@ -338,7 +381,56 @@
   const fmtKm = d => d < 1 ? Math.round(d * 1000) + " m" : d.toFixed(2) + " km";
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Parseo de datos (admite varios formatos) ---------- */
+  /* ---------- Estaciones (Diccionario local + GeoJSON de Renfe) ---------- */
+  const stations = new Map();
+  function registerStation(code, name) {
+    if (code === undefined || code === null || !name) return;
+    const c = String(code).trim();
+    const n = String(name).trim();
+    if (!c || !n) return;
+    stations.set(c, n);
+    stations.set(c.replace(/^0+/, ""), n);
+    stations.set(c.padStart(5, "0"), n);
+  }
+  Object.entries(DEFAULT_STATIONS).forEach(([k, v]) => registerStation(k, v));
+
+  function resolveStation(val) {
+    if (val === undefined || val === null || val === "") return "";
+    const s = String(val).trim();
+    if (!s || s === "0" || s === "-") return "";
+    return stations.get(s) || stations.get(s.replace(/^0+/, "")) || stations.get(s.padStart(5, "0")) || s;
+  }
+
+  let stationsTried = false;
+  function proxify(url) {
+    const p = el.proxy.value.trim();
+    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
+  }
+  async function loadStations() {
+    if (stationsTried || el.source.value !== "ld") return;
+    stationsTried = true;
+    const base = SOURCES.ld.replace("flotaLD.json", "");
+    const candidates = ["estacionesEstatico.geojson", "estaciones.geojson"];
+    for (const file of candidates) {
+      try {
+        const r = await fetch(proxify(base + file));
+        if (!r.ok) continue;
+        const g = await r.json();
+        const feats = g.features || [];
+        if (!feats.length) continue;
+        feats.forEach(f => {
+          const pr = f.properties || {};
+          const keys = Object.keys(pr);
+          const kc = keys.find(k => /(cod|id|estacion|clave)/i.test(k) && (typeof pr[k] === "number" || /^\d+$/.test(String(pr[k]).trim())));
+          const kn = keys.find(k => /(nom|name|desc|titulo|label)/i.test(k) && typeof pr[k] === "string" && !/^\d+$/.test(pr[k].trim()));
+          if (kc && kn) registerStation(pr[kc], pr[kn]);
+        });
+        break;
+      } catch (e) {}
+    }
+  }
+
+  /* ---------- Parseo de datos y extracción mejorada ---------- */
   function extractList(data) {
     if (Array.isArray(data)) return data;
     if (data && Array.isArray(data.trenes)) return data.trenes;
@@ -350,53 +442,125 @@
     }
     return [];
   }
-  function valueTipo(o) {
-    const re = /^(AVE|AVLO|AVANT|AVMD|AV|ALVIA|ALTARIA|EUROMED|INTERCITY|IC|MD|LD|REG|REGIONAL|REGIONAL EXPRESS|TRD|TALGO|IRYO|OUIGO)$/i;
-    for (const k of Object.keys(o)) if (typeof o[k] === "string" && re.test(o[k].trim())) return o[k];
+
+  function cleanProductType(rawStr) {
+    if (!rawStr) return "";
+    const s = String(rawStr).trim().toUpperCase();
+    if (/AVE/.test(s)) return "AVE";
+    if (/AVLO/.test(s)) return "AVLO";
+    if (/ALVIA/.test(s)) return "ALVIA";
+    if (/AVANT/.test(s)) return "AVANT";
+    if (/EUROMED/.test(s)) return "EUROMED";
+    if (/INTERCITY|\bIC\b/.test(s)) return "INTERCITY";
+    if (/ALTARIA/.test(s)) return "ALTARIA";
+    if (/TALGO/.test(s)) return "TALGO";
+    if (/MEDIA DISTANCIA|\bMD\b|\bAVMD\b/.test(s)) return "MD";
+    if (/REGIONAL EXPR|REG\.?\s*EXP/.test(s)) return "REG.EXP";
+    if (/REGIONAL|\bREG\b/.test(s)) return "REGIONAL";
+    if (/CERCAN/.test(s)) return "CERCANÍAS";
+    return s;
   }
+
+  function valueTipo(o) {
+    const re = /^(AVE|AVLO|AVANT|AVMD|AV|ALVIA|ALTARIA|EUROMED|INTERCITY|IC|MD|LD|REG|REGIONAL|REGIONAL EXPRESS|REG\.EXP|TRD|TALGO|IRYO|OUIGO)$/i;
+    for (const k of Object.keys(o)) if (typeof o[k] === "string" && re.test(o[k].trim())) return o[k];
+    return "";
+  }
+
   function normalize(item, idx) {
     const v = item.vehicle && typeof item.vehicle === "object" && item.vehicle.position ? item.vehicle : null; // GTFS-RT
     const pos = v ? v.position : item;
-    const findKey = (o, re) => { for (const k of Object.keys(o)) if (re.test(k) && o[k] !== null && typeof o[k] !== "object") return o[k]; };
+    const findKey = (o, re) => { for (const k of Object.keys(o)) if (re.test(k) && o[k] !== null && o[k] !== "" && typeof o[k] !== "object") return o[k]; };
     const lat = toNum(pos.latitud ?? pos.lat ?? pos.latitude ?? pos.Latitud ?? findKey(pos, /^lat/i));
     const lon = toNum(pos.longitud ?? pos.lon ?? pos.lng ?? pos.long ?? pos.longitude ?? pos.Longitud ?? findKey(pos, /^(lon|lng)/i));
     if (!isFinite(lat) || !isFinite(lon)) return null;
     if (lat < SPAIN_BOUNDS.latMin || lat > SPAIN_BOUNDS.latMax || lon < SPAIN_BOUNDS.lonMin || lon > SPAIN_BOUNDS.lonMax) return null;
+
     let id, label, raw = {};
     if (v) {
       id = (v.vehicle && (v.vehicle.id || v.vehicle.label)) || item.id || ("v" + idx);
       label = (v.vehicle && v.vehicle.label) || (v.trip && v.trip.tripId) || id;
       raw = { Tren: label, Viaje: v.trip && v.trip.tripId, Línea: v.trip && v.trip.routeId, Velocidad: v.position.speed, Estado: v.currentStatus, Parada: v.stopId };
     } else {
-      id = item.codTren ?? item.id ?? item.tren ?? item.trainId ?? ("t" + idx);
-      label = item.codComercial ?? item.nombre ?? item.label ?? id;
+      const codTren = item.codTren ?? item.numTren ?? item.numero ?? item.tren ?? item.trainId ?? item.id;
+      const codCom = item.codComercial ?? item.numComercial ?? item.nombre ?? item.label;
+      id = codTren ?? codCom ?? ("t" + idx);
+      label = codCom ?? codTren ?? id;
       raw = item;
     }
-    const tipoRaw = v ? "" : (item.tipoTren ?? item.tipo ?? item.codProducto ?? item.producto ?? findKey(item, /(tipo|prod|clase|servicio)/i) ?? valueTipo(item) ?? "");
-    return { id: String(id), label: String(label), lat, lon, raw, tipo: String(tipoRaw).trim() };
+
+    const tipoCandidate = v
+      ? (v.trip && v.trip.routeId ? "CERCANÍAS" : "")
+      : (item.desProducto ?? item.descProducto ?? item.tipoTren ?? item.codProducto ?? item.producto ?? item.siglas ?? item.tipo ?? findKey(item, /(prod|tipo|clase|servicio|sigla)/i) ?? valueTipo(item) ?? "");
+    const tipo = cleanProductType(tipoCandidate);
+
+    return {
+      id: String(id).trim(),
+      label: String(label).trim(),
+      lat,
+      lon,
+      raw,
+      tipo
+    };
   }
 
-  /* ---------- Estaciones (nombres) ---------- */
-  const stations = new Map();
-  let stationsTried = false;
-  function proxify(url) {
-    const p = el.proxy.value.trim();
-    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
-  }
-  async function loadStations() {
-    if (stationsTried || el.source.value !== "ld") return;
-    stationsTried = true;
-    try {
-      const r = await fetch(proxify(SOURCES.ld.replace("flotaLD.json", "estaciones.geojson")));
-      if (!r.ok) return;
-      const g = await r.json();
-      (g.features || []).forEach(f => {
-        const pr = f.properties || {};
-        const kc = Object.keys(pr).find(k => /^(cod|codigo|id)/i.test(k));
-        const kn = Object.keys(pr).find(k => /^(nom|name|desc)/i.test(k));
-        if (kc && kn && pr[kc] != null && pr[kn]) { const c = String(pr[kc]).trim(); stations.set(c, pr[kn]); stations.set(c.replace(/^0+/, ""), pr[kn]); }
-      });
-    } catch (e) { /* sin nombres: se mostrarán los códigos */ }
+  /* ---------- Extracción enriquecida de información del tren ---------- */
+  function trainInfo(t) {
+    const r = t.raw || {};
+    const get = re => {
+      for (const k of Object.keys(r)) {
+        if (re.test(k) && r[k] !== "" && r[k] !== null && r[k] !== undefined && typeof r[k] !== "object") return r[k];
+      }
+      return undefined;
+    };
+
+    const numComercial = r.codComercial ?? r.numComercial ?? t.label;
+    const numTecnico = r.codTren ?? r.numTren ?? t.id;
+    const numero = String(numComercial || numTecnico || t.label).trim();
+
+    // Nombres o códigos de estación
+    const origRaw = r.desOrigen ?? r.nomOrigen ?? r.descOrigen ?? r.origen ?? r.codOrigen ?? get(/orig/i);
+    const destRaw = r.desDestino ?? r.nomDestino ?? r.descDestino ?? r.destino ?? r.codDestino ?? get(/dest/i);
+    const sigRaw  = r.desEstSig ?? r.nomEstSig ?? r.estacionSiguiente ?? r.codEstSig ?? r.paradaSig ?? get(/(sig|prox|next)/i);
+    const antRaw  = r.desEstAnt ?? r.nomEstAnt ?? r.estacionAnterior ?? r.codEstAnt ?? get(/ant/i);
+
+    const orig = resolveStation(origRaw);
+    const dest = resolveStation(destRaw);
+    const sig  = resolveStation(sigRaw);
+    const ant  = resolveStation(antRaw);
+
+    const horaSal = r.horaSalida ?? r.salida ?? get(/hora.*sal/i) ?? "";
+    const horaLleg = r.horaLlegada ?? r.llegada ?? get(/hora.*lleg/i) ?? "";
+    const vel = toNum(r.velocidad ?? r.vel ?? r.speed ?? r["Velocidad (km/h)"] ?? get(/vel|speed/i));
+    const ret = toNum(r.retraso ?? r.demora ?? r.delay ?? get(/retraso|demora/i));
+    const mat = r.mat ?? r.material ?? r.composicion ?? "";
+    const corredor = r.corredor ?? r.linea ?? r.nucleo ?? "";
+
+    let retHtml = "";
+    if (isFinite(ret)) {
+      retHtml = ret > 0
+        ? `<b style="color:#e53935">Retraso: +${ret} min</b>`
+        : ret < 0
+          ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>`
+          : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
+    }
+
+    return {
+      tipo: t.tipo || "TREN",
+      numero,
+      numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "",
+      orig,
+      dest,
+      sig,
+      ant,
+      horaSal: String(horaSal || "").trim(),
+      horaLleg: String(horaLleg || "").trim(),
+      vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null,
+      ret,
+      retHtml,
+      mat: String(mat || "").trim(),
+      corredor: String(corredor || "").trim()
+    };
   }
 
   /* ---------- Descarga ---------- */
@@ -422,23 +586,23 @@
 
   /* ---------- Demo ---------- */
   const CITIES = {
-    Madrid: [40.4168, -3.7038], Barcelona: [41.3851, 2.1734], Valencia: [39.4699, -0.3763], Sevilla: [37.3891, -5.9845],
-    Málaga: [36.7213, -4.4214], Zaragoza: [41.6488, -0.8891], Bilbao: [43.263, -2.935], Valladolid: [41.6523, -4.7245],
-    Córdoba: [37.8882, -4.7794], Alicante: [38.3452, -0.481], Vigo: [42.2406, -8.7207], Granada: [37.1773, -3.5986],
-    Albacete: [38.9943, -1.8585], Burgos: [42.3439, -3.6969], Salamanca: [40.9701, -5.6635], Toledo: [39.8628, -4.0273]
+    "Madrid-Puerta de Atocha": [40.4065, -3.6896], "Barcelona-Sants": [41.3791, 2.1401], "València-Joaquín Sorolla": [39.4601, -0.3816],
+    "Sevilla-Santa Justa": [37.3919, -5.9753], "Málaga-María Zambrano": [36.7115, -4.4316], "Zaragoza-Delicias": [41.6587, -0.9114],
+    "Bilbao-Abando": [43.2614, -2.9277], "Valladolid-Campo Grande": [41.6416, -4.7289], "Córdoba": [37.8884, -4.7892],
+    "Alacant-Terminal": [38.3446, -0.4951], "Vigo-Urzáiz": [42.2351, -8.7118], "Granada": [37.1841, -3.6091]
   };
   let demoFleet = null;
   function makeDemoFleet() {
-    const names = Object.keys(CITIES), fleet = [];
+    const names = Object.keys(CITIES), tipos = ["AVE", "AVLO", "ALVIA", "AVANT", "INTERCITY"], fleet = [];
     const rnd = (a, b) => a + Math.random() * (b - a);
-    for (let i = 0; i < 140; i++) {
+    for (let i = 0; i < 120; i++) {
       let a = names[Math.floor(Math.random() * names.length)], b;
       do { b = names[Math.floor(Math.random() * names.length)]; } while (b === a);
       const km = haversine(...CITIES[a], ...CITIES[b]);
-      const speed = rnd(70, 290);
+      const speed = rnd(90, 295);
       const phase = Math.random();
-      fleet.push({ id: "D" + (10000 + i), a, b, km, speed, phase });
-      if (i % 9 === 0) fleet.push({ id: "D" + (20000 + i), a, b, km, speed: speed * rnd(0.95, 1.05), phase: phase + rnd(0.002, 0.03) });
+      const tipo = tipos[i % tipos.length];
+      fleet.push({ id: "0" + (2100 + i), tipo, a, b, km, speed, phase });
     }
     return fleet;
   }
@@ -448,8 +612,11 @@
     return demoFleet.map(f => {
       let p = (now * f.speed / f.km + f.phase) % 2; if (p > 1) p = 2 - p;
       const [la1, lo1] = CITIES[f.a], [la2, lo2] = CITIES[f.b];
-      return { id: f.id, label: f.id, lat: la1 + (la2 - la1) * p, lon: lo1 + (lo2 - lo1) * p,
-               raw: { Tren: f.id, Origen: f.a, Destino: f.b, "Velocidad (km/h)": Math.round(f.speed) } };
+      return {
+        id: f.id, label: f.id, tipo: f.tipo,
+        lat: la1 + (la2 - la1) * p, lon: lo1 + (lo2 - lo1) * p,
+        raw: { codTren: f.id, desProducto: f.tipo, desOrigen: f.a, desDestino: f.b, velocidad: Math.round(f.speed), retraso: 0 }
+      };
     });
   }
 
@@ -459,9 +626,10 @@
     const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
     trains.forEach(t => {
       t.d = Infinity;
+      t.nearTrain = null;
       t.offTrack = !isOnHighSpeedTrack(t.lat, t.lon);
+      t._info = trainInfo(t);
     });
-    // Solo se calcula proximidad entre trenes que están dentro del trazado de alta velocidad
     const onTrackTrains = trains.filter(t => !t.offTrack);
     const sorted = [...onTrackTrains].sort((a, b) => a.lat - b.lat);
     const maxDLat = tO / 111.19;
@@ -473,8 +641,8 @@
         if (b.lat - a.lat > maxDLat) break;
         const d = haversine(a.lat, a.lon, b.lat, b.lon);
         if (d < tO) {
-          if (d < a.d) a.d = d;
-          if (d < b.d) b.d = d;
+          if (d < a.d) { a.d = d; a.nearTrain = b; }
+          if (d < b.d) { b.d = d; b.nearTrain = a; }
           pairs.push({ a, b, d });
         }
       }
@@ -487,33 +655,71 @@
     return { tR, tO };
   }
 
-  /* ---------- Pintado ---------- */
-  function trainInfo(t) {
-    const r = t.raw || {};
-    const get = re => { for (const k of Object.keys(r)) if (re.test(k) && r[k] !== "" && r[k] !== null && typeof r[k] !== "object") return r[k]; };
-    const nm = c => { if (c === undefined) return ""; const x = String(c).trim(); return stations.get(x) || stations.get(x.replace(/^0+/, "")) || x; };
-    const orig = nm(get(/^(origen|desc.*orig|nom.*orig)/i) ?? get(/orig/i));
-    const dest = nm(get(/^(destino|desc.*dest|nom.*dest)/i) ?? get(/dest/i));
-    const sig = nm(get(/^(sig|prox|next).*(parada|est)/i) ?? get(/^(codEstSig|paradaSig)/i) ?? get(/sig/i));
-    const ret = toNum(get(/^retraso/i));
-    let retHtml = "";
-    if (isFinite(ret)) retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32">En hora</span>`;
-    return { orig, dest, sig, retHtml };
+  /* ---------- Pintado de Tooltip (hover) y Popup (click) ---------- */
+  function badgeColor(tipo) {
+    return BADGE_COLORS[tipo] || "#475569";
   }
+
   function tipHtml(t) {
-    const x = trainInfo(t);
-    const head = `<b class="t">${t.tipo ? esc(t.tipo) + " · " : ""}${esc(t.label)}</b>`;
-    const ruta = x.orig || x.dest ? `<br>${esc(x.orig || "?")} → ${esc(x.dest || "?")}` : "";
-    const prox = x.sig ? `<br>Próxima: ${esc(x.sig)}` : "";
-    const ret = x.retHtml ? `<br>${x.retHtml}` : "";
-    const off = t.offTrack ? `<br><span style="color:var(--gray)">Fuera de vía de alta velocidad</span>` : "";
-    const near = (!t.offTrack && isFinite(t.d)) ? `<br><span style="color:${t.color === "red" ? "#e53935" : "#fb8c00"}">⚠ Otro tren a ${fmtKm(t.d)}</span>` : "";
-    return head + ruta + prox + ret + off + near;
+    const x = t._info || trainInfo(t);
+    const head = `<div class="t-head">` +
+      `<span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span>` +
+      `<span class="t-num">Nº ${esc(x.numero)}</span>` +
+      `</div>`;
+    const ruta = (x.orig || x.dest)
+      ? `<div class="t-route">📍 ${esc(x.orig || "Origen desc.")} → ${esc(x.dest || "Destino desc.")}</div>`
+      : "";
+    const paradas = [];
+    if (x.sig) paradas.push(`Próxima parada: <b>${esc(x.sig)}</b>`);
+    else if (x.ant) paradas.push(`Última parada: ${esc(x.ant)}`);
+    if (x.vel !== null) paradas.push(`Velocidad: <b>${x.vel} km/h</b>`);
+    const meta = paradas.length ? `<div class="t-meta">${paradas.join(" · ")}</div>` : "";
+    const ret = x.retHtml ? `<div style="margin-top:2px">${x.retHtml}</div>` : "";
+    const off = t.offTrack ? `<div style="color:var(--gray);font-weight:600;margin-top:2px">Fuera de vía de alta velocidad</div>` : "";
+    const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "otro tren";
+    const near = (!t.offTrack && isFinite(t.d))
+      ? `<div style="color:${t.color === "red" ? "#e53935" : "#fb8c00"};font-weight:700;margin-top:3px">⚠ A ${fmtKm(t.d)} de ${esc(nearName)}</div>`
+      : "";
+    return head + ruta + meta + ret + off + near;
   }
+
   function popupHtml(t) {
-    const rows = Object.entries(t.raw).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").slice(0, 24)
+    const x = t._info || trainInfo(t);
+    const mainRows = [
+      ["Tipo de servicio", x.tipo],
+      ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
+      ["Origen", x.orig || "—"],
+      ["Destino", x.dest || "—"]
+    ];
+    if (x.ant) mainRows.push(["Estación anterior", x.ant]);
+    if (x.sig) mainRows.push(["Próxima estación", x.sig]);
+    if (x.horaSal || x.horaLleg) mainRows.push(["Horario Sal. / Lleg.", `${x.horaSal || "—"} → ${x.horaLleg || "—"}`]);
+    if (x.vel !== null) mainRows.push(["Velocidad", `${x.vel} km/h`]);
+    if (x.retHtml) mainRows.push(["Puntualidad", x.retHtml, true]);
+    if (x.corredor) mainRows.push(["Corredor / Línea", x.corredor]);
+    if (x.mat) mainRows.push(["Material / Serie", x.mat]);
+    mainRows.push(["Vía Alta Velocidad", t.offTrack ? "No (fuera de trazado AV)" : "Sí (en trazado AV)"]);
+    if (!t.offTrack && isFinite(t.d)) {
+      const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "";
+      mainRows.push(["Tren más cercano", `${fmtKm(t.d)} (${nearName})`]);
+    }
+    mainRows.push(["Coordenadas GPS", `${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}`]);
+
+    const tableHtml = mainRows.map(([k, v, isHtml]) =>
+      `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`
+    ).join("");
+
+    // Desplegable opcional con los campos crudos de Renfe por si se requiere inspección técnica
+    const rawRows = Object.entries(t.raw || {})
+      .filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object")
       .map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
-    return `<div style="font-size:12px">${tipHtml(t)}<table style="margin-top:6px">${rows}</table></div>`;
+
+    return `<div class="pop-wrap">` +
+      `<div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Tren Nº ${esc(x.numero)}</span></div>` +
+      (x.orig || x.dest ? `<div class="t-route">📍 ${esc(x.orig || "?")} → ${esc(x.dest || "?")}</div>` : "") +
+      `<table class="pop-table">${tableHtml}</table>` +
+      (rawRows ? `<details class="pop-raw"><summary>Ver datos técnicos JSON</summary><table style="margin-top:4px">${rawRows}</table></details>` : "") +
+      `</div>`;
   }
 
   const TRAIN_SVG = '<svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>';
@@ -531,7 +737,11 @@
     trains.forEach(t => {
       counts[t.color]++;
       let ok = show[t.color];
-      if (ok && q) ok = (t.id + " " + t.label + " " + Object.values(t.raw).filter(v => typeof v !== "object").join(" ")).toLowerCase().includes(q);
+      if (ok && q) {
+        const x = t._info || trainInfo(t);
+        const searchStr = `${t.id} ${t.label} ${x.tipo} ${x.numero} ${x.orig} ${x.dest} ${x.sig} ${Object.values(t.raw).filter(v => typeof v !== "object").join(" ")}`.toLowerCase();
+        ok = searchStr.includes(q);
+      }
       t.visible = ok;
       if (!ok) return;
       visible++;
@@ -541,7 +751,7 @@
       if (!m) {
         m = L.marker([t.lat, t.lon], { icon: makeIcon(t.color), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
         m.bindTooltip(() => tipHtml(m._train), { direction: "top", offset: [0, -16], className: "trtip" });
-        m.bindPopup(() => popupHtml(m._train));
+        m.bindPopup(() => popupHtml(m._train), { maxWidth: 340 });
         m._color = t.color;
         markers.set(t.id, m);
       } else {
@@ -552,7 +762,6 @@
     });
     for (const [id, m] of markers) if (!alive.has(id)) { map.removeLayer(m); markers.delete(id); }
 
-    // líneas entre trenes cercanos
     linesLayer.clearLayers();
     if (el.showLines.checked) {
       pairs.forEach(p => {
@@ -565,14 +774,15 @@
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green; el.nGray.textContent = counts.gray;
     el.nTotal.textContent = visible + " / " + trains.length;
 
-    // lista de pares
     if (!pairs.length) {
       el.pairs.innerHTML = '<div class="sub">Ningún par de trenes por debajo del umbral.</div>';
     } else {
       const tR = toNum(el.thRed.value) || 3;
-      el.pairs.innerHTML = pairs.slice(0, 100).map((p, i) =>
-        `<div class="pair" data-i="${i}"><span><span class="dot" style="background:${p.d < tR ? COLORS.red : COLORS.orange}"></span> ${esc(p.a.label)} ↔ ${esc(p.b.label)}</span><span class="d">${fmtKm(p.d)}</span></div>`
-      ).join("") + (pairs.length > 100 ? `<div class="sub" style="padding:6px 4px">… y ${pairs.length - 100} pares más</div>` : "");
+      el.pairs.innerHTML = pairs.slice(0, 100).map((p, i) => {
+        const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label;
+        const lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
+        return `<div class="pair" data-i="${i}"><span><span class="dot" style="background:${p.d < tR ? COLORS.red : COLORS.orange}"></span> ${esc(la)} ↔ ${esc(lb)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
+      }).join("") + (pairs.length > 100 ? `<div class="sub" style="padding:6px 4px">… y ${pairs.length - 100} pares más</div>` : "");
     }
   }
 
@@ -658,7 +868,6 @@
     map.flyTo([(p.a.lat + p.b.lat) / 2, (p.a.lon + p.b.lon) / 2], Math.max(map.getZoom(), 11), { duration: 0.8 });
   });
 
-  // Si la página se sirve desde servidor.py (http://localhost), usar su proxy integrado
   const DEFAULT_PROXY = "https://trenes.juliopuli.workers.dev/?url={url}";
   try { el.proxy.value = localStorage.getItem("proxyRenfe") || DEFAULT_PROXY; } catch (e) { el.proxy.value = DEFAULT_PROXY; }
   if (/^https?:$/.test(location.protocol) && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && !el.proxy.value) {
