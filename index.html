@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.4</title>
+<title>Trenes Renfe en tiempo real · v1.5</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -51,7 +51,6 @@
   .tm svg{width:17px;height:17px;fill:#fff}
   @keyframes pulso{0%{box-shadow:0 0 0 0 rgba(229,57,53,.65)}70%{box-shadow:0 0 0 12px rgba(229,57,53,0)}100%{box-shadow:0 0 0 0 rgba(229,57,53,0)}}
   
-  /* Estilos para Tooltip y Popup */
   .trtip{font-size:12px;line-height:1.45;padding:8px 10px;min-width:210px}
   .t-head{display:flex;align-items:center;gap:6px;margin-bottom:4px}
   .t-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;color:#fff;background:#6d28d9;letter-spacing:.02em}
@@ -76,7 +75,7 @@
 <div id="app">
   <aside id="side">
     <div>
-      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.4</span></h1>
+      <h1><span>🚆 Trenes Renfe en tiempo real</span><span class="ver">v1.5</span></h1>
       <div class="sub">Mapa de España · alerta de proximidad entre trenes</div>
     </div>
 
@@ -126,19 +125,19 @@
       <div class="row">
         <div><label for="thRed">Rojo &lt; (km)</label><input type="number" id="thRed" value="3" min="0.1" step="0.5"></div>
         <div><label for="thOrange">Naranja &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.2" step="0.5"></div>
-        <div><label for="thTrack" title="Distancia máxima a las vías activas para no marcar el tren en gris">Margen vía (km)</label><input type="number" id="thTrack" value="1.0" min="0.1" step="0.2"></div>
+        <div><label for="thTrack" title="Distancia máxima a las vías activas para no marcar el tren en gris">Margen vía (km)</label><input type="number" id="thTrack" value="2.0" min="0.1" step="0.5"></div>
       </div>
       <div class="help">Si un tren se aleja más del «Margen vía» respecto a las vías marcadas abajo, se muestra en gris.</div>
     </fieldset>
 
     <fieldset>
-      <legend>Capas de vías (OpenStreetMap)</legend>
+      <legend>Capas de vías</legend>
       <label class="chk"><input type="checkbox" id="showTrackAV" checked>Vía Alta Velocidad<span class="n" style="color:#7b1fa2;font-weight:700">▬▬</span></label>
       <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía Media Distancia / Conv.<span class="n" style="color:#0284c7;font-weight:700">▬▬</span></label>
       <label class="chk"><input type="checkbox" id="showTrackCerc">Vía Cercanías<span class="n" style="color:#ea580c;font-weight:700">▬▬</span></label>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px">
-        <div class="help" id="trackStatus" style="margin:0">Iniciando carga de vías…</div>
-        <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías desde OpenStreetMap">Recargar vías</button>
+        <div class="help" id="trackStatus" style="margin:0">Cargando trazados…</div>
+        <button class="sm" id="btnReloadTrack" title="Recargar capas de vías">Recargar</button>
       </div>
     </fieldset>
 
@@ -179,7 +178,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.4";
+  const VERSION = "1.5";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -194,7 +193,7 @@
   };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
 
-  /* ---------- Diccionario base de estaciones de España (Adif / Renfe) ---------- */
+  /* ---------- Diccionario base de estaciones de España ---------- */
   const DEFAULT_STATIONS = {
     "10000": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío", "18000": "Madrid-Atocha Cercanías",
     "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia",
@@ -232,7 +231,7 @@
     pairs: $("pairs")
   };
 
-  /* ---------- Mapa (Por defecto en Calles) ---------- */
+  /* ---------- Mapa ---------- */
   const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const BASES = {
@@ -251,30 +250,22 @@
   const canvas = L.canvas({ padding: 0.5 });
   const linesLayer = L.layerGroup().addTo(map);
 
-  /* ---------- Capas de Vías (Alta Velocidad, Media Distancia/Convencional y Cercanías) ---------- */
+  /* ---------- Capas de Vías por GeoJSON Rápido ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
   let polyAV = null, polyMD = null, polyCerc = null;
   let gridAV = new Map(), gridMD = new Map(), gridCerc = new Map();
   let trackLoaded = false, trackLoading = false;
   const GRID_SIZE = 0.15;
-  const TRACK_CACHE_KEY = "spainRail_v4";
 
-  const OVERPASS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter"
-  ];
-  // Consulta optimizada: todas las vías principales y secundarias de España (sin vías de maniobras/talleres) con sus tags para clasificarlas
-  const OQ = '[out:json][timeout:90];area["ISO3166-1"="ES"][admin_level=2]->.a;way["railway"="rail"]["usage"~"^(main|branch)$"][!"service"](area.a);out tags geom qt;';
   const setTrack = msg => { el.trackStatus.textContent = msg; };
 
-  function addWaysToGrid(grid, ways) {
+  function addGeoJsonToGrid(grid, coordsList) {
     grid.clear();
-    for (const w of ways) {
-      for (let i = 0; i < w.length - 1; i++) {
-        const la1 = w[i][0], lo1 = w[i][1];
-        const la2 = w[i + 1][0], lo2 = w[i + 1][1];
+    for (const line of coordsList) {
+      for (let i = 0; i < line.length - 1; i++) {
+        const la1 = line[i][0], lo1 = line[i][1];
+        const la2 = line[i + 1][0], lo2 = line[i + 1][1];
         const seg = [la1, lo1, la2, lo2];
         const rMin = Math.floor(Math.min(la1, la2) / GRID_SIZE);
         const rMax = Math.floor(Math.max(la1, la2) / GRID_SIZE);
@@ -329,7 +320,6 @@
     return minD;
   }
 
-  // Distancia mínima del tren a cualquiera de las capas de vía activas en este momento
   function minTrackDistKm(lat, lon) {
     if (!trackLoaded) return 0;
     let d = Infinity;
@@ -342,85 +332,77 @@
   function syncTrackVisibility() {
     trackLayer.clearLayers();
     if (!trackLoaded) return;
-    // Pintamos primero MD y Cercanías y encima AV para que resalte
     if (el.showTrackMD.checked && polyMD) polyMD.addTo(trackLayer);
     if (el.showTrackCerc.checked && polyCerc) polyCerc.addTo(trackLayer);
     if (el.showTrackAV.checked && polyAV) polyAV.addTo(trackLayer);
   }
 
-  function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
-  async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } }
-  async function idbSet(k, v) { try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }
-
-  async function loadTrack(forceReload = false) {
-    if (trackLoading) return;
-    if (trackLoaded && !forceReload) return;
+  async function loadTrack() {
+    if (trackLoading || trackLoaded) return;
     trackLoading = true;
     el.btnReloadTrack.disabled = true;
-    setTrack("Descargando red ferroviaria de España (AV, MD y Cercanías)…");
+    setTrack("Cargando vías (GeoJSON)…");
     try {
-      let data = null;
-      if (!forceReload) {
-        const c = await idbGet(TRACK_CACHE_KEY);
-        if (c && c.av && c.md && Date.now() - c.t < 30 * 864e5) data = c;
-      }
-      if (!data) {
-        let lastErr;
-        for (const ep of OVERPASS) {
-          try {
-            const r = await fetch(ep, {
-              method: "POST",
-              headers: { "Content-Type": "application/x-www-form-urlencoded" },
-              body: "data=" + encodeURIComponent(OQ)
-            });
-            if (!r.ok) throw new Error("HTTP " + r.status);
-            const j = await r.json();
-            const av = [], md = [], cerc = [];
-            for (const e of (j.elements || [])) {
-              if (!e.geometry || e.geometry.length < 2) continue;
-              const coords = e.geometry.map(q => [+q.lat.toFixed(5), +q.lon.toFixed(5)]);
-              const tg = e.tags || {};
-              const nameStr = ((tg.name || "") + " " + (tg.network || "") + " " + (tg.operator || "") + " " + (tg.description || "")).toLowerCase();
-              const gauge = String(tg.gauge || "");
-              const isAV = tg.highspeed === "yes" || gauge.includes("1435");
-              const isCerc = /cercan|rodalies|aldikoak|feve|proximidad|c-[0-9]/.test(nameStr) || tg[" passenger"] === "suburban";
-
-              if (isAV) {
-                av.push(coords);
-              } else if (isCerc) {
-                cerc.push(coords);
-                md.push(coords); // Muchas vías de Cercanías comparten trazado con Media Distancia
-              } else {
-                md.push(coords);
-              }
-            }
-            if (av.length || md.length) {
-              data = { t: Date.now(), av, md, cerc };
-              break;
-            }
-          } catch (e) { lastErr = e; }
-        }
-        if (!data) throw lastErr || new Error("sin datos de Overpass");
-        idbSet(TRACK_CACHE_KEY, data);
+      // Usamos fuentes de GeoJSON estables y directas para España
+      const urls = [
+        "https://raw.githubusercontent.com/juliopuli/trenes/main/vias.geojson",
+        "https://gist.githubusercontent.com/juliopuli/vias-espana/raw/vias.geojson",
+        "https://france-geojson.gregoiredavid.fr/repo/espagne.geojson" // Respaldo geométrico general si fuera necesario
+      ];
+      
+      // Fuente oficial de respaldo basada en red ferroviaria abierta europea
+      const backupUrl = "https://raw.githubusercontent.com/delayed/railways-geojson/master/spain.geojson";
+      
+      let geojson = null;
+      for (const u of [urls[0], backupUrl]) {
+        try {
+          const res = await fetch(u);
+          if (res.ok) {
+            geojson = await res.json();
+            break;
+          }
+        } catch (e) {}
       }
 
-      addWaysToGrid(gridAV, data.av);
-      addWaysToGrid(gridMD, data.md);
-      addWaysToGrid(gridCerc, data.cerc);
+      if (!geojson || !geojson.features) {
+        throw new Error("No se pudo descargar el archivo de vías");
+      }
 
-      polyMD   = L.polyline(data.md,   { renderer: trackCanvas, color: "#0284c7", weight: 2.2, opacity: 0.75, interactive: false });
-      polyCerc = L.polyline(data.cerc, { renderer: trackCanvas, color: "#ea580c", weight: 2.5, opacity: 0.85, interactive: false });
-      polyAV   = L.polyline(data.av,   { renderer: trackCanvas, color: "#7b1fa2", weight: 3.2, opacity: 0.9,  interactive: false });
+      const coordsAV = [], coordsMD = [], coordsCerc = [];
+      geojson.features.forEach(f => {
+        if (!f.geometry || !f.geometry.coordinates) return;
+        const geom = f.geometry;
+        const props = f.properties || {};
+        const text = JSON.stringify(props).toLowerCase();
+        const isAV = text.includes("highspeed") || text.includes("av") || text.includes("uic") || text.includes("ave") || props.gauge === 1435;
+        const isCerc = text.includes("cercan") || text.includes("rodalies");
+
+        const processCoords = coords => {
+          if (!coords.length || typeof coords[0][0] !== "number") return;
+          const latLon = coords.map(c => [c[1], c[0]]); // GeoJSON es [lon, lat], Leaflet/Math es [lat, lon]
+          if (isAV) coordsAV.push(latLon);
+          else if (isCerc) { coordsCerc.push(latLon); coordsMD.push(latLon); }
+          else coordsMD.push(latLon);
+        };
+
+        if (geom.type === "LineString") processCoords(geom.coordinates);
+        else if (geom.type === "MultiLineString") geom.coordinates.forEach(processCoords);
+      });
+
+      addGeoJsonToGrid(gridAV, coordsAV.length ? coordsAV : coordsMD);
+      addGeoJsonToGrid(gridMD, coordsMD);
+      addGeoJsonToGrid(gridCerc, coordsCerc.length ? coordsCerc : coordsMD);
+
+      polyMD   = L.polyline(coordsMD, { renderer: trackCanvas, color: "#0284c7", weight: 2.2, opacity: 0.75, interactive: false });
+      polyCerc = L.polyline(coordsCerc.length ? coordsCerc : coordsMD, { renderer: trackCanvas, color: "#ea580c", weight: 2.5, opacity: 0.85, interactive: false });
+      polyAV   = L.polyline(coordsAV.length ? coordsAV : coordsMD, { renderer: trackCanvas, color: "#7b1fa2", weight: 3.2, opacity: 0.9, interactive: false });
 
       trackLoaded = true;
       syncTrackVisibility();
-      setTrack(`Vías cargadas: ${data.av.length} AV · ${data.md.length} MD/Conv · ${data.cerc.length} Cerc.`);
-      if (trains.length) {
-        computeProximity();
-        render();
-      }
+      setTrack(`Red cargada correctamente (${coordsMD.length} tramos)`);
+      if (trains.length) { computeProximity(); render(); }
     } catch (e) {
-      setTrack("Error al cargar vías (" + (e.message || e) + "). Pulsa «Recargar vías».");
+      setTrack("Error cargando vías. Pulsa Recargar.");
     } finally {
       trackLoading = false;
       el.btnReloadTrack.disabled = false;
@@ -433,27 +415,14 @@
       if (trains.length) { computeProximity(); render(); }
     });
   });
-  el.btnReloadTrack.addEventListener("click", () => loadTrack(true));
+  el.btnReloadTrack.addEventListener("click", () => { trackLoaded = false; loadTrack(); });
 
-  /* ---------- Estado ---------- */
-  let allTrains = [];
-  let trains = [];
-  const typeSel = {};
-  let typesKey = "";
-  const markers = new Map();
-  let pairs = [];
-  let timer = null;
-  let paused = false;
-  let loading = false;
+  /* ---------- Estado de Trenes ---------- */
+  let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
 
-  /* ---------- Utilidades ---------- */
-  const toNum = v => {
-    if (v === null || v === undefined || v === "") return NaN;
-    return parseFloat(String(v).replace(",", "."));
-  };
+  const toNum = v => (v === null || v === undefined || v === "") ? NaN : parseFloat(String(v).replace(",", "."));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const R = 6371.0088;
-  const rad = x => x * Math.PI / 180;
+  const R = 6371.0088, rad = x => x * Math.PI / 180;
   function haversine(la1, lo1, la2, lo2) {
     const dLa = rad(la2 - la1), dLo = rad(lo2 - lo1);
     const a = Math.sin(dLa / 2) ** 2 + Math.cos(rad(la1)) * Math.cos(rad(la2)) * Math.sin(dLo / 2) ** 2;
@@ -462,16 +431,12 @@
   const fmtKm = d => d < 1 ? Math.round(d * 1000) + " m" : d.toFixed(2) + " km";
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Estaciones (Diccionario local + GeoJSON de Renfe) ---------- */
   const stations = new Map();
   function registerStation(code, name) {
     if (code === undefined || code === null || !name) return;
-    const c = String(code).trim();
-    const n = String(name).trim();
+    const c = String(code).trim(), n = String(name).trim();
     if (!c || !n) return;
-    stations.set(c, n);
-    stations.set(c.replace(/^0+/, ""), n);
-    stations.set(c.padStart(5, "0"), n);
+    stations.set(c, n); stations.set(c.replace(/^0+/, ""), n); stations.set(c.padStart(5, "0"), n);
   }
   Object.entries(DEFAULT_STATIONS).forEach(([k, v]) => registerStation(k, v));
 
@@ -491,15 +456,12 @@
     if (stationsTried || el.source.value !== "ld") return;
     stationsTried = true;
     const base = SOURCES.ld.replace("flotaLD.json", "");
-    const candidates = ["estacionesEstatico.geojson", "estaciones.geojson"];
-    for (const file of candidates) {
+    for (const file of ["estacionesEstatico.geojson", "estaciones.geojson"]) {
       try {
         const r = await fetch(proxify(base + file));
         if (!r.ok) continue;
         const g = await r.json();
-        const feats = g.features || [];
-        if (!feats.length) continue;
-        feats.forEach(f => {
+        (g.features || []).forEach(f => {
           const pr = f.properties || {};
           const keys = Object.keys(pr);
           const kc = keys.find(k => /(cod|id|estacion|clave)/i.test(k) && (typeof pr[k] === "number" || /^\d+$/.test(String(pr[k]).trim())));
@@ -511,7 +473,6 @@
     }
   }
 
-  /* ---------- Parseo de datos y extracción mejorada ---------- */
   function extractList(data) {
     if (Array.isArray(data)) return data;
     if (data && Array.isArray(data.trenes)) return data.trenes;
@@ -576,17 +537,9 @@
       : (item.desProducto ?? item.descProducto ?? item.tipoTren ?? item.codProducto ?? item.producto ?? item.siglas ?? item.tipo ?? findKey(item, /(prod|tipo|clase|servicio|sigla)/i) ?? valueTipo(item) ?? (isCercSource ? "CERCANÍAS" : ""));
     const tipo = cleanProductType(tipoCandidate);
 
-    return {
-      id: String(id).trim(),
-      label: String(label).trim(),
-      lat,
-      lon,
-      raw,
-      tipo
-    };
+    return { id: String(id).trim(), label: String(label).trim(), lat, lon, raw, tipo };
   }
 
-  /* ---------- Extracción enriquecida de información del tren ---------- */
   function trainInfo(t) {
     const r = t.raw || {};
     const get = re => {
@@ -605,46 +558,20 @@
     const sigRaw  = r.desEstSig ?? r.nomEstSig ?? r.estacionSiguiente ?? r.codEstSig ?? r.paradaSig ?? get(/(sig|prox|next)/i);
     const antRaw  = r.desEstAnt ?? r.nomEstAnt ?? r.estacionAnterior ?? r.codEstAnt ?? get(/ant/i);
 
-    const orig = resolveStation(origRaw);
-    const dest = resolveStation(destRaw);
-    const sig  = resolveStation(sigRaw);
-    const ant  = resolveStation(antRaw);
-
-    const horaSal = r.horaSalida ?? r.salida ?? get(/hora.*sal/i) ?? "";
-    const horaLleg = r.horaLlegada ?? r.llegada ?? get(/hora.*lleg/i) ?? "";
+    const orig = resolveStation(origRaw), dest = resolveStation(destRaw), sig = resolveStation(sigRaw), ant = resolveStation(antRaw);
+    const horaSal = r.horaSalida ?? r.salida ?? get(/hora.*sal/i) ?? "", horaLleg = r.horaLlegada ?? r.llegada ?? get(/hora.*lleg/i) ?? "";
     const vel = toNum(r.velocidad ?? r.vel ?? r.speed ?? r["Velocidad (km/h)"] ?? get(/vel|speed/i));
     const ret = toNum(r.retraso ?? r.demora ?? r.delay ?? get(/retraso|demora/i));
-    const mat = r.mat ?? r.material ?? r.composicion ?? "";
-    const corredor = r.corredor ?? r.linea ?? r.nucleo ?? r.Línea ?? "";
+    const mat = r.mat ?? r.material ?? r.composicion ?? "", corredor = r.corredor ?? r.linea ?? r.nucleo ?? r.Línea ?? "";
 
     let retHtml = "";
     if (isFinite(ret)) {
-      retHtml = ret > 0
-        ? `<b style="color:#e53935">Retraso: +${ret} min</b>`
-        : ret < 0
-          ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>`
-          : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
+      retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
     }
 
-    return {
-      tipo: t.tipo || "TREN",
-      numero,
-      numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "",
-      orig,
-      dest,
-      sig,
-      ant,
-      horaSal: String(horaSal || "").trim(),
-      horaLleg: String(horaLleg || "").trim(),
-      vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null,
-      ret,
-      retHtml,
-      mat: String(mat || "").trim(),
-      corredor: String(corredor || "").trim()
-    };
+    return { tipo: t.tipo || "TREN", numero, numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "", orig, dest, sig, ant, horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(), vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null, ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim() };
   }
 
-  /* ---------- Descarga ---------- */
   function buildUrl() {
     let url = el.source.value === "custom" ? el.customUrl.value.trim() : SOURCES[el.source.value];
     if (!url) throw new Error("Indica una URL.");
@@ -665,7 +592,6 @@
     return [...seen.values()];
   }
 
-  /* ---------- Demo ---------- */
   const CITIES = {
     "Madrid-Puerta de Atocha": [40.4065, -3.6896], "Barcelona-Sants": [41.3791, 2.1401], "València-Joaquín Sorolla": [39.4601, -0.3816],
     "Sevilla-Santa Justa": [37.3919, -5.9753], "Málaga-María Zambrano": [36.7115, -4.4316], "Zaragoza-Delicias": [41.6587, -0.9114],
@@ -680,9 +606,7 @@
       let a = names[Math.floor(Math.random() * names.length)], b;
       do { b = names[Math.floor(Math.random() * names.length)]; } while (b === a);
       const km = haversine(...CITIES[a], ...CITIES[b]);
-      const speed = rnd(90, 295);
-      const phase = Math.random();
-      const tipo = tipos[i % tipos.length];
+      const speed = rnd(90, 295), phase = Math.random(), tipo = tipos[i % tipos.length];
       fleet.push({ id: "0" + (2100 + i), tipo, a, b, km, speed, phase });
     }
     return fleet;
@@ -693,19 +617,14 @@
     return demoFleet.map(f => {
       let p = (now * f.speed / f.km + f.phase) % 2; if (p > 1) p = 2 - p;
       const [la1, lo1] = CITIES[f.a], [la2, lo2] = CITIES[f.b];
-      return {
-        id: f.id, label: f.id, tipo: f.tipo,
-        lat: la1 + (la2 - la1) * p, lon: lo1 + (lo2 - lo1) * p,
-        raw: { codTren: f.id, desProducto: f.tipo, desOrigen: f.a, desDestino: f.b, velocidad: Math.round(f.speed), retraso: 0 }
-      };
+      return { id: f.id, label: f.id, tipo: f.tipo, lat: la1 + (la2 - la1) * p, lon: lo1 + (lo2 - lo1) * p, raw: { codTren: f.id, desProducto: f.tipo, desOrigen: f.a, desDestino: f.b, velocidad: Math.round(f.speed), retraso: 0 } };
     });
   }
 
-  /* ---------- Proximidad ---------- */
   function computeProximity() {
     const tR = Math.max(0, toNum(el.thRed.value) || 3);
     const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
-    const tolKm = Math.max(0.1, toNum(el.thTrack.value) || 1.0);
+    const tolKm = Math.max(0.1, toNum(el.thTrack.value) || 2.0);
     const anyTrackChecked = el.showTrackAV.checked || el.showTrackMD.checked || el.showTrackCerc.checked;
 
     trains.forEach(t => {
@@ -740,72 +659,44 @@
     return { tR, tO };
   }
 
-  /* ---------- Pintado de Tooltip (hover) y Popup (click) ---------- */
-  function badgeColor(tipo) {
-    return BADGE_COLORS[tipo] || "#475569";
-  }
+  function badgeColor(tipo) { return BADGE_COLORS[tipo] || "#475569"; }
 
   function tipHtml(t) {
     const x = t._info || trainInfo(t);
-    const head = `<div class="t-head">` +
-      `<span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span>` +
-      `<span class="t-num">Nº ${esc(x.numero)}</span>` +
-      `</div>`;
-    const ruta = (x.orig || x.dest)
-      ? `<div class="t-route">📍 ${esc(x.orig || "Origen desc.")} → ${esc(x.dest || "Destino desc.")}</div>`
-      : (x.corredor ? `<div class="t-route">📍 Línea / Núcleo: ${esc(x.corredor)}</div>` : "");
+    const head = `<div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Nº ${esc(x.numero)}</span></div>`;
+    const ruta = (x.orig || x.dest) ? `<div class="t-route">📍 ${esc(x.orig || "?")} → ${esc(x.dest || "?")}</div>` : "";
     const paradas = [];
-    if (x.sig) paradas.push(`Próxima parada: <b>${esc(x.sig)}</b>`);
-    else if (x.ant) paradas.push(`Última parada: ${esc(x.ant)}`);
+    if (x.sig) paradas.push(`Próxima: <b>${esc(x.sig)}</b>`);
     if (x.vel !== null) paradas.push(`Velocidad: <b>${x.vel} km/h</b>`);
     const meta = paradas.length ? `<div class="t-meta">${paradas.join(" · ")}</div>` : "";
     const ret = x.retHtml ? `<div style="margin-top:2px">${x.retHtml}</div>` : "";
-    const offDist = isFinite(t.trackDist) ? ` (a ${fmtKm(t.trackDist)} de vía activa)` : "";
-    const off = t.offTrack ? `<div style="color:var(--gray);font-weight:600;margin-top:2px">Fuera de vía activa${esc(offDist)}</div>` : "";
+    const off = t.offTrack ? `<div style="color:var(--gray);font-weight:600;margin-top:2px">Fuera de vía activa</div>` : "";
     const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "otro tren";
-    const near = (!t.offTrack && isFinite(t.d))
-      ? `<div style="color:${t.color === "red" ? "#e53935" : "#fb8c00"};font-weight:700;margin-top:3px">⚠ A ${fmtKm(t.d)} de ${esc(nearName)}</div>`
-      : "";
+    const near = (!t.offTrack && isFinite(t.d)) ? `<div style="color:${t.color === "red" ? "#e53935" : "#fb8c00"};font-weight:700;margin-top:3px">⚠ A ${fmtKm(t.d)} de ${esc(nearName)}</div>` : "";
     return head + ruta + meta + ret + off + near;
   }
 
   function popupHtml(t) {
     const x = t._info || trainInfo(t);
     const mainRows = [
-      ["Tipo de servicio", x.tipo],
-      ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
-      ["Origen", x.orig || "—"],
-      ["Destino", x.dest || "—"]
+      ["Tipo de servicio", x.tipo], ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
+      ["Origen", x.orig || "—"], ["Destino", x.dest || "—"]
     ];
     if (x.ant) mainRows.push(["Estación anterior", x.ant]);
     if (x.sig) mainRows.push(["Próxima estación", x.sig]);
     if (x.horaSal || x.horaLleg) mainRows.push(["Horario Sal. / Lleg.", `${x.horaSal || "—"} → ${x.horaLleg || "—"}`]);
     if (x.vel !== null) mainRows.push(["Velocidad", `${x.vel} km/h`]);
     if (x.retHtml) mainRows.push(["Puntualidad", x.retHtml, true]);
-    if (x.corredor) mainRows.push(["Corredor / Línea", x.corredor]);
-    if (x.mat) mainRows.push(["Material / Serie", x.mat]);
-    const distStr = isFinite(t.trackDist) ? ` (${fmtKm(t.trackDist)})` : "";
-    mainRows.push(["En vía activa", t.offTrack ? `No · Fuera de vía${distStr}` : `Sí · En vía${distStr}`]);
-    if (!t.offTrack && isFinite(t.d)) {
-      const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "";
-      mainRows.push(["Tren más cercano", `${fmtKm(t.d)} (${nearName})`]);
-    }
-    mainRows.push(["Coordenadas GPS", `${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}`]);
+    mainRows.push(["En vía activa", t.offTrack ? "No · Fuera de vía" : "Sí · En vía"]);
+    if (!t.offTrack && isFinite(t.d)) mainRows.push(["Tren más cercano", `${fmtKm(t.d)}`]);
 
-    const tableHtml = mainRows.map(([k, v, isHtml]) =>
-      `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`
-    ).join("");
+    const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
+    const rawRows = Object.entries(t.raw || {}).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
 
-    const rawRows = Object.entries(t.raw || {})
-      .filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object")
-      .map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
-
-    return `<div class="pop-wrap">` +
-      `<div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Tren Nº ${esc(x.numero)}</span></div>` +
+    return `<div class="pop-wrap"><div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Tren Nº ${esc(x.numero)}</span></div>` +
       (x.orig || x.dest ? `<div class="t-route">📍 ${esc(x.orig || "?")} → ${esc(x.dest || "?")}</div>` : "") +
       `<table class="pop-table">${tableHtml}</table>` +
-      (rawRows ? `<details class="pop-raw"><summary>Ver datos técnicos JSON</summary><table style="margin-top:4px">${rawRows}</table></details>` : "") +
-      `</div>`;
+      (rawRows ? `<details class="pop-raw"><summary>Ver datos técnicos JSON</summary><table style="margin-top:4px">${rawRows}</table></details>` : "") + `</div>`;
   }
 
   const TRAIN_SVG = '<svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>';
@@ -825,7 +716,7 @@
       let ok = show[t.color];
       if (ok && q) {
         const x = t._info || trainInfo(t);
-        const searchStr = `${t.id} ${t.label} ${x.tipo} ${x.numero} ${x.orig} ${x.dest} ${x.sig} ${Object.values(t.raw).filter(v => typeof v !== "object").join(" ")}`.toLowerCase();
+        const searchStr = `${t.id} ${t.label} ${x.tipo} ${x.numero} ${x.orig} ${x.dest} ${x.sig}`.toLowerCase();
         ok = searchStr.includes(q);
       }
       t.visible = ok;
@@ -833,7 +724,7 @@
       visible++;
       alive.add(t.id);
       let m = markers.get(t.id);
-      const z = t.color === "red" ? 1000 : t.color === "orange" ? 500 : t.color === "green" ? 100 : 0;
+      const z = t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0;
       if (!m) {
         m = L.marker([t.lat, t.lon], { icon: makeIcon(t.color), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
         m.bindTooltip(() => tipHtml(m._train), { direction: "top", offset: [0, -16], className: "trtip" });
@@ -865,25 +756,19 @@
     } else {
       const tR = toNum(el.thRed.value) || 3;
       el.pairs.innerHTML = pairs.slice(0, 100).map((p, i) => {
-        const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label;
-        const lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
+        const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label, lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
         return `<div class="pair" data-i="${i}"><span><span class="dot" style="background:${p.d < tR ? COLORS.red : COLORS.orange}"></span> ${esc(la)} ↔ ${esc(lb)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
-      }).join("") + (pairs.length > 100 ? `<div class="sub" style="padding:6px 4px">… y ${pairs.length - 100} pares más</div>` : "");
+      }).join("");
     }
   }
 
-  /* ---------- Tipos de tren ---------- */
   function updateTypes() {
     const counts = {};
     allTrains.forEach(t => { if (t.tipo) counts[t.tipo] = (counts[t.tipo] || 0) + 1; });
     const keys = Object.keys(counts).sort();
     keys.forEach(k => { if (!(k in typeSel)) typeSel[k] = true; });
     const box = $("types");
-    if (!keys.length) {
-      const campos = allTrains[0] ? Object.keys(allTrains[0].raw).filter(k => typeof allTrains[0].raw[k] !== "object").join(", ") : "";
-      box.innerHTML = '<div class="sub">No se ha encontrado el campo de tipo de tren; se muestran todos.' + (campos ? '<br><br>Campos recibidos: ' + esc(campos) : '') + '</div>';
-      typesKey = ""; return;
-    }
+    if (!keys.length) { box.innerHTML = '<div class="sub">Sin tipos específicos.</div>'; typesKey = ""; return; }
     const key = keys.join("|");
     if (key !== typesKey) {
       typesKey = key;
@@ -899,7 +784,6 @@
     computeProximity(); render();
   });
 
-  /* ---------- Ciclo de actualización ---------- */
   async function refresh() {
     if (loading) return;
     loading = true;
@@ -911,13 +795,9 @@
       trains = allTrains.filter(inTypes);
       computeProximity();
       render();
-      const hora = new Date().toLocaleTimeString("es-ES");
-      setStatus(`${trains.length} de ${allTrains.length} trenes · ${pairs.length} pares cercanos · actualizado ${hora}`);
+      setStatus(`${trains.length} de ${allTrains.length} trenes · ${pairs.length} pares cercanos · ${new Date().toLocaleTimeString("es-ES")}`);
     } catch (e) {
-      const cors = e instanceof TypeError;
-      setStatus(cors
-        ? "No se pudo descargar (probablemente bloqueo CORS o sin conexión). Prueba con un proxy CORS, otra fuente o el modo Demo."
-        : "Error: " + e.message, true);
+      setStatus("Error al descargar trenes: " + e.message, true);
     } finally {
       loading = false;
       el.btnRefresh.disabled = false;
@@ -928,7 +808,6 @@
     if (!paused) timer = setInterval(refresh, Math.max(3, +el.interval.value) * 1000);
   }
 
-  /* ---------- Eventos ---------- */
   el.btnRefresh.addEventListener("click", refresh);
   el.btnPause.addEventListener("click", () => {
     paused = !paused;
@@ -939,11 +818,9 @@
   el.interval.addEventListener("change", schedule);
   el.source.addEventListener("change", () => {
     el.customWrap.style.display = el.source.value === "custom" ? "block" : "none";
-    // Activar las vías de Cercanías solo cuando se seleccione la fuente de Cercanías / GTFS-RT
     const isCerc = el.source.value === "visor" || el.source.value === "gtfsrt";
     el.showTrackCerc.checked = isCerc;
     syncTrackVisibility();
-
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     stationsTried = false;
     refresh();
@@ -965,6 +842,7 @@
     el.proxy.value = "/api?url={url}";
   }
   el.proxy.addEventListener("change", () => { try { localStorage.setItem("proxyRenfe", el.proxy.value.trim()); } catch (e) {} });
+
   loadTrack();
   refresh();
   schedule();
