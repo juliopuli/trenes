@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.15.1</title>
+<title>Trenes Renfe en tiempo real · v1.15.2</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -71,20 +71,56 @@
 
   /* Panel flotante superior izquierdo en el mapa para Alertas Rojas */
   #redOverlay{
-    position:absolute; top:12px; left:54px; z-index:1000; background:var(--panel);
-    border:2px solid var(--red); border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,.28);
-    min-width:290px; max-width:410px; max-height:260px; display:flex; flex-direction:column; overflow:hidden; pointer-events:auto;
+    position:absolute;
+    top:12px;
+    left:54px;
+    z-index:1000;
+    background:var(--panel);
+    border:2px solid var(--red);
+    border-radius:10px;
+    box-shadow:0 4px 16px rgba(0,0,0,.28);
+    min-width:290px;
+    max-width:410px;
+    max-height:260px;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    pointer-events:auto;
   }
-  #redOverlay.empty{ border-color:var(--line); opacity:0.9; }
+  #redOverlay.empty{
+    border-color:var(--line);
+    opacity:0.9;
+  }
   .ro-head{
-    background:var(--red); color:#fff; font-size:12px; font-weight:700; padding:6px 10px;
-    display:flex; align-items:center; justify-content:space-between; letter-spacing:.02em;
+    background:var(--red);
+    color:#fff;
+    font-size:12px;
+    font-weight:700;
+    padding:6px 10px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    letter-spacing:.02em;
   }
-  #redOverlay.empty .ro-head{ background:var(--bg); color:var(--muted); border-bottom:1px solid var(--line); }
-  #redList{ padding:6px 8px; overflow-y:auto; font-size:12px; }
+  #redOverlay.empty .ro-head{
+    background:var(--bg);
+    color:var(--muted);
+    border-bottom:1px solid var(--line);
+  }
+  #redList{
+    padding:6px 8px;
+    overflow-y:auto;
+    font-size:12px;
+  }
   .ro-item{
-    display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 4px;
-    border-bottom:1px solid var(--line); cursor:pointer; font-weight:600;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+    padding:5px 4px;
+    border-bottom:1px solid var(--line);
+    cursor:pointer;
+    font-weight:600;
   }
   .ro-item:last-child{border-bottom:0}
   .ro-item:hover{background:var(--bg)}
@@ -129,10 +165,10 @@
   <aside id="side">
     <div>
       <div class="title-flex">
-        <h1>🚆 Trenes Renfe</h1>
+        <h1>🚆 Trenes Renfe en tiempo real</h1>
         <button class="help-btn" id="btnHelp" title="¿Cómo funciona?">?</button>
       </div>
-      <div class="sub">Control de tráfico y seguridad</div>
+      <div class="sub">Mapa de España · alerta por alcance y misma vía</div>
     </div>
 
     <fieldset>
@@ -261,7 +297,7 @@
         <div><b>Alerta Roja (Peligro de Alcance):</b> Salta cuando dos trenes están a menos de 5 km en el mismo sentido, pero <u>el tren de atrás va rápido (a más de 100 km/h) y alcanza al de delante</u> (porque va a igual o mayor velocidad). ¡El espacio entre ellos se reduce rápidamente!</div>
       </div>
 
-      <p style="margin-top: 12px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--line); pt: 8px;">
+      <p style="margin-top: 12px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8px;">
         * Nota: Los trenes de Alta Velocidad (AVE) y los de Media Distancia (Convencionales) nunca se cruzan en las alertas, ya que van por vías diferentes aunque pasen cerca.
       </p>
     </div>
@@ -273,8 +309,8 @@
 (() => {
   "use strict";
 
-  /* ---------- Configuración ---------- */
-  const VERSION = "1.15.1";
+  /* ---------- Configuración y Constantes de Respaldo ---------- */
+  const VERSION = "1.15.2";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -288,6 +324,31 @@
     ALTARIA: "#00695c", "CERCANÍAS": "#ea580c", TREN: "#475569"
   };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
+
+  const FALLBACK_AV_WAYS = [
+    [[40.4065,-3.6896],[40.5567,-3.1670],[40.9250,-2.4500],[41.3410,-1.6440],[41.6587,-0.9114],[41.5200,0.0500],[41.6208,0.6327],[41.3900,1.0200],[41.1992,1.2690],[41.3791,2.1401],[41.9793,2.8169],[42.2654,2.9436]],
+    [[40.4065,-3.6896],[39.8900,-3.9200],[38.9830,-3.9160],[38.6850,-4.1070],[38.1500,-4.4500],[37.8884,-4.7892],[37.6500,-5.4000],[37.3919,-5.9753]],
+    [[37.8884,-4.7892],[37.3980,-4.7060],[37.0672,-4.6869],[36.7115,-4.4316]],
+    [[37.0672,-4.6869],[37.0180,-4.5570],[37.1670,-4.1480],[37.1841,-3.6091]],
+    [[40.4065,-3.6896],[40.0300,-3.0100],[40.0442,-2.1380],[39.5890,-1.1740],[39.4601,-0.3816]],
+    [[40.0442,-2.1380],[39.4200,-1.9600],[38.9997,-1.8490],[38.6064,-0.9234],[38.3446,-0.4951]],
+    [[38.6064,-0.9234],[38.2480,-0.7420],[38.0830,-0.9460],[37.9746,-1.1301]],
+    [[40.4722,-3.6822],[40.8884,-4.0958],[41.3200,-4.4800],[41.6416,-4.7289],[42.0110,-4.5390],[42.5960,-5.5786],[43.1600,-5.8280],[43.3662,-5.8536]],
+    [[42.0110,-4.5390],[42.3712,-3.6657]],
+    [[41.2850,-4.6850],[41.5126,-5.7369],[42.0289,-6.6214],[42.3411,-7.8647],[42.8705,-8.5446],[43.3526,-8.4098]],
+    [[42.8705,-8.5446],[42.5960,-8.7610],[42.4227,-8.6345],[42.2351,-8.7118]],
+    [[39.9678,-6.1030],[39.4650,-6.3840],[38.9218,-6.3426],[38.8878,-6.9822]],
+    [[40.1500,-3.8200],[39.8624,-4.0113]]
+  ];
+
+  const FALLBACK_MD_WAYS = [
+    [[41.3791,2.1401],[41.2240,1.7250],[41.1120,1.2550],[40.8120,0.5210],[40.4700,0.4730],[39.9870,-0.0528],[39.6800,-0.2700],[39.4601,-0.3816],[39.1500,-0.4350],[38.9900,-0.5200],[38.8700,-0.7800],[38.6100,-0.8700],[38.3446,-0.4951],[38.2650,-0.6980],[38.0830,-0.9460],[37.9746,-1.1301],[37.6050,-0.9860]],
+    [[40.4065,-3.6896],[40.0320,-3.6060],[39.6100,-3.5000],[39.3880,-3.2180],[39.2000,-2.6500],[38.9997,-1.8490],[38.8680,-1.0970],[38.8700,-0.7800]],
+    [[39.3880,-3.2180],[38.9950,-3.3700],[38.7610,-3.3850],[38.3800,-3.5050],[38.0694,-3.5931],[38.0180,-3.8600],[38.0300,-4.0500],[37.8884,-4.7892],[37.7500,-5.0500],[37.6180,-5.2800],[37.3919,-5.9753],[37.1750,-5.9220],[36.9150,-6.0700],[36.6796,-6.1268],[36.5930,-6.2250],[36.5290,-6.2869]],
+    [[40.4722,-3.6822],[40.6350,-4.0100],[40.6596,-4.6869],[41.0500,-4.7800],[41.3186,-4.9089],[41.6416,-4.7289],[41.9200,-4.4500],[42.1200,-4.1000],[42.3712,-3.6657],[42.5400,-3.3100],[42.6844,-2.9480],[42.8415,-2.6716],[42.8900,-2.3000],[43.0400,-2.2000],[43.1350,-2.0750],[43.3177,-1.9765],[43.3396,-1.7890]],
+    [[42.0110,-4.5390],[42.4500,-4.3800],[42.8000,-4.2600],[43.0000,-4.1300],[43.3389,-4.0531],[43.4586,-3.8115]],
+    [[41.6587,-0.9114],[41.8800,-0.1500],[41.9050,0.1900],[41.6208,0.6327],[41.6500,1.1400],[41.7200,1.8250],[41.5450,2.1100],[41.3791,2.1401]]
+  ];
 
   /* ---------- Modal de Ayuda ---------- */
   const helpModal = document.getElementById("helpModal");
@@ -456,39 +517,16 @@
   /* ---------- Capas de Vías ---------- */
   const trackCanvas = L.canvas({ padding: 0.5 });
   const trackLayer = L.layerGroup().addTo(map);
+  let polyAV = null, polyMD = null, polyCerc = null;
+  let gridAV = new Map(), gridMD = new Map(), gridCerc = new Map();
+  let trackLoaded = false, trackLoading = false;
   const GRID_SIZE = 0.15;
 
-  const SPAIN_QUADRANTS = [
-    "35.8,-9.5,40.2,-3.2",
-    "35.8,-3.2,40.2,3.4",
-    "40.2,-9.5,43.8,-3.2",
-    "40.2,-3.2,43.8,3.4"
-  ];
+  const setTrack = msg => { el.trackStatus.textContent = msg; };
 
-  const TRACKS = {
-    av: {
-      name: "AV", color: "#7b1fa2", weight: 3.3, opacity: 0.92, minKm: 0.08, key: "avTrack_v12",
-      fallback: FALLBACK_AV_WAYS,
-      queries: ['[out:json][timeout:30][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'],
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map()
-    },
-    md: {
-      name: "MD/Conv", color: "#0066cc", weight: 2.6, opacity: 0.85, minKm: 0.18, key: "mdTrack_v12",
-      fallback: FALLBACK_MD_WAYS,
-      queries: SPAIN_QUADRANTS.map(b => `[out:json][timeout:25][bbox:${b}];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;`),
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map()
-    }
-  };
-
-  const OVERPASS = [
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter"
-  ];
-
-  function addWaysToGrid(grid, lines) {
+  function addGeoJsonToGrid(grid, coordsList) {
     grid.clear();
-    for (const line of lines) {
+    for (const line of coordsList) {
       for (let i = 0; i < line.length - 1; i++) {
         const la1 = line[i][0], lo1 = line[i][1];
         const la2 = line[i + 1][0], lo2 = line[i + 1][1];
@@ -520,7 +558,8 @@
       t = (x * dx + y * dy) / lenSq;
       if (t < 0) t = 0; else if (t > 1) t = 1;
     }
-    return Math.hypot(x - t * dx, y - t * dy);
+    const nearX = t * dx, nearY = t * dy;
+    return Math.hypot(x - nearX, y - nearY);
   }
 
   function minDistInGrid(grid, lat, lon) {
@@ -535,7 +574,7 @@
           const d = distToSegmentKm(lat, lon, s[0], s[1], s[2], s[3]);
           if (d < minD) {
             minD = d;
-            if (minD < 0.03) return minD;
+            if (minD < 0.05) return minD;
           }
         }
       }
@@ -543,193 +582,59 @@
     return minD;
   }
 
-  function updateTrackStatus() {
-    const part = st => {
-      if (st.loading) return `${st.name}: detallando OSM…`;
-      if (st.osmLoaded) return `${st.name}: ${st.n} tramos OSM`;
-      if (st.loaded) return `${st.name}: red base activa`;
-      return `${st.name}: sin cargar`;
-    };
-    const parts = [];
-    if (el.showTrackAV.checked) parts.push(part(TRACKS.av));
-    if (el.showTrackMD.checked) parts.push(part(TRACKS.md));
-    el.trackStatus.textContent = parts.length ? parts.join(" · ") : "Capas de vías ocultas";
-  }
-
-  function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
-  async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } }
-  async function idbSet(k, v) { try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }
-
-  async function overpassSingle(query) {
-    let lastErr;
-    for (const ep of OVERPASS) {
-      try {
-        const ctl = new AbortController();
-        const to = setTimeout(() => ctl.abort(), 22000);
-        const r = await fetch(ep, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: "data=" + encodeURIComponent(query),
-          signal: ctl.signal
-        });
-        clearTimeout(to);
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        const j = await r.json();
-        const ways = (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => e.geometry.map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]));
-        if (ways.length) return ways;
-        throw new Error("vacío");
-      } catch (e) { lastErr = e; }
-    }
-    throw lastErr || new Error("sin datos");
-  }
-
-  function decimate(pts, minKm) {
-    const out = [pts[0]]; let last = pts[0];
-    for (let i = 1; i < pts.length - 1; i++) {
-      const p = pts[i];
-      const dy = (p[0] - last[0]) * 111.19, dx = (p[1] - last[1]) * 111.19 * Math.cos(p[0] * Math.PI / 180);
-      if (dx * dx + dy * dy >= minKm * minKm) { out.push(p); last = p; }
-    }
-    out.push(pts[pts.length - 1]);
-    return out;
+  function minTrackDistKm(lat, lon) {
+    if (!trackLoaded) return 0;
+    let d = Infinity;
+    if (el.showTrackAV.checked) d = Math.min(d, minDistInGrid(gridAV, lat, lon));
+    if (el.showTrackMD.checked) d = Math.min(d, minDistInGrid(gridMD, lat, lon));
+    return d;
   }
 
   function syncTrackVisibility() {
     trackLayer.clearLayers();
-    if (el.showTrackMD.checked && TRACKS.md.poly) TRACKS.md.poly.addTo(trackLayer);
-    if (el.showTrackAV.checked && TRACKS.av.poly) TRACKS.av.poly.addTo(trackLayer);
+    if (!trackLoaded) return;
+    if (el.showTrackMD.checked && polyMD) polyMD.addTo(trackLayer);
+    if (el.showTrackAV.checked && polyAV) polyAV.addTo(trackLayer);
   }
 
-  function applyTrackWays(st, ways, isOsm) {
-    const combined = isOsm ? [...st.fallback, ...ways] : ways;
-    addWaysToGrid(st.grid, combined);
-    st.poly = L.polyline(combined, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
-    st.loaded = true;
-    st.osmLoaded = !!isOsm;
-    syncTrackVisibility();
-    updateTrackStatus();
-  }
-
-  async function loadTrackLayer(kind, force) {
-    const st = TRACKS[kind];
-    if (st.loading) return;
-    if (!st.loaded && st.fallback) {
-      applyTrackWays(st, st.fallback, false);
-    }
-    if (st.osmLoaded && !force) return;
-
-    st.loading = true; updateTrackStatus();
+  async function loadTrack() {
+    if (trackLoading || trackLoaded) return;
+    trackLoading = true;
+    el.btnReloadTrack.disabled = true;
+    setTrack("Cargando vías…");
     try {
-      let ways = null;
-      if (!force) {
-        const c = await idbGet(st.key);
-        if (c && c.ways && Date.now() - c.t < 30 * 864e5) ways = c.ways;
-      }
-      if (!ways) {
-        const allWays = [];
-        for (const q of st.queries) {
-          try {
-            const raw = await overpassSingle(q);
-            const dec = raw.map(w => decimate(w, st.minKm));
-            allWays.push(...dec);
-            if (allWays.length) applyTrackWays(st, allWays, true);
-          } catch (e) {}
-        }
-        if (!allWays.length) throw new Error("sin respuesta OSM");
-        ways = allWays;
-        idbSet(st.key, { t: Date.now(), ways });
-      }
-      applyTrackWays(st, ways, true);
+      addWaysToGrid(gridAV, FALLBACK_AV_WAYS);
+      addWaysToGrid(gridMD, FALLBACK_MD_WAYS);
+
+      polyMD = L.polyline(FALLBACK_MD_WAYS, { renderer: trackCanvas, color: "#0066cc", weight: 2.2, opacity: 0.75, interactive: false });
+      polyAV = L.polyline(FALLBACK_AV_WAYS, { renderer: trackCanvas, color: "#7b1fa2", weight: 3.2, opacity: 0.9, interactive: false });
+
+      trackLoaded = true;
+      syncTrackVisibility();
+      setTrack(`Red cargada correctamente`);
+      if (trains.length) { computeProximity(); render(); }
     } catch (e) {
+      setTrack("Error cargando vías.");
     } finally {
-      st.loading = false;
-      updateTrackStatus();
+      trackLoading = false;
+      el.btnReloadTrack.disabled = false;
     }
   }
 
-  function onTrackToggle(kind, chk) {
-    if (chk.checked && !TRACKS[kind].osmLoaded) loadTrackLayer(kind);
-    syncTrackVisibility();
-    updateTrackStatus();
-  }
-  el.showTrackAV.addEventListener("change", () => onTrackToggle("av", el.showTrackAV));
-  el.showTrackMD.addEventListener("change", () => onTrackToggle("md", el.showTrackMD));
-  el.btnReloadTrack.addEventListener("click", () => {
-    if (el.showTrackAV.checked) loadTrackLayer("av", true);
-    if (el.showTrackMD.checked) loadTrackLayer("md", true);
+  [el.showTrackAV, el.showTrackMD].forEach(chk => {
+    chk.addEventListener("change", () => {
+      syncTrackVisibility();
+      if (trains.length) { computeProximity(); render(); }
+    });
   });
+  el.btnReloadTrack.addEventListener("click", () => { trackLoaded = false; loadTrack(); });
 
-  /* ---------- Estado de Trenes ---------- */
+  /* ---------- Estado de Trenes con Historial Vectorial ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
 
   const toNum = v => (v === null || v === undefined || v === "") ? NaN : parseFloat(String(v).replace(",", "."));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const R = 6371.0088, rad = x => x * Math.PI / 180;
-  function haversine(la1, lo1, la2, lo2) {
-    const dLa = rad(la2 - la1), dLo = rad(lo2 - lo1);
-    const a = Math.sin(dLa / 2) ** 2 + Math.cos(rad(la1)) * Math.cos(rad(la2)) * Math.sin(dLo / 2) ** 2;
-    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
-  }
-  const fmtKm = d => d < 1 ? Math.round(d * 1000) + " m" : d.toFixed(2) + " km";
-  function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
-
-  const stations = new Map();
-  function registerStation(code, name) {
-    if (code === undefined || code === null || !name) return;
-    const c = String(code).trim(), n = String(name).trim();
-    if (!c || !n || /^\d+$/.test(n)) return;
-    stations.set(c, n); stations.set(c.replace(/^0+/, ""), n); stations.set(c.padStart(5, "0"), n);
-  }
-  Object.entries(DEFAULT_STATIONS).forEach(([k, v]) => registerStation(k, v));
-
-  function resolveStation(val) {
-    if (val === undefined || val === null || val === "") return "";
-    const s = String(val).trim();
-    if (!s || s === "0" || s === "-") return "";
-    const found = stations.get(s) || stations.get(s.replace(/^0+/, "")) || stations.get(s.padStart(5, "0"));
-    if (found) return found;
-    if (/^\d+$/.test(s)) return "";
-    return s;
-  }
-
-  let stationsTried = false;
-  function proxify(url) {
-    const p = el.proxy.value.trim();
-    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
-  }
-  async function loadStations() {
-    if (stationsTried || el.source.value !== "ld") return;
-    stationsTried = true;
-    const base = SOURCES.ld.replace("flotaLD.json", "");
-    for (const file of ["estacionesEstatico.geojson", "estaciones.geojson"]) {
-      try {
-        const r = await fetch(proxify(base + file));
-        if (!r.ok) continue;
-        const g = await r.json();
-        (g.features || []).forEach(f => {
-          const pr = f.properties || {};
-          const keys = Object.keys(pr);
-          const kc = keys.find(k => /(cod|id|estacion|clave)/i.test(k) && (typeof pr[k] === "number" || /^\d+$/.test(String(pr[k]).trim())));
-          const kn = keys.find(k => /(nom|name|desc|titulo|label)/i.test(k) && typeof pr[k] === "string" && !/^\d+$/.test(pr[k].trim()));
-          if (kc && kn) registerStation(pr[kc], pr[kn]);
-        });
-        break;
-      } catch (e) {}
-    }
-  }
-
-  function extractList(data) {
-    if (Array.isArray(data)) return data;
-    if (data && Array.isArray(data.trenes)) return data.trenes;
-    if (data && Array.isArray(data.entity)) return data.entity;
-    if (data && Array.isArray(data.vehicles)) return data.vehicles;
-    if (data && Array.isArray(data.data)) return data.data;
-    if (data && typeof data === "object") {
-      for (const k of Object.keys(data)) if (Array.isArray(data[k]) && data[k].length && typeof data[k][0] === "object") return data[k];
-    }
-    return [];
-  }
 
   function resolveTrainType(item, trainNumber) {
     if (!item || typeof item !== "object") return inferTypeFromNumber(trainNumber);
@@ -878,118 +783,7 @@
       retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
     }
 
-    return {
-      tipo: t.tipo || "AVE", numero,
-      numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "",
-      orig, dest, sig, ant,
-      horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(),
-      vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null,
-      measures: t.speedMeasures || 0,
-      speedsList: t.speedsList || [],
-      ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim()
-    };
-  }
-
-  function getTrainTrackGroup(t) {
-    const tipo = (t.tipo || "").toUpperCase();
-    if (tipo === "AVE" || tipo === "AVLO" || tipo === "AVANT") return "AV";
-    if (tipo === "MD" || tipo === "REGIONAL" || tipo === "REG.EXP" || tipo === "CERCANÍAS") return "CONV";
-    if (isFinite(t.calcSpeed) && t.calcSpeed > 205) return "AV";
-    const dAV = TRACKS.av.loaded ? minDistInGrid(TRACKS.av.grid, t.lat, t.lon) : Infinity;
-    const dMD = TRACKS.md.loaded ? minDistInGrid(TRACKS.md.grid, t.lat, t.lon) : Infinity;
-    if (dAV <= 1.2 && dAV < dMD * 0.8) return "AV";
-    if (dMD <= 1.2 && dMD < dAV * 0.8) return "CONV";
-    return "HYB";
-  }
-
-  function isSameTrackGroup(a, b) {
-    const gA = a.trackGroup || getTrainTrackGroup(a);
-    const gB = b.trackGroup || getTrainTrackGroup(b);
-    if ((gA === "AV" && gB === "CONV") || (gA === "CONV" && gB === "AV")) return false;
-    return true;
-  }
-
-  function getRouteVector(t) {
-    const x = t._info || trainInfo(t);
-    const cOrig = findStationCoords(x.orig);
-    const cDest = findStationCoords(x.dest);
-    const cSig  = findStationCoords(x.sig);
-    const cAnt  = findStationCoords(x.ant);
-
-    if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 3.0) return [cSig[0] - t.lat, cSig[1] - t.lon];
-    if (cAnt && cSig && (cAnt[0] !== cSig[0] || cAnt[1] !== cSig[1])) return [cSig[0] - cAnt[0], cSig[1] - cAnt[1]];
-    if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 5.0) return [cDest[0] - t.lat, cDest[1] - t.lon];
-    if (cOrig && cDest && (cOrig[0] !== cDest[0] || cOrig[1] !== cDest[1])) return [cDest[0] - cOrig[0], cDest[1] - cOrig[1]];
-    return null;
-  }
-
-  function cosBetweenVectors(v1Lat, v1Lon, v2Lat, v2Lon, refLat) {
-    const kLon = Math.cos((refLat || 40) * Math.PI / 180);
-    const x1 = v1Lon * kLon, y1 = v1Lat;
-    const x2 = v2Lon * kLon, y2 = v2Lat;
-    const m1 = Math.hypot(x1, y1), m2 = Math.hypot(x2, y2);
-    if (m1 < 1e-8 || m2 < 1e-8) return null;
-    return (x1 * x2 + y1 * y2) / (m1 * m2);
-  }
-
-  function areMovingSameDirection(a, b) {
-    const infoA = a._info, infoB = b._info;
-    const refLat = (a.lat + b.lat) / 2;
-
-    if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
-      if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return false;
-      if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return false;
-      if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return false;
-    }
-
-    const rA = a.routeVec, rB = b.routeVec;
-    if (rA && rB) {
-      const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
-      if (cosRoute !== null && cosRoute < 0.5) return false;
-    }
-
-    if (a.hasVector && b.hasVector) {
-      const cosGps = cosBetweenVectors(a.dLat, a.dLon, b.dLat, b.dLon, refLat);
-      if (cosGps !== null && cosGps < 0.5) return false;
-      return true;
-    }
-
-    if (a.hasVector && rB) {
-      const cosMix = cosBetweenVectors(a.dLat, a.dLon, rB[0], rB[1], refLat);
-      if (cosMix !== null && cosMix < 0.5) return false;
-    }
-    if (b.hasVector && rA) {
-      const cosMix = cosBetweenVectors(rA[0], rA[1], b.dLat, b.dLon, refLat);
-      if (cosMix !== null && cosMix < 0.5) return false;
-    }
-
-    if (rA && rB) {
-      const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
-      return cosRoute !== null && cosRoute > 0.65;
-    }
-
-    return false;
-  }
-
-  function getTrailingAndLeading(a, b) {
-    let vLat = 0, vLon = 0;
-    if (a.hasVector) { vLat += a.dLat; vLon += a.dLon; }
-    if (b.hasVector) { vLat += b.dLat; vLon += b.dLon; }
-    if (vLat === 0 && vLon === 0) {
-      if (a.routeVec) { vLat += a.routeVec[0]; vLon += a.routeVec[1]; }
-      if (b.routeVec) { vLat += b.routeVec[0]; vLon += b.routeVec[1]; }
-    }
-    if (vLat === 0 && vLon === 0) return null;
-
-    const kLon = Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
-    const abLat = b.lat - a.lat;
-    const abLon = (b.lon - a.lon) * kLon;
-    const proj = (abLat * vLat) + (abLon * vLon * kLon);
-    if (Math.abs(proj) < 1e-9) return null;
-
-    return proj > 0
-      ? { trailing: a, leading: b }
-      : { trailing: b, leading: a };
+    return { tipo: t.tipo || "AVE", numero, numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "", orig, dest, sig, ant, horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(), vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null, ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim() };
   }
 
   function buildUrl() {
@@ -1012,20 +806,43 @@
     return [...seen.values()];
   }
 
+  function demoTrains() {
+    if (!demoFleet) {
+      const names = Object.keys(CITIES), tipos = ["AVE", "AVLO", "ALVIA", "AVANT", "MD"], fleet = [];
+      const rnd = (a, b) => a + Math.random() * (b - a);
+      for (let i = 0; i < 120; i++) {
+        let a = names[Math.floor(Math.random() * names.length)], b;
+        do { b = names[Math.floor(Math.random() * names.length)]; } while (b === a);
+        const km = haversine(...CITIES[a], ...CITIES[b]);
+        const speed = rnd(90, 295), phase = Math.random(), tipo = tipos[i % tipos.length];
+        fleet.push({ id: "D" + i, tipo, a, b, km, speed, phase });
+      }
+      demoFleet = fleet;
+    }
+    const now = Date.now() / 3600000;
+    return demoFleet.map(f => {
+      let p = (now * f.speed / f.km + f.phase) % 2; if (p > 1) p = 2 - p;
+      const [la1, lo1] = CITIES[f.a], [la2, lo2] = CITIES[f.b];
+      return {
+        id: f.id, label: f.id, tipo: f.tipo,
+        lat: la1 + (la2 - la1) * p, lon: lo1 + (lo2 - lo1) * p,
+        raw: { codTren: f.id, desProducto: f.tipo, desOrigen: f.a, desDestino: f.b, velocidad: Math.round(f.speed), retraso: 0 }
+      };
+    });
+  }
+  let demoFleet = null;
+
   function computeProximity() {
-    const tO = Math.max(0.5, toNum(el.thOrange.value) || 5);
+    const tR = Math.max(0, toNum(el.thOrange.value) || 3);
+    const tO = Math.max(tR, toNum(el.thOrange.value) || 5);
     const minSpeed = Math.max(10, toNum(el.thSpeed.value) || 100);
 
     trains.forEach(t => {
       t.d = Infinity;
       t.nearTrain = null;
-      t.hasRedPair = false;
-      t.roleInfo = "";
       t.inStation = isInStationArea(t.lat, t.lon, 2.2);
-      t.isFast = isConfirmedHighSpeed(t, minSpeed);
+      t.isFast = (t.calcSpeed !== null && t.calcSpeed >= minSpeed);
       t._info = trainInfo(t);
-      t.trackGroup = getTrainTrackGroup(t);
-      t.routeVec = getRouteVector(t);
     });
 
     const activeTrains = trains.filter(t => !t.inStation);
@@ -1038,54 +855,40 @@
       for (let j = i + 1; j < sorted.length; j++) {
         const b = sorted[j];
         if (b.lat - a.lat > maxDLat) break;
-
-        if (!isSameTrackGroup(a, b)) continue;
-
         const d = haversine(a.lat, a.lon, b.lat, b.lon);
+        
         if (d < tO) {
-          if (!areMovingSameDirection(a, b)) continue;
-
-          const order = getTrailingAndLeading(a, b);
-          let pairSeverity = "orange";
-          let trailing = a, leading = b;
-
-          if (order) {
-            trailing = order.trailing;
-            leading = order.leading;
-            const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
-            const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
-
-            if (trailing.isFast && vTrail >= vLead) {
-              pairSeverity = "red";
-            } else {
-              pairSeverity = "orange";
+          let opuestos = false;
+          if (a.hasVector && b.hasVector) {
+            const dotProduct = (a.dLat * b.dLat) + (a.dLon * b.dLon);
+            if (dotProduct < -0.00000001) opuestos = true;
+          } else {
+            const infoA = a._info, infoB = b._info;
+            if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
+              if (infoA.orig === infoB.dest && infoA.dest === infoB.orig) opuestos = true;
             }
           }
 
-          if (d < a.d) { a.d = d; a.nearTrain = b; }
-          if (d < b.d) { b.d = d; b.nearTrain = a; }
-          if (pairSeverity === "red") {
-            a.hasRedPair = true;
-            b.hasRedPair = true;
+          if (!opuestos) {
+            if (d < a.d) { a.d = d; a.nearTrain = b; }
+            if (d < b.d) { b.d = d; b.nearTrain = a; }
+            pairs.push({ a, b, d });
           }
-          if (order) {
-            trailing.roleInfo = `Detrás de ${leading.tipo} ${leading.label}`;
-            leading.roleInfo  = `Delante de ${trailing.tipo} ${trailing.label}`;
-          }
-
-          pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, severity: pairSeverity });
         }
       }
     }
 
     trains.forEach(t => {
-      if (t.inStation || !isFinite(t.d) || t.d >= tO) {
+      if (t.inStation) {
         t.color = "green";
+      } else if (t.d < tR && t.isFast) {
+        t.color = "red";
+      } else if (t.d < tO) {
+        t.color = "orange";
       } else {
-        t.color = t.hasRedPair ? "red" : "orange";
+        t.color = "green";
       }
     });
-
     pairs.sort((x, y) => x.d - y.d);
   }
 
@@ -1093,53 +896,31 @@
 
   function tipHtml(t) {
     const x = t._info || trainInfo(t);
-    const vGrp = t.trackGroup === "AV" ? "Vía AV" : (t.trackGroup === "CONV" ? "Vía Conv." : "Vía Híbrida");
-    const head = `<div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Nº ${esc(x.numero)}</span><span style="margin-left:auto;font-size:10.5px;color:#667085">${esc(vGrp)}</span></div>`;
+    const head = `<div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Nº ${esc(x.numero)}</span></div>`;
     const ruta = (x.orig || x.dest) ? `<div class="t-route">📍 ${esc(x.orig || "?")} → ${esc(x.dest || "?")}</div>` : "";
     const paradas = [];
     if (x.sig) paradas.push(`Próxima: <b>${esc(x.sig)}</b>`);
-    if (x.vel !== null) {
-      const mTag = x.measures >= 2 ? " (2 med.)" : " (1 med.)";
-      paradas.push(`Vel. GPS: <b>${x.vel} km/h</b>${mTag}`);
-    } else {
-      paradas.push(`Vel. GPS: <i>calculando…</i>`);
-    }
+    if (x.vel !== null) paradas.push(`Velocidad: <b>${x.vel} km/h</b>`);
     const meta = paradas.length ? `<div class="t-meta">${paradas.join(" · ")}</div>` : "";
     const ret = x.retHtml ? `<div style="margin-top:2px">${x.retHtml}</div>` : "";
-    const statNote = t.inStation ? `<div style="color:#0284c7;font-weight:600;margin-top:2px">En zona de estación (exento de alertas)</div>` : "";
+    const statNote = t.inStation ? `<div style="color:#0284c7;font-weight:600;margin-top:2px">En zona de estación (exento)</div>` : "";
     const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "otro tren";
-    const roleTxt = t.roleInfo ? ` (${t.roleInfo})` : "";
-    let near = "";
-    if (!t.inStation && isFinite(t.d)) {
-      if (t.color === "red") {
-        near = `<div style="color:#e53935;font-weight:700;margin-top:3px">🚨 PELIGRO ALCANCE: A ${fmtKm(t.d)}${esc(roleTxt)}</div>`;
-      } else {
-        near = `<div style="color:#d97706;font-weight:700;margin-top:3px">⚠ Precaución: A ${fmtKm(t.d)} de ${esc(nearName)}${esc(roleTxt)}</div>`;
-      }
-    }
+    const near = (!t.inStation && isFinite(t.d)) ? `<div style="color:${t.color === "red" ? "#e53935" : "#fb8c00"};font-weight:700;margin-top:3px">⚠ A ${fmtKm(t.d)} de ${esc(nearName)}</div>` : "";
     return head + ruta + meta + ret + statNote + near;
   }
 
   function popupHtml(t) {
     const x = t._info || trainInfo(t);
-    const vGrp = t.trackGroup === "AV" ? "Alta Velocidad (UIC)" : (t.trackGroup === "CONV" ? "Convencional (Ibérico)" : "Ancho Variable / Mixto");
     const mainRows = [
-      ["Tipo de servicio", x.tipo], ["Infraestructura", vGrp],
-      ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
+      ["Tipo de servicio", x.tipo], ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
       ["Origen", x.orig || "—"], ["Destino", x.dest || "—"]
     ];
     if (x.ant) mainRows.push(["Estación anterior", x.ant]);
     if (x.sig) mainRows.push(["Próxima estación", x.sig]);
     if (x.horaSal || x.horaLleg) mainRows.push(["Horario Sal. / Lleg.", `${x.horaSal || "—"} → ${x.horaLleg || "—"}`]);
-    if (x.vel !== null) {
-      const det = x.speedsList.length ? ` [${x.speedsList.map(v => Math.round(v)).join(" / ")} km/h]` : "";
-      mainRows.push(["Velocidad GPS", `${x.vel} km/h (${x.measures}/2 medidas)${det}`]);
-    } else {
-      mainRows.push(["Velocidad GPS", "Esperando cambio de posición GPS…"]);
-    }
+    if (x.vel !== null) mainRows.push(["Velocidad", `${x.vel} km/h`]);
     if (x.retHtml) mainRows.push(["Puntualidad", x.retHtml, true]);
-    if (t.roleInfo) mainRows.push(["Posición en vía", t.roleInfo]);
-    mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.color === "red" ? "ROJO (Alcance a >100 km/h)" : (t.color === "orange" ? "AMARILLO/NARANJA (<5 km sin alcance)" : "Normal en ruta"))]);
+    mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.color === "red" ? "ROJO (Peligro de alcance)" : (t.color === "orange" ? "NARANJA (Cerca)" : "Normal"))]);
     if (!t.inStation && isFinite(t.d)) mainRows.push(["Tren más cercano", `${fmtKm(t.d)}`]);
 
     const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
@@ -1156,23 +937,9 @@
     return L.divIcon({ className: "tm " + color, html: '<div class="b">' + TRAIN_SVG + '</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
   }
 
-  function formatPairText(p) {
-    if (p.hasOrder) {
-      const tr = `${p.trailing.tipo ? p.trailing.tipo + " " : ""}${p.trailing.label}`;
-      const ld = `${p.leading.tipo ? p.leading.tipo + " " : ""}${p.leading.label}`;
-      const vT = isFinite(p.trailing.calcSpeed) ? `${p.trailing.calcSpeed}` : "?";
-      const vL = isFinite(p.leading.calcSpeed) ? `${p.leading.calcSpeed}` : "?";
-      return `${esc(tr)} (${vT}) ➔ ${esc(ld)} (${vL} km/h)`;
-    }
-    const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label;
-    const lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
-    return `${esc(la)} ↔ ${esc(lb)}`;
-  }
-
-  /* ---------- Función render() restaurada ---------- */
   function render() {
     const q = el.search.value.trim().toLowerCase();
-    const show = { red: true, orange: true, green: true };
+    const show = { red: el.showRed.checked, orange: el.showOrange.checked, green: el.showGreen.checked };
     const counts = { red: 0, orange: 0, green: 0 };
     const alive = new Set();
     let visible = 0;
@@ -1209,37 +976,22 @@
     if (el.showLines.checked) {
       pairs.forEach(p => {
         if (!p.a.visible || !p.b.visible) return;
-        const col = p.severity === "red" ? COLORS.red : COLORS.orange;
-        L.polyline([[p.a.lat, p.a.lon], [p.b.lat, p.b.lon]], { renderer: canvas, color: col, weight: p.severity === "red" ? 3 : 2, opacity: 0.85 }).addTo(linesLayer);
+        const col = p.a.color === "red" || p.b.color === "red" ? COLORS.red : COLORS.orange;
+        L.polyline([[p.a.lat, p.a.lon], [p.b.lat, p.b.lon]], { renderer: canvas, color: col, weight: 2, opacity: 0.8 }).addTo(linesLayer);
       });
     }
 
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
     el.nTotal.textContent = visible + " / " + trains.length;
 
-    const redPairs = [];
-    const orangePairs = [];
-    pairs.forEach((p, idx) => {
-      if (p.severity === "red") redPairs.push({ p, idx });
-      else orangePairs.push({ p, idx });
-    });
-
-    el.roCount.textContent = redPairs.length;
-    if (!redPairs.length) {
-      el.redOverlay.classList.add("empty");
-      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance.</div>';
+    if (!pairs.length) {
+      el.pairs.innerHTML = '<div class="sub">Ningún par de trenes por debajo del umbral en ruta.</div>';
     } else {
-      el.redOverlay.classList.remove("empty");
-      el.redList.innerHTML = redPairs.map(({ p, idx }) => {
-        return `<div class="ro-item" data-i="${idx}"><span>🔴 ${formatPairText(p)}</span><span class="ro-d">${fmtKm(p.d)}</span></div>`;
-      }).join("");
-    }
-
-    if (!orangePairs.length) {
-      el.pairs.innerHTML = '<div class="sub">Ningún par en precaución.</div>';
-    } else {
-      el.pairs.innerHTML = orangePairs.slice(0, 100).map(({ p, idx }) => {
-        return `<div class="pair" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
+      const tR = toNum(el.thOrange.value) || 3;
+      el.pairs.innerHTML = pairs.slice(0, 100).map((p, i) => {
+        const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label, lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
+        const col = p.a.color === "red" || p.b.color === "red" ? COLORS.red : COLORS.orange;
+        return `<div class="pair" data-i="${i}"><span><span class="dot" style="background:${col}"></span> ${esc(la)} ↔ ${esc(lb)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
       }).join("");
     }
   }
@@ -1258,7 +1010,6 @@
     }
     keys.forEach(k => { const n = box.querySelector(`[data-c="${CSS.escape(k)}"]`); if (n) n.textContent = counts[k]; });
   }
-
   const inTypes = t => !t.tipo || typeSel[t.tipo] !== false;
   $("types").addEventListener("change", e => {
     const k = e.target.dataset && e.target.dataset.t; if (k === undefined) return;
@@ -1278,7 +1029,7 @@
       trains = allTrains.filter(inTypes);
       computeProximity();
       render();
-      setStatus(`${trains.length} trenes · ${pairs.length} pares cercanos · actualizado ${new Date().toLocaleTimeString("es-ES")}`);
+      setStatus(`${trains.length} trenes · ${pairs.length} pares cercanos · ${new Date().toLocaleTimeString("es-ES")}`);
     } catch (e) {
       setStatus("Error al descargar trenes: " + e.message, true);
     } finally {
@@ -1289,12 +1040,6 @@
   function schedule() {
     clearInterval(timer);
     if (!paused) timer = setInterval(refresh, Math.max(3, +el.interval.value) * 1000);
-  }
-
-  function flyToPairIndex(idx) {
-    const p = pairs[idx];
-    if (!p) return;
-    map.flyTo([(p.a.lat + p.b.lat) / 2, (p.a.lon + p.b.lon) / 2], Math.max(map.getZoom(), 11), { duration: 0.8 });
   }
 
   el.btnRefresh.addEventListener("click", refresh);
@@ -1321,11 +1066,8 @@
   el.search.addEventListener("input", render);
   el.pairs.addEventListener("click", e => {
     const row = e.target.closest(".pair"); if (!row) return;
-    flyToPairIndex(+row.dataset.i);
-  });
-  el.redList.addEventListener("click", e => {
-    const row = e.target.closest(".ro-item"); if (!row) return;
-    flyToPairIndex(+row.dataset.i);
+    const p = pairs[+row.dataset.i]; if (!p) return;
+    map.flyTo([(p.a.lat + p.b.lat) / 2, (p.a.lon + p.b.lon) / 2], Math.max(map.getZoom(), 11), { duration: 0.8 });
   });
 
   const DEFAULT_PROXY = "https://trenes.juliopuli.workers.dev/?url={url}";
@@ -1335,9 +1077,7 @@
   }
   el.proxy.addEventListener("change", () => { try { localStorage.setItem("proxyRenfe", el.proxy.value.trim()); } catch (e) {} });
 
-  loadTrackLayer("av");
-  loadTrackLayer("md");
-  updateTrackStatus();
+  loadTrack();
   refresh();
   schedule();
 })();
