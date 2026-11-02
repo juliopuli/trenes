@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.31</title>
+<title>Alertas Ferrocarril · v1.30</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -418,7 +418,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.31</span>
+          <span class="ver">v1.30</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -441,9 +441,9 @@
         </div>
       </div>
       <div class="help">
-        • <b>Sentido sobre la vía:</b> verifica la tangente real del raíl en cada extremo (evita falsas alertas en curvas de 180° donde los trenes se alejan entre sí).<br>
+        • <b>Distancia por vía:</b> medida sobre los raíles entre ambos trenes.<br>
         • <b>Velocidad limitada por tipo:</b> AVE 320, ALVIA 250/220, AVANT 250, MD 160, Cercanías/Reg. 140 km/h.<br>
-        • <b>Prioridad roja:</b> la alerta roja siempre prevalece sobre la naranja.
+        • <b>Prioridad roja:</b> cuando coinciden en un mismo tramo, la alerta roja siempre prevalece sobre la naranja.
       </div>
     </fieldset>
 
@@ -592,7 +592,7 @@
     </div>
     <div class="hm-body">
       <p style="margin:0">
-        Esta aplicación es un <b>sistema inteligente de alertas de proximidad de trenes en España</b>. Cada 10 segundos mira dónde está cada tren por GPS, lo coloca exactamente sobre su vía real y mide la distancia y el sentido de avance siguiendo todas las curvas del trazado ferroviario.
+        Esta aplicación es un <b>sistema inteligente de alertas de proximidad de trenes en España</b>. Cada 10 segundos mira dónde está cada tren por GPS, lo coloca exactamente sobre su vía real y mide la distancia siguiendo todas las curvas del trazado ferroviario.
       </p>
 
       <div class="hm-box" style="border-left:5px solid #43a047">
@@ -600,8 +600,8 @@
         <div>
           El tren viaja con total normalidad:
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li>No tiene ningún otro tren cerca (a menos de <b>5 km medidos por la vía</b>) avanzando en su mismo sentido sobre el raíl.</li>
-            <li>Si dos trenes están en una curva en "U" o bifurcación pero sobre el raíl cada uno se aleja en sentido opuesto, <b>se mantienen en verde</b>.</li>
+            <li>No tiene ningún otro tren cerca (a menos de <b>5 km medidos por la vía</b>) en su misma vía y dirección.</li>
+            <li>Si se cruza de frente con otro tren en sentido contrario, <b>sigue en verde</b> porque cada uno va por su vía paralela.</li>
             <li>Si llega a una estación grande (como Atocha, Sants o Málaga), también se pone en verde porque allí los trenes van muy despacio para aparcar en su andén.</li>
           </ul>
         </div>
@@ -615,7 +615,7 @@
       <div class="hm-box" style="border-left:5px solid #f59e0b">
         <div class="hm-box-title"><span class="dot" style="background:#f59e0b;width:14px;height:14px"></span> 2. Trenes en NARANJA con flecha y etiqueta (Precaución)</div>
         <div>
-          Dos trenes avanzan por la <b>misma vía y en el mismo sentido de recorrido del raíl</b> a <b>menos de 5 km</b> (uno detrás del otro), pero <b>NO hay peligro inminente</b> porque:
+          Dos trenes van por la <b>misma vía y en el mismo sentido</b> a <b>menos de 5 km sobre el raíl</b> (mostrando una <b>flecha naranja delante</b> y su número debajo), pero <b>NO hay peligro inminente</b> porque:
           <ul style="margin:4px 0 0;padding-left:18px">
             <li>Ambos van despacito (a menos de 100 km/h) o están parados esperando señal.</li>
             <li>O bien <b>el tren que va delante corre más que el que va detrás</b>, así que cada vez se alejan más el uno del otro.</li>
@@ -633,7 +633,7 @@
         <div>
           Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) y prevalece siempre en pantalla sobre cualquier alerta naranja cuando:
           <ol style="margin:4px 0 0;padding-left:18px">
-            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> y avanzan en el <b>mismo sentido sobre el raíl</b> a <b>menos de 5 km</b>.</li>
+            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> y van en el <b>mismo sentido</b> a <b>menos de 5 km</b>.</li>
             <li>El tren que viene por <b>detrás supera los 100 km/h</b> y va <b>más rápido (o igual) que el de delante</b>.</li>
             <li><b>Al pulsar sobre cualquier alerta:</b> el mapa encuadra automáticamente a los dos trenes implicados y los rodea con un <b>halo azul brillante</b> para distinguirlos de cualquier otro tren cercano.</li>
           </ol>
@@ -654,7 +654,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.31";
+  const VERSION = "1.30";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1611,7 +1611,6 @@
       t.speedsList = t.speedsList.map(v => Math.min(v, maxSpeed));
     }
 
-    t.bestSnapSeg = bestSnap ? bestSnap.seg : null;
     if (bestSnap && bestSnap.distToTrack <= 0.8) {
       t.drawLat = bestSnap.snapLat;
       t.drawLon = bestSnap.snapLon;
@@ -1649,8 +1648,7 @@
     return null;
   }
 
-  // Obtiene el vector unitario de avance del tren (priorizando GPS real y respaldando con vector de ruta)
-  function getTrainMotionVector(t) {
+  function computeTrainBearing(t) {
     let vLat = 0, vLon = 0;
     if (t.hasVector && (Math.abs(t.dLat) > 1e-7 || Math.abs(t.dLon) > 1e-7)) {
       vLat = t.dLat;
@@ -1661,35 +1659,10 @@
     } else {
       return null;
     }
-    const kLon = Math.cos((t.lat || 40) * Math.PI / 180);
-    const vx = vLon * kLon, vy = vLat;
-    const m = Math.hypot(vx, vy);
-    if (m < 1e-8) return null;
-    return { vx: vx / m, vy: vy / m, vLat, vLon };
-  }
-
-  // Calcula el rumbo en grados alineado con la tangente del segmento de vía donde está el tren
-  function computeTrainBearing(t) {
-    const mv = getTrainMotionVector(t);
-    if (!mv) return null;
-
-    // Si tenemos el segmento de vía bajo el tren, alineamos la flecha exactamente con la dirección del raíl
-    if (t.bestSnapSeg) {
-      const s = t.bestSnapSeg;
-      const kLon = Math.cos((t.lat || 40) * Math.PI / 180);
-      const sx = (s.lo2 - s.lo1) * kLon, sy = s.la2 - s.la1;
-      const sm = Math.hypot(sx, sy);
-      if (sm > 1e-8) {
-        const dot = (mv.vx * sx + mv.vy * sy) / sm;
-        if (Math.abs(dot) > 0.15) {
-          const dirX = dot >= 0 ? sx : -sx;
-          const dirY = dot >= 0 ? sy : -sy;
-          return (Math.atan2(dirX, dirY) * 180 / Math.PI + 360) % 360;
-        }
-      }
-    }
-
-    return (Math.atan2(mv.vx, mv.vy) * 180 / Math.PI + 360) % 360;
+    const dx = vLon * Math.cos((t.lat || 40) * Math.PI / 180);
+    const dy = vLat;
+    if (Math.hypot(dx, dy) < 1e-8) return null;
+    return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
   }
 
   function cosBetweenVectors(v1Lat, v1Lon, v2Lat, v2Lon, refLat) {
@@ -1701,93 +1674,64 @@
     return (x1 * x2 + y1 * y2) / (m1 * m2);
   }
 
-  /* ---------- Verificación Topológica de Sentido SOBRE LA PROPIA VÍA (Evita falsas alertas en curvas de 90°/180°) ---------- */
-  // Extrae el vector tangente unitario al inicio de pathCoords (en A apuntando hacia B por la vía)
-  // y al final de pathCoords (en B apuntando en el mismo sentido de recorrido de A hacia B por la vía)
-  function getPathEndTangents(pathCoords, refLat) {
-    if (!pathCoords || pathCoords.length < 2) return null;
-    const kLon = Math.cos((refLat || 40) * Math.PI / 180);
+  function areMovingSameDirection(a, b) {
+    const infoA = a._info, infoB = b._info;
+    const refLat = (a.lat + b.lat) / 2;
 
-    // Tangente en A (avanzando unos metros desde el inicio de la polilínea para evitar ruido de nodos muy juntos)
-    let p0 = pathCoords[0], pA = pathCoords[1];
-    for (let i = 1; i < pathCoords.length; i++) {
-      if (haversine(p0[0], p0[1], pathCoords[i][0], pathCoords[i][1]) >= 0.04) {
-        pA = pathCoords[i];
-        break;
-      }
+    if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
+      if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return false;
+      if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return false;
+      if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return false;
     }
-    const ax = (pA[1] - p0[1]) * kLon, ay = pA[0] - p0[0];
-    const am = Math.hypot(ax, ay);
 
-    // Tangente en B (desde un punto previo hacia el extremo final en B)
-    const n = pathCoords.length;
-    let pN = pathCoords[n - 1], pB = pathCoords[n - 2];
-    for (let i = n - 2; i >= 0; i--) {
-      if (haversine(pathCoords[i][0], pathCoords[i][1], pN[0], pN[1]) >= 0.04) {
-        pB = pathCoords[i];
-        break;
-      }
+    const rA = a.routeVec, rB = b.routeVec;
+    if (rA && rB) {
+      const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
+      if (cosRoute !== null && cosRoute < 0.5) return false;
     }
-    const bx = (pN[1] - pB[1]) * kLon, by = pN[0] - pB[0];
-    const bm = Math.hypot(bx, by);
 
-    if (am < 1e-8 || bm < 1e-8) return null;
-    return {
-      tAx: ax / am, tAy: ay / am,
-      tBx: bx / bm, tBy: by / bm
-    };
+    if (a.hasVector && b.hasVector) {
+      const cosGps = cosBetweenVectors(a.dLat, a.dLon, b.dLat, b.dLon, refLat);
+      if (cosGps !== null && cosGps < 0.5) return false;
+      return true;
+    }
+
+    if (a.hasVector && rB) {
+      const cosMix = cosBetweenVectors(a.dLat, a.dLon, rB[0], rB[1], refLat);
+      if (cosMix !== null && cosMix < 0.5) return false;
+    }
+    if (b.hasVector && rA) {
+      const cosMix = cosBetweenVectors(rA[0], rA[1], b.dLat, b.dLon, refLat);
+      if (cosMix !== null && cosMix < 0.5) return false;
+    }
+
+    if (rA && rB) {
+      const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
+      return cosRoute !== null && cosRoute > 0.65;
+    }
+
+    return false;
   }
 
-  // Analiza si los trenes A y B van realmente en el mismo sentido A LO LARGO DE LA VÍA que los conecta,
-  // y determina con total exactitud quién va detrás (trailing) y quién va delante (leading) sobre el raíl.
-  function analyzeMovementAlongPath(a, b, pathCoords) {
-    const infoA = a._info, infoB = b._info;
-    // 1. Descarte inmediato si origen/destino están invertidos (sentido comercial opuesto)
-    if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
-      if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return null;
-      if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return null;
-      if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return null;
+  function getTrailingAndLeading(a, b) {
+    let vLat = 0, vLon = 0;
+    if (a.hasVector) { vLat += a.dLat; vLon += a.dLon; }
+    if (b.hasVector) { vLat += b.dLat; vLon += b.dLon; }
+    if (vLat === 0 && vLon === 0) {
+      if (a.routeVec) { vLat += a.routeVec[0]; vLon += a.routeVec[1]; }
+      if (b.routeVec) { vLat += b.routeVec[0]; vLon += b.routeVec[1]; }
     }
+    if (vLat === 0 && vLon === 0) return null;
 
-    const mvA = getTrainMotionVector(a);
-    const mvB = getTrainMotionVector(b);
-    if (!mvA || !mvB) return null;
+    const kLon = Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+    const abLat = b.lat - a.lat;
+    const abLon = (b.lon - a.lon) * kLon;
+    const proj = (abLat * vLat) + (abLon * vLon * kLon);
+    if (Math.abs(proj) < 1e-9) return null;
 
-    const refLat = (a.lat + b.lat) / 2;
-    const tangents = getPathEndTangents(pathCoords, refLat);
-
-    if (tangents) {
-      // Proyección del movimiento de A sobre la vía en A (positivo = avanza por la vía hacia B; negativo = se aleja de B)
-      const projA = mvA.vx * tangents.tAx + mvA.vy * tangents.tAy;
-      // Proyección del movimiento de B sobre la vía en B (positivo = avanza alejándose de A; negativo = viene hacia A)
-      const projB = mvB.vx * tangents.tBx + mvB.vy * tangents.tBy;
-
-      // Exigimos que ambos trenes tengan una componente clara a lo largo de la vía (> 0.25 ~ ángulo < 75° respecto al raíl)
-      if (Math.abs(projA) < 0.25 || Math.abs(projB) < 0.25) return null;
-
-      // ¡CLAVE!:
-      // - Si projA > 0 y projB < 0 -> van de frente uno hacia el otro por vías paralelas (cruce en sentido opuesto) -> DESCARTAR
-      // - Si projA < 0 y projB > 0 -> se están dando la espalda y alejándose cada uno por su extremo de la curva (como en Barcelona) -> DESCARTAR
-      if ((projA > 0 && projB < 0) || (projA < 0 && projB > 0)) {
-        return null;
-      }
-
-      // Ambos tienen el mismo signo a lo largo del camino ferroviario:
-      // - Si projA > 0 y projB > 0: el sentido del camino es A ➔ B (A va detrás persiguiendo a B, B va delante)
-      // - Si projA < 0 y projB < 0: el sentido del camino es B ➔ A (B va detrás persiguiendo a A, A va delante)
-      return projA > 0
-        ? { trailing: a, leading: b }
-        : { trailing: b, leading: a };
-    }
-
-    // Respaldo solo si no hubiera geometría de vía cargada todavía
-    const cosDir = mvA.vx * mvB.vx + mvA.vy * mvB.vy;
-    if (cosDir < 0.5) return null;
-    const kLon = Math.cos(refLat * Math.PI / 180);
-    const abX = (b.lon - a.lon) * kLon, abY = b.lat - a.lat;
-    const proj = abX * (mvA.vx + mvB.vx) + abY * (mvA.vy + mvB.vy);
-    if (Math.abs(proj) < 1e-8) return null;
-    return proj > 0 ? { trailing: a, leading: b } : { trailing: b, leading: a };
+    return proj > 0
+      ? { trailing: a, leading: b }
+      : { trailing: b, leading: a };
   }
 
   function buildUrl() {
@@ -1863,7 +1807,10 @@
         const straightD = haversine(a.lat, a.lon, b.lat, b.lon);
         if (straightD >= tO) continue;
 
-        // 2. CÁLCULO DE DISTANCIA Y TRAZADO REAL SOBRE LA VÍA
+        // 2. FILTRO ESTRICTO DE SENTIDO DE LA MARCHA
+        if (!areMovingSameDirection(a, b)) continue;
+
+        // 3. CÁLCULO DE DISTANCIA Y TRAZADO REAL SOBRE LA VÍA
         const anyLayerLoaded = TRACKS.av.loaded || TRACKS.md.loaded;
         let d = straightD;
         let pathCoords = null;
@@ -1877,22 +1824,24 @@
           pathCoords = [[a.drawLat, a.drawLon], [b.drawLat, b.drawLon]];
         }
 
-        // 3. VERIFICACIÓN TOPOLÓGICA DE SENTIDO A LO LARGO DE LA VÍA (Evita falsas alertas cuando se alejan en curvas)
-        const order = analyzeMovementAlongPath(a, b, pathCoords);
-        if (!order) continue;
-
-        const trailing = order.trailing;
-        const leading = order.leading;
-        const vTrail = isNum(trailing.calcSpeed) ? trailing.calcSpeed : 0;
-        const vLead  = isNum(leading.calcSpeed)  ? leading.calcSpeed  : 0;
-        const closingSpeed = vTrail - vLead;
-
+        const order = getTrailingAndLeading(a, b);
         let pairSeverity = "orange";
+        let trailing = a, leading = b;
         let impactSec = null;
 
-        if (trailing.isFast && closingSpeed >= 0) {
-          pairSeverity = "red";
-          impactSec = closingSpeed > 0 ? (d / closingSpeed) * 3600 : Infinity;
+        if (order) {
+          trailing = order.trailing;
+          leading = order.leading;
+          const vTrail = isNum(trailing.calcSpeed) ? trailing.calcSpeed : 0;
+          const vLead  = isNum(leading.calcSpeed)  ? leading.calcSpeed  : 0;
+          const closingSpeed = vTrail - vLead;
+
+          if (trailing.isFast && closingSpeed >= 0) {
+            pairSeverity = "red";
+            impactSec = closingSpeed > 0 ? (d / closingSpeed) * 3600 : Infinity;
+          } else {
+            pairSeverity = "orange";
+          }
         }
 
         const pairKey = makePairKey(a.id, b.id);
@@ -1910,13 +1859,17 @@
             a.redD = d;
             a.d = d;
             a.nearTrain = b;
-            a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (order) {
+              a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            }
           }
           if (!b.hasRedPair || d < b.redD) {
             b.redD = d;
             b.d = d;
             b.nearTrain = a;
-            b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (order) {
+              b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            }
           }
           a.hasRedPair = true;
           b.hasRedPair = true;
@@ -1925,19 +1878,24 @@
             if (b.impactSec === null || impactSec < b.impactSec) b.impactSec = impactSec;
           }
         } else {
+          // Solo actualizar con datos de alerta naranja si el tren no tiene ya una alerta roja prioritaria
           if (!a.hasRedPair && d < a.d) {
             a.d = d;
             a.nearTrain = b;
-            a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (order) {
+              a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            }
           }
           if (!b.hasRedPair && d < b.d) {
             b.d = d;
             b.nearTrain = a;
-            b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (order) {
+              b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            }
           }
         }
 
-        pairs.push({ a, b, trailing, leading, hasOrder: true, d, pathCoords, severity: pairSeverity, impactSec, pairKey, redStartMs });
+        pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, pathCoords, severity: pairSeverity, impactSec, pairKey, redStartMs });
       }
     }
 
