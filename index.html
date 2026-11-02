@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.22</title>
+<title>Trenes Renfe en tiempo real · v1.23</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -32,10 +32,10 @@
   .sub{font-size:12px;color:var(--muted)}
   fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
   legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
-  label{display:block;font-size:12px;margin:6px 0 3px}
+  label{display:block;font-size:11.5px;margin:6px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   input[type=text],input[type=number],select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px}
   .row{display:flex;gap:8px}
-  .row>*{flex:1}
+  .row>*{flex:1;min-width:0}
   .chk{display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0;cursor:pointer}
   .dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25)}
   .chk .n{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
@@ -65,9 +65,9 @@
     border:2px solid var(--red);
     border-radius:10px;
     box-shadow:0 4px 16px rgba(0,0,0,.28);
-    min-width:320px;
-    max-width:480px;
-    max-height:260px;
+    min-width:340px;
+    max-width:540px;
+    max-height:270px;
     display:flex;
     flex-direction:column;
     overflow:hidden;
@@ -76,6 +76,9 @@
   #redOverlay.empty{
     border-color:var(--line);
     opacity:0.9;
+  }
+  #redOverlay.has-persistent{
+    box-shadow:0 0 0 3px rgba(229,57,53,.45), 0 6px 22px rgba(229,57,53,.5);
   }
   .ro-head{
     background:var(--red);
@@ -97,18 +100,22 @@
     padding:6px 8px;
     overflow-y:auto;
     font-size:12px;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
   }
   .ro-item{
     display:flex;
     justify-content:space-between;
     align-items:center;
     gap:8px;
-    padding:5px 4px;
-    border-bottom:1px solid var(--line);
+    padding:6px 7px;
+    border-radius:6px;
+    border:1px solid var(--line);
     cursor:pointer;
     font-weight:600;
+    transition:background .15s;
   }
-  .ro-item:last-child{border-bottom:0}
   .ro-item:hover{background:var(--bg)}
   .ro-item .ro-right{display:flex;align-items:center;gap:6px;white-space:nowrap}
   .ro-item .ro-d{color:var(--red);font-variant-numeric:tabular-nums}
@@ -120,6 +127,43 @@
     padding:2px 6px;
     border-radius:5px;
     font-variant-numeric:tabular-nums;
+  }
+  .ro-item .ro-pers{
+    background:#7f1d1d;
+    color:#fff;
+    font-size:10.5px;
+    font-weight:700;
+    padding:2px 5px;
+    border-radius:4px;
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* Parpadeo intenso en el mapa para alertas rojas que superan el tiempo de persistencia */
+  @keyframes blinkPersistentAlert{
+    0%, 100%{
+      background:#dc2626;
+      color:#ffffff;
+      border-color:#991b1b;
+      box-shadow:0 0 12px rgba(220,38,38,.85);
+    }
+    50%{
+      background:#fff1f2;
+      color:#991b1b;
+      border-color:#dc2626;
+      box-shadow:0 0 2px rgba(220,38,38,.2);
+    }
+  }
+  .ro-item.persistent-blink{
+    animation:blinkPersistentAlert 0.75s infinite ease-in-out;
+  }
+  .ro-item.persistent-blink .ro-d{
+    color:inherit;
+    font-weight:800;
+  }
+  .ro-item.persistent-blink .ro-tti{
+    background:rgba(0,0,0,.28);
+    color:inherit;
+    border:1px solid currentColor;
   }
 
   /* Botones flotantes superior derecha (Actualizar / Pausar) */
@@ -256,7 +300,7 @@
     <div>
       <div class="side-top">
         <button class="help-btn" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
-        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.22</span></h1>
+        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.23</span></h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
@@ -264,13 +308,23 @@
     <fieldset>
       <legend>Reglas de alerta (por trazado de vía)</legend>
       <div class="row">
-        <div><label for="thOrange" title="Distancia de seguridad medida siguiendo las curvas reales de la vía">Distancia &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.5" step="0.5"></div>
-        <div><label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
+        <div>
+          <label for="thOrange" title="Distancia de seguridad medida siguiendo las curvas reales de la vía">Distancia &lt; (km)</label>
+          <input type="number" id="thOrange" value="5" min="0.5" step="0.5">
+        </div>
+        <div>
+          <label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label>
+          <input type="number" id="thSpeed" value="100" min="20" step="10">
+        </div>
+        <div>
+          <label for="thPersist" title="Segundos seguidos en alerta roja a partir de los cuales la alerta parpadea intensamente en el mapa">Persistencia (s)</label>
+          <input type="number" id="thPersist" value="30" min="5" step="5">
+        </div>
       </div>
       <div class="help">
         • <b>Distancia por vía:</b> medida sobre los raíles entre ambos trenes.<br>
         • <b>Velocidad limitada por tipo:</b> AVE 320, ALVIA 250/220, AVANT 250, MD 160, Cercanías/Reg. 140 km/h.<br>
-        • <b>Rojo:</b> ordenado de menor a mayor <b>tiempo de impacto</b>.
+        • <b>Persistencia roja:</b> si una alerta roja supera el tiempo indicado, parpadea en el panel superior del mapa.
       </div>
     </fieldset>
 
@@ -446,14 +500,13 @@
       </div>
 
       <div class="hm-box" style="border-left:5px solid #e53935">
-        <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO PARPADEANTE (¡Peligro por alcance y Tiempo de Impacto!)</div>
+        <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO y Parpadeo por Persistencia</div>
         <div>
-          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) cuando se cumplen estas 4 cosas a la vez:
+          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) cuando:
           <ol style="margin:4px 0 0;padding-left:18px">
-            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> (un AVE nunca puede chocar con un Media Distancia convencional aunque sus vías pasen juntas).</li>
-            <li>Van en el <b>mismo sentido de la marcha</b> a <b>menos de 5 km medidos siguiendo las curvas de la vía</b>.</li>
-            <li>El tren que viene por <b>detrás va lanzado a más de 100 km/h</b> (aplicando siempre el techo real de cada tren: AVE 320, ALVIA 250/220, AVANT 250, MD 160 y Cercanías/Regional 140 km/h).</li>
-            <li>El tren de <b>atrás va más rápido (o igual) que el de delante</b>, calculándose al instante el <b>tiempo que tardarían en impactar</b> según la distancia y la diferencia de velocidad.</li>
+            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> y van en el <b>mismo sentido</b> a <b>menos de 5 km</b>.</li>
+            <li>El tren que viene por <b>detrás supera los 100 km/h</b> y va <b>más rápido (o igual) que el de delante</b>.</li>
+            <li><b>Aviso de Persistencia:</b> Si una misma alerta roja se mantiene activa de forma ininterrumpida durante más segundos de los configurados en <b>Persistencia (s)</b>, su fila en el panel superior del mapa comienza a <b>parpadear intensamente en rojo</b> para alertar al operador.</li>
           </ol>
         </div>
         <div class="hm-diagram" style="border-color:#e53935">
@@ -472,7 +525,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.22";
+  const VERSION = "1.23";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -653,7 +706,7 @@
   const el = {
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
     interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
-    thOrange: $("thOrange"), thSpeed: $("thSpeed"),
+    thOrange: $("thOrange"), thSpeed: $("thSpeed"), thPersist: $("thPersist"),
     showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"), showOrmTiles: $("showOrmTiles"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
@@ -693,7 +746,6 @@
 
   const GRID_SIZE = 0.08;
 
-  // Geometrías en memoria (para imantar los trenes, saber si un ALVIA va por vía AVE o Convencional y pintar el tramo de alerta sobre el raíl)
   const TRACKS = {
     av: {
       name: "AV", minKm: 0.015, key: "avTrack_v18",
@@ -736,6 +788,12 @@
     const h = Math.floor(m / 60);
     const remM = m % 60;
     return `${h}h ${remM}m`;
+  };
+  const fmtDuration = sec => {
+    const s = Math.max(0, Math.round(sec));
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60), remS = s % 60;
+    return remS > 0 ? `${m}m ${remS}s` : `${m}m`;
   };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
@@ -812,29 +870,19 @@
   /* ---------- Límite de Velocidad Máxima por Tipo de Tren e Infraestructura ---------- */
   function getMaxSpeedForTrain(tipoStr, lat, lon) {
     const tipo = (tipoStr || "").toUpperCase();
-    // AVE / AVLO: 320 km/h
     if (tipo === "AVE" || tipo === "AVLO") return 320;
-    // AVANT: 250 km/h
     if (tipo === "AVANT") return 250;
-    // MD: 160 km/h
     if (tipo === "MD") return 160;
-    // Cercanías, Regional y Regional Express: 140 km/h
     if (tipo === "CERCANÍAS" || tipo === "REGIONAL" || tipo === "REG.EXP") return 140;
 
-    // ALVIA (y otros híbridos como EUROMED / INTERCITY / ALTARIA / TALGO):
-    // 250 km/h si va por vía AVE, 220 km/h si va por vía convencional
+    // ALVIA y trenes de ancho variable: 250 km/h en vía AVE y 220 km/h en vía convencional
     const sAV = TRACKS.av.loaded ? snapToTrackLayer(TRACKS.av, lat, lon) : null;
     const sMD = TRACKS.md.loaded ? snapToTrackLayer(TRACKS.md, lat, lon) : null;
     const dAV = sAV ? sAV.distToTrack : Infinity;
     const dMD = sMD ? sMD.distToTrack : Infinity;
 
-    if (dAV <= 1.2 && dAV <= dMD) {
-      return 250; // En vía AVE
-    }
-    if (dMD <= 1.2 && dMD < dAV) {
-      return 220; // En vía convencional
-    }
-    // Si aún se está cargando la geometría de vías, por defecto para ALVIA en red mixta permitimos hasta 250
+    if (dAV <= 1.2 && dAV <= dMD) return 250;
+    if (dMD <= 1.2 && dMD < dAV) return 220;
     return 250;
   }
 
@@ -1134,9 +1182,11 @@
     updateTrackStatus();
   });
 
-  /* ---------- Estado de Trenes ---------- */
+  /* ---------- Estado de Trenes y Memoria de Persistencia de Alertas Rojas ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
+  // Mapa pairKey -> timestamp (ms) en que comenzó ininterrumpidamente la alerta roja para ese par
+  const redAlertStart = new Map();
 
   const stations = new Map();
   function registerStation(code, name) {
@@ -1249,7 +1299,6 @@
 
       if (distKm >= 0.015 && dtSec >= 1.5) {
         const rawV = (distKm / dtSec) * 3600;
-        // Si no es un salto de teletransporte absurdo (> 600 km/h), aplicamos el techo máximo real del tipo de tren
         if (rawV <= 600) {
           const cappedV = Math.min(rawV, maxSpeed);
           h.dLat = trainObj.lat - lastPt.lat;
@@ -1266,7 +1315,6 @@
         h.pts[h.pts.length - 1].t = now;
       }
 
-      // Asegurar que ninguna medida histórica supere el límite de la vía actual (por ejemplo, si un ALVIA acaba de entrar en vía convencional)
       for (let i = 0; i < h.speeds.length; i++) {
         if (h.speeds[i] > maxSpeed) h.speeds[i] = maxSpeed;
       }
@@ -1400,7 +1448,6 @@
     }
 
     t.trackGroup = group;
-    // Re-evaluar el techo de velocidad con la vía ya asignada (para ALVIA: 250 en AV, 220 en CONV)
     const maxSpeed = (tipo === "ALVIA" || group === "HYB")
       ? (group === "CONV" ? 220 : 250)
       : getMaxSpeedForTrain(tipo, t.lat, t.lon);
@@ -1549,9 +1596,15 @@
     return false;
   }
 
+  function makePairKey(id1, id2) {
+    return id1 < id2 ? `${id1}|${id2}` : `${id2}|${id1}`;
+  }
+
   function computeProximity() {
     const tO = Math.max(0.5, toNum(el.thOrange.value) || 5);
     const minSpeed = Math.max(10, toNum(el.thSpeed.value) || 100);
+    const now = Date.now();
+    const activeRedKeys = new Set();
 
     trains.forEach(t => {
       t.d = Infinity;
@@ -1620,6 +1673,17 @@
           }
         }
 
+        const pairKey = makePairKey(a.id, b.id);
+        let redStartMs = null;
+
+        if (pairSeverity === "red") {
+          activeRedKeys.add(pairKey);
+          if (!redAlertStart.has(pairKey)) {
+            redAlertStart.set(pairKey, now);
+          }
+          redStartMs = redAlertStart.get(pairKey);
+        }
+
         if (d < a.d) { a.d = d; a.nearTrain = b; }
         if (d < b.d) { b.d = d; b.nearTrain = a; }
         if (pairSeverity === "red") {
@@ -1635,8 +1699,13 @@
           leading.roleInfo  = `Delante de ${trailing.tipo} ${trailing.label}`;
         }
 
-        pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, pathCoords, severity: pairSeverity, impactSec });
+        pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, pathCoords, severity: pairSeverity, impactSec, pairKey, redStartMs });
       }
+    }
+
+    // Limpiar del historial de persistencia cualquier par que haya dejado de estar en alerta roja
+    for (const k of redAlertStart.keys()) {
+      if (!activeRedKeys.has(k)) redAlertStart.delete(k);
     }
 
     trains.forEach(t => {
@@ -1737,6 +1806,52 @@
     return `${esc(la)} ↔ ${esc(lb)}`;
   }
 
+  // Actualiza únicamente el panel superior de alertas rojas (se llama tanto en render() como cada segundo para activar el parpadeo en tiempo real)
+  function renderRedOverlayList() {
+    const redPairs = [];
+    pairs.forEach((p, idx) => {
+      if (p.severity === "red") redPairs.push({ p, idx });
+    });
+
+    redPairs.sort((a, b) => {
+      const tA = (a.p.impactSec !== null && isFinite(a.p.impactSec)) ? a.p.impactSec : Infinity;
+      const tB = (b.p.impactSec !== null && isFinite(b.p.impactSec)) ? b.p.impactSec : Infinity;
+      if (tA !== tB) return tA - tB;
+      return a.p.d - b.p.d;
+    });
+
+    const persistThresholdSec = Math.max(1, toNum(el.thPersist.value) || 30);
+    const now = Date.now();
+    let anyPersistent = false;
+
+    el.roCount.textContent = redPairs.length;
+    if (!redPairs.length) {
+      el.redOverlay.classList.add("empty");
+      el.redOverlay.classList.remove("has-persistent");
+      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
+    } else {
+      el.redOverlay.classList.remove("empty");
+      el.redList.innerHTML = redPairs.map(({ p, idx }) => {
+        const elapsedSec = p.redStartMs ? (now - p.redStartMs) / 1000 : 0;
+        const isPersistent = elapsedSec >= persistThresholdSec;
+        if (isPersistent) anyPersistent = true;
+
+        const ttiBadge = p.impactSec !== null
+          ? `<span class="ro-tti" title="Tiempo estimado hasta el impacto manteniendo velocidades actuales">⏱ Impacto: ${esc(fmtImpactTime(p.impactSec))}</span>`
+          : "";
+        const persBadge = isPersistent
+          ? `<span class="ro-pers" title="Esta alerta roja lleva más de ${persistThresholdSec} s activa de forma continua">🔥 ${esc(fmtDuration(elapsedSec))}</span>`
+          : "";
+
+        return `<div class="ro-item${isPersistent ? " persistent-blink" : ""}" data-i="${idx}">` +
+          `<span>🔴 ${formatPairText(p)}</span>` +
+          `<span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span>` +
+          `</div>`;
+      }).join("");
+      el.redOverlay.classList.toggle("has-persistent", anyPersistent);
+    }
+  }
+
   function render() {
     const q = el.search.value.trim().toLowerCase();
     const counts = { red: 0, orange: 0, green: 0 };
@@ -1804,40 +1919,15 @@
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
     el.nTotal.textContent = visible + " / " + trains.length;
 
-    const redPairs = [];
-    const orangePairs = [];
-    pairs.forEach((p, idx) => {
-      if (p.severity === "red") redPairs.push({ p, idx });
-      else orangePairs.push({ p, idx });
-    });
-
-    // Ordenar las Alertas Rojas de MENOR tiempo de impacto a MAYOR tiempo de impacto
-    redPairs.sort((a, b) => {
-      const tA = (a.p.impactSec !== null && isFinite(a.p.impactSec)) ? a.p.impactSec : Infinity;
-      const tB = (b.p.impactSec !== null && isFinite(b.p.impactSec)) ? b.p.impactSec : Infinity;
-      if (tA !== tB) return tA - tB;
-      return a.p.d - b.p.d;
-    });
-
-    // 1. Recuadro superior izquierdo del mapa (Solo Alertas Rojas ordenadas por menor tiempo de impacto)
-    el.roCount.textContent = redPairs.length;
-    if (!redPairs.length) {
-      el.redOverlay.classList.add("empty");
-      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
-    } else {
-      el.redOverlay.classList.remove("empty");
-      el.redList.innerHTML = redPairs.map(({ p, idx }) => {
-        const ttiBadge = p.impactSec !== null
-          ? `<span class="ro-tti" title="Tiempo estimado hasta el impacto manteniendo velocidades actuales">⏱ Impacto: ${esc(fmtImpactTime(p.impactSec))}</span>`
-          : "";
-        return `<div class="ro-item" data-i="${idx}">` +
-          `<span>🔴 ${formatPairText(p)}</span>` +
-          `<span class="ro-right"><span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span>` +
-          `</div>`;
-      }).join("");
-    }
+    // 1. Actualizar el recuadro superior izquierdo del mapa (Alertas Rojas + Persistencia)
+    renderRedOverlayList();
 
     // 2. Banda lateral izquierda (Solo Amarillos/Naranjas en precaución o alejándose)
+    const orangePairs = [];
+    pairs.forEach((p, idx) => {
+      if (p.severity !== "red") orangePairs.push({ p, idx });
+    });
+
     if (!orangePairs.length) {
       el.pairs.innerHTML = '<div class="sub">Ningún par en precaución (amarillo/naranja).</div>';
     } else {
@@ -1846,6 +1936,13 @@
       }).join("");
     }
   }
+
+  // Reloj ligero de 1 segundo para activar el parpadeo de persistencia en cuanto se cumple el umbral
+  setInterval(() => {
+    if (!paused && redAlertStart.size > 0) {
+      renderRedOverlayList();
+    }
+  }, 1000);
 
   function updateTypes() {
     const counts = {};
@@ -1937,6 +2034,7 @@
     el.lblSource.textContent = val === "ld" ? "LD / Alta Velocidad" : "Cercanías";
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     trainHistory.clear();
+    redAlertStart.clear();
     stationsTried = false;
     refresh();
   });
@@ -1963,6 +2061,7 @@
   });
 
   [el.thOrange, el.thSpeed].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
+  el.thPersist.addEventListener("input", () => { if (trains.length) renderRedOverlayList(); });
   el.showLines.addEventListener("change", render);
   el.search.addEventListener("input", render);
   el.pairs.addEventListener("click", e => {
