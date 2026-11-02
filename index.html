@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.32</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
+<title>Alertas Ferrocarril · v1.31</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -48,7 +47,7 @@
   button.sm{padding:4px 8px;font-size:11px;border-radius:6px}
   button:hover{filter:brightness(.96)}
   #status{font-size:12px;color:var(--muted);line-height:1.4;margin-top:4px}
-  #status.err{color:var(--red);font-weight:600}
+  #status.err{color:var(--red)}
   #pairs{max-height:240px;overflow-y:auto;font-size:12px}
   .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:5px}
   .pair:hover{background:var(--bg)}
@@ -419,7 +418,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.32</span>
+          <span class="ver">v1.31</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -655,7 +654,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.32";
+  const VERSION = "1.31";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -909,16 +908,16 @@
     md: {
       name: "MD/Conv", minKm: 0.025, key: "mdTrack_v18",
       queries: [
-        '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"="main"][!"service"];out skel geom qt;'
+        '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;'
       ],
       loaded: false, osmLoaded: false, loading: false, n: 0, grid: new Map(), ways: []
     }
   };
 
-  // Servidores Overpass principales de alta disponibilidad (eliminado kumi.systems que cerraba conexión con ERR_EMPTY_RESPONSE)
   const OVERPASS = [
     "https://overpass-api.de/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter"
   ];
 
   const toNum = v => (v === null || v === undefined || v === "") ? NaN : parseFloat(String(v).replace(",", "."));
@@ -1228,7 +1227,7 @@
     for (const ep of OVERPASS) {
       try {
         const ctl = new AbortController();
-        const to = setTimeout(() => ctl.abort(), 30000);
+        const to = setTimeout(() => ctl.abort(), 35000);
         const r = await fetch(ep, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -1244,6 +1243,31 @@
       } catch (e) { lastErr = e; }
     }
     throw lastErr || new Error("sin datos");
+  }
+
+  async function fetchRenfeOfficialLines() {
+    const base = SOURCES.ld.replace("flotaLD.json", "");
+    for (const file of ["lineas.geojson", "lineasLD.geojson"]) {
+      try {
+        const r = await fetch(proxify(base + file));
+        if (!r.ok) continue;
+        const g = await r.json();
+        const ways = [];
+        for (const f of (g.features || [])) {
+          const geom = f.geometry;
+          if (!geom) continue;
+          if (geom.type === "LineString" && geom.coordinates.length > 1) {
+            ways.push(geom.coordinates.map(c => [+c[1].toFixed(5), +c[0].toFixed(5)]));
+          } else if (geom.type === "MultiLineString") {
+            for (const line of geom.coordinates) {
+              if (line.length > 1) ways.push(line.map(c => [+c[1].toFixed(5), +c[0].toFixed(5)]));
+            }
+          }
+        }
+        if (ways.length) return ways;
+      } catch (e) {}
+    }
+    return null;
   }
 
   function decimate(pts, minKm) {
@@ -1287,6 +1311,10 @@
             allWays.push(...dec);
           } catch (e) {}
         }
+        if (!allWays.length && kind === "av") {
+          const renfeWays = await fetchRenfeOfficialLines();
+          if (renfeWays) allWays.push(...renfeWays);
+        }
         if (!allWays.length) throw new Error("sin respuesta OSM");
         ways = allWays;
         idbSet(st.key, { t: Date.now(), ways });
@@ -1329,6 +1357,32 @@
     if (found) return found;
     if (/^\d+$/.test(s)) return "";
     return s;
+  }
+
+  let stationsTried = false;
+  function proxify(url) {
+    const p = el.proxy.value.trim();
+    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
+  }
+  async function loadStations() {
+    if (stationsTried || el.source.value !== "ld") return;
+    stationsTried = true;
+    const base = SOURCES.ld.replace("flotaLD.json", "");
+    for (const file of ["estacionesEstatico.geojson", "estaciones.geojson"]) {
+      try {
+        const r = await fetch(proxify(base + file));
+        if (!r.ok) continue;
+        const g = await r.json();
+        (g.features || []).forEach(f => {
+          const pr = f.properties || {};
+          const keys = Object.keys(pr);
+          const kc = keys.find(k => /(cod|id|estacion|clave)/i.test(k) && (typeof pr[k] === "number" || /^\d+$/.test(String(pr[k]).trim())));
+          const kn = keys.find(k => /(nom|name|desc|titulo|label)/i.test(k) && typeof pr[k] === "string" && !/^\d+$/.test(pr[k].trim()));
+          if (kc && kn) registerStation(pr[kc], pr[kn]);
+        });
+        break;
+      } catch (e) {}
+    }
   }
 
   function extractList(data) {
@@ -1595,6 +1649,7 @@
     return null;
   }
 
+  // Obtiene el vector unitario de avance del tren (priorizando GPS real y respaldando con vector de ruta)
   function getTrainMotionVector(t) {
     let vLat = 0, vLon = 0;
     if (t.hasVector && (Math.abs(t.dLat) > 1e-7 || Math.abs(t.dLon) > 1e-7)) {
@@ -1613,10 +1668,12 @@
     return { vx: vx / m, vy: vy / m, vLat, vLon };
   }
 
+  // Calcula el rumbo en grados alineado con la tangente del segmento de vía donde está el tren
   function computeTrainBearing(t) {
     const mv = getTrainMotionVector(t);
     if (!mv) return null;
 
+    // Si tenemos el segmento de vía bajo el tren, alineamos la flecha exactamente con la dirección del raíl
     if (t.bestSnapSeg) {
       const s = t.bestSnapSeg;
       const kLon = Math.cos((t.lat || 40) * Math.PI / 180);
@@ -1635,10 +1692,23 @@
     return (Math.atan2(mv.vx, mv.vy) * 180 / Math.PI + 360) % 360;
   }
 
+  function cosBetweenVectors(v1Lat, v1Lon, v2Lat, v2Lon, refLat) {
+    const kLon = Math.cos((refLat || 40) * Math.PI / 180);
+    const x1 = v1Lon * kLon, y1 = v1Lat;
+    const x2 = v2Lon * kLon, y2 = v2Lat;
+    const m1 = Math.hypot(x1, y1), m2 = Math.hypot(x2, y2);
+    if (m1 < 1e-8 || m2 < 1e-8) return null;
+    return (x1 * x2 + y1 * y2) / (m1 * m2);
+  }
+
+  /* ---------- Verificación Topológica de Sentido SOBRE LA PROPIA VÍA (Evita falsas alertas en curvas de 90°/180°) ---------- */
+  // Extrae el vector tangente unitario al inicio de pathCoords (en A apuntando hacia B por la vía)
+  // y al final de pathCoords (en B apuntando en el mismo sentido de recorrido de A hacia B por la vía)
   function getPathEndTangents(pathCoords, refLat) {
     if (!pathCoords || pathCoords.length < 2) return null;
     const kLon = Math.cos((refLat || 40) * Math.PI / 180);
 
+    // Tangente en A (avanzando unos metros desde el inicio de la polilínea para evitar ruido de nodos muy juntos)
     let p0 = pathCoords[0], pA = pathCoords[1];
     for (let i = 1; i < pathCoords.length; i++) {
       if (haversine(p0[0], p0[1], pathCoords[i][0], pathCoords[i][1]) >= 0.04) {
@@ -1649,6 +1719,7 @@
     const ax = (pA[1] - p0[1]) * kLon, ay = pA[0] - p0[0];
     const am = Math.hypot(ax, ay);
 
+    // Tangente en B (desde un punto previo hacia el extremo final en B)
     const n = pathCoords.length;
     let pN = pathCoords[n - 1], pB = pathCoords[n - 2];
     for (let i = n - 2; i >= 0; i--) {
@@ -1667,8 +1738,11 @@
     };
   }
 
+  // Analiza si los trenes A y B van realmente en el mismo sentido A LO LARGO DE LA VÍA que los conecta,
+  // y determina con total exactitud quién va detrás (trailing) y quién va delante (leading) sobre el raíl.
   function analyzeMovementAlongPath(a, b, pathCoords) {
     const infoA = a._info, infoB = b._info;
+    // 1. Descarte inmediato si origen/destino están invertidos (sentido comercial opuesto)
     if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
       if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return null;
       if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return null;
@@ -1683,20 +1757,30 @@
     const tangents = getPathEndTangents(pathCoords, refLat);
 
     if (tangents) {
+      // Proyección del movimiento de A sobre la vía en A (positivo = avanza por la vía hacia B; negativo = se aleja de B)
       const projA = mvA.vx * tangents.tAx + mvA.vy * tangents.tAy;
+      // Proyección del movimiento de B sobre la vía en B (positivo = avanza alejándose de A; negativo = viene hacia A)
       const projB = mvB.vx * tangents.tBx + mvB.vy * tangents.tBy;
 
+      // Exigimos que ambos trenes tengan una componente clara a lo largo de la vía (> 0.25 ~ ángulo < 75° respecto al raíl)
       if (Math.abs(projA) < 0.25 || Math.abs(projB) < 0.25) return null;
 
+      // ¡CLAVE!:
+      // - Si projA > 0 y projB < 0 -> van de frente uno hacia el otro por vías paralelas (cruce en sentido opuesto) -> DESCARTAR
+      // - Si projA < 0 y projB > 0 -> se están dando la espalda y alejándose cada uno por su extremo de la curva (como en Barcelona) -> DESCARTAR
       if ((projA > 0 && projB < 0) || (projA < 0 && projB > 0)) {
         return null;
       }
 
+      // Ambos tienen el mismo signo a lo largo del camino ferroviario:
+      // - Si projA > 0 y projB > 0: el sentido del camino es A ➔ B (A va detrás persiguiendo a B, B va delante)
+      // - Si projA < 0 y projB < 0: el sentido del camino es B ➔ A (B va detrás persiguiendo a A, A va delante)
       return projA > 0
         ? { trailing: a, leading: b }
         : { trailing: b, leading: a };
     }
 
+    // Respaldo solo si no hubiera geometría de vía cargada todavía
     const cosDir = mvA.vx * mvB.vx + mvA.vy * mvB.vy;
     if (cosDir < 0.5) return null;
     const kLon = Math.cos(refLat * Math.PI / 180);
@@ -1706,62 +1790,24 @@
     return proj > 0 ? { trailing: a, leading: b } : { trailing: b, leading: a };
   }
 
-  /* ---------- Descarga Resiliente con Reintentos ante Error 502 de Renfe ---------- */
-  function buildProxyUrls(targetUrl) {
+  function buildUrl() {
+    let url = el.source.value === "custom" ? el.customUrl.value.trim() : SOURCES[el.source.value];
+    if (!url) throw new Error("Indica una URL.");
+    if (el.source.value === "ld") url += "?v=" + Date.now();
     const p = el.proxy.value.trim();
-    const primary = p
-      ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(targetUrl)) : p + encodeURIComponent(targetUrl))
-      : targetUrl;
-    return [
-      primary,
-      "https://corsproxy.io/?" + encodeURIComponent(targetUrl),
-      "https://api.allorigins.win/raw?url=" + encodeURIComponent(targetUrl)
-    ];
+    if (p) url = p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url);
+    return url;
   }
-
-  async function fetchJsonWithFallback(targetUrl) {
-    const candidates = buildProxyUrls(targetUrl);
-    let lastError = null;
-    for (const url of candidates) {
-      try {
-        const ctl = new AbortController();
-        const to = setTimeout(() => ctl.abort(), 12000);
-        const res = await fetch(url, { cache: "no-store", signal: ctl.signal });
-        clearTimeout(to);
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        return await res.json();
-      } catch (err) {
-        lastError = err;
-      }
-    }
-    throw lastError || new Error("Fallo de red");
-  }
-
   async function fetchTrains() {
     if (el.source.value === "demo") return [];
-    const primaryTarget = el.source.value === "custom" ? el.customUrl.value.trim() : SOURCES[el.source.value];
-    if (!primaryTarget) throw new Error("Indica una URL.");
-
-    // 1. Intentar con la URL limpia oficial (sin ?v= para evitar que el balanceador de Renfe devuelva 502 Bad Gateway)
-    const urlsToTry = [primaryTarget];
-    if (el.source.value === "visor") {
-      urlsToTry.push(SOURCES.gtfsrt);
-    }
-
-    let lastErr = null;
-    for (const target of urlsToTry) {
-      try {
-        const data = await fetchJsonWithFallback(target);
-        const list = extractList(data).map(normalize).filter(Boolean);
-        if (!list.length) throw new Error("Respuesta sin trenes activos");
-        const seen = new Map();
-        list.forEach(t => seen.set(t.id, t));
-        return [...seen.values()];
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-    throw lastErr || new Error("HTTP 502 (Servidor Renfe saturado)");
+    const res = await fetch(buildUrl(), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    const list = extractList(data).map(normalize).filter(Boolean);
+    if (!list.length) throw new Error("La respuesta no contiene trenes con posición.");
+    const seen = new Map();
+    list.forEach(t => seen.set(t.id, t));
+    return [...seen.values()];
   }
 
   function isConfirmedHighSpeed(t, minSpeedKmh) {
@@ -1831,7 +1877,7 @@
           pathCoords = [[a.drawLat, a.drawLon], [b.drawLat, b.drawLon]];
         }
 
-        // 3. VERIFICACIÓN TOPOLÓGICA DE SENTIDO A LO LARGO DE LA VÍA
+        // 3. VERIFICACIÓN TOPOLÓGICA DE SENTIDO A LO LARGO DE LA VÍA (Evita falsas alertas cuando se alejan en curvas)
         const order = analyzeMovementAlongPath(a, b, pathCoords);
         if (!order) continue;
 
@@ -2200,6 +2246,7 @@
     el.btnRefresh.disabled = true;
     el.btnRefresh.classList.add("spinning");
     try {
+      await loadStations();
       allTrains = await fetchTrains();
       updateTypes();
       trains = allTrains.filter(inTypes);
@@ -2207,8 +2254,7 @@
       render();
       setStatus(`${trains.length} trenes · ${pairs.length} pares cercanos · actualizado ${new Date().toLocaleTimeString("es-ES")}`);
     } catch (e) {
-      const keepMsg = trains.length ? ` (manteniendo ${trains.length} trenes previos)` : "";
-      setStatus(`Aviso: servidor de Renfe no disponible (${e.message})${keepMsg}`, true);
+      setStatus("Error al descargar trenes: " + e.message, true);
     } finally {
       loading = false;
       el.btnRefresh.disabled = false;
@@ -2293,6 +2339,7 @@
     redAlertStart.clear();
     selectedPairKey = null;
     selectedTrainIds.clear();
+    stationsTried = false;
     refresh();
   });
 
