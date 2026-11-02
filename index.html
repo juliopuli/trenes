@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.23</title>
+<title>Alertas Ferrocarril · v1.24</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -19,16 +19,19 @@
   #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:14px 14px 24px;display:flex;flex-direction:column;gap:14px}
   #mapWrap{position:relative;height:100%;width:100%}
   #map{height:100%;width:100%;background:#cfd8e3}
-  h1{font-size:16px;margin:0;display:flex;align-items:center;gap:8px;flex:1}
-  .side-top{display:flex;align-items:center;gap:8px}
-  .help-btn{
-    width:26px;height:26px;border-radius:50%;border:1.5px solid var(--accent);
-    background:var(--accent);color:#fff;font-weight:800;font-size:14px;
-    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
-    flex-shrink:0;padding:0;box-shadow:0 2px 5px rgba(29,78,216,.3);
+  h1{font-size:18px;margin:0;display:flex;align-items:center;gap:8px;flex:1}
+  .emerg-title{
+    color:var(--red);
+    font-family:"Impact","Arial Black","Franklin Gothic Heavy",system-ui,sans-serif;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    font-size:18.5px;
+    line-height:1.1;
+    text-shadow:0 1px 2px rgba(229,57,53,.18);
   }
-  .help-btn:hover{filter:brightness(1.08);transform:scale(1.05)}
-  .ver{font-size:11px;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line);margin-left:auto}
+  .side-top{display:flex;align-items:center;gap:8px}
+  .ver{font-size:11px;font-family:system-ui,sans-serif;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line);margin-left:auto;letter-spacing:normal}
   .sub{font-size:12px;color:var(--muted)}
   fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
   legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
@@ -166,26 +169,42 @@
     border:1px solid currentColor;
   }
 
-  /* Botones flotantes superior derecha (Actualizar / Pausar) */
+  /* Botones flotantes superior derecha (Restablecer vista, Actualizar, Pausar y debajo ?) */
   #topRightControls{
     position:absolute;
     top:12px;
     right:12px;
     z-index:1000;
     display:flex;
+    flex-direction:column;
+    align-items:flex-end;
     gap:8px;
+  }
+  .tr-row{
+    display:flex;
+    gap:8px;
+    align-items:center;
   }
   .fab-btn{
     width:40px;height:40px;border-radius:10px;background:var(--panel);
     border:1px solid var(--line);color:var(--text);display:flex;
     align-items:center;justify-content:center;cursor:pointer;
     box-shadow:0 3px 12px rgba(0,0,0,.22);padding:0;
+    font-size:17px;font-weight:800;
   }
   .fab-btn:hover{background:var(--bg);border-color:var(--accent)}
   .fab-btn svg{width:20px;height:20px;fill:currentColor}
   @keyframes giroRefresh{to{transform:rotate(360deg)}}
   .fab-btn.spinning svg{animation:giroRefresh .8s linear infinite}
   .fab-btn.paused{border-color:var(--orange);color:var(--orange)}
+  .fab-btn.help-fab{
+    background:var(--accent);
+    color:#fff;
+    border-color:var(--accent);
+  }
+  .fab-btn.help-fab:hover{
+    filter:brightness(1.08);
+  }
 
   /* Barra flotante inferior izquierda */
   #bottomLeftControls{
@@ -289,7 +308,7 @@
   @media (max-width:760px){
     #app{grid-template-columns:1fr;grid-template-rows:46% 54%}
     #side{order:2;border-right:0;border-top:1px solid var(--line)}
-    #redOverlay{left:48px;right:60px;max-width:none}
+    #redOverlay{left:48px;right:150px;max-width:none}
     .fl-btn span.lbl{display:none}
   }
 </style>
@@ -299,8 +318,11 @@
   <aside id="side">
     <div>
       <div class="side-top">
-        <button class="help-btn" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
-        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.23</span></h1>
+        <h1>
+          <span>🚆</span>
+          <span class="emerg-title">Alertas Ferrocarril</span>
+          <span class="ver">v1.24</span>
+        </h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
@@ -372,14 +394,20 @@
       </div>
     </div>
 
-    <!-- Controles flotantes superior derecha: Actualizar (fijo 10s) y Pausar -->
+    <!-- Controles flotantes superior derecha: Restablecer vista, Actualizar, Pausar y debajo (?) -->
     <div id="topRightControls">
-      <button class="fab-btn" id="btnRefresh" title="Actualizar ahora (automático cada 10 s)">
-        <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-      </button>
-      <button class="fab-btn" id="btnPause" title="Pausar / Reanudar actualización automática">
-        <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-      </button>
+      <div class="tr-row">
+        <button class="fab-btn" id="btnResetView" title="Restablecer vista a toda España">
+          <svg viewBox="0 0 24 24"><path d="M5 5h5V3H3v7h2V5zm14 0v5h2V3h-7v2h5zm0 14h-5v2h7v-7h-2v5zM5 14H3v7h7v-2H5v-5zm7-5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+        </button>
+        <button class="fab-btn" id="btnRefresh" title="Actualizar ahora (automático cada 10 s)">
+          <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        </button>
+        <button class="fab-btn" id="btnPause" title="Pausar / Reanudar actualización automática">
+          <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+      </div>
+      <button class="fab-btn help-fab" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
     </div>
 
     <!-- Barra flotante inferior izquierda -->
@@ -525,7 +553,9 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.23";
+  const VERSION = "1.24";
+  const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
+  const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -705,7 +735,7 @@
   const $ = id => document.getElementById(id);
   const el = {
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
-    interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
+    interval: $("interval"), btnResetView: $("btnResetView"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
     thOrange: $("thOrange"), thSpeed: $("thSpeed"), thPersist: $("thPersist"),
     showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"), showOrmTiles: $("showOrmTiles"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
@@ -716,7 +746,7 @@
   };
 
   /* ---------- Mapa Base y Capa Oficial OpenRailwayMap (Única capa visual de vías) ---------- */
-  const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
+  const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView(SPAIN_DEFAULT_CENTER, SPAIN_DEFAULT_ZOOM);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const BASES = {
     gris:   { url: ESRI + "Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 16, maxZoom: 18, attribution: "Tiles &copy; Esri" } },
@@ -875,7 +905,6 @@
     if (tipo === "MD") return 160;
     if (tipo === "CERCANÍAS" || tipo === "REGIONAL" || tipo === "REG.EXP") return 140;
 
-    // ALVIA y trenes de ancho variable: 250 km/h en vía AVE y 220 km/h en vía convencional
     const sAV = TRACKS.av.loaded ? snapToTrackLayer(TRACKS.av, lat, lon) : null;
     const sMD = TRACKS.md.loaded ? snapToTrackLayer(TRACKS.md, lat, lon) : null;
     const dAV = sAV ? sAV.distToTrack : Infinity;
@@ -1185,7 +1214,6 @@
   /* ---------- Estado de Trenes y Memoria de Persistencia de Alertas Rojas ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
-  // Mapa pairKey -> timestamp (ms) en que comenzó ininterrumpidamente la alerta roja para ese par
   const redAlertStart = new Map();
 
   const stations = new Map();
@@ -1703,7 +1731,6 @@
       }
     }
 
-    // Limpiar del historial de persistencia cualquier par que haya dejado de estar en alerta roja
     for (const k of redAlertStart.keys()) {
       if (!activeRedKeys.has(k)) redAlertStart.delete(k);
     }
@@ -1806,7 +1833,6 @@
     return `${esc(la)} ↔ ${esc(lb)}`;
   }
 
-  // Actualiza únicamente el panel superior de alertas rojas (se llama tanto en render() como cada segundo para activar el parpadeo en tiempo real)
   function renderRedOverlayList() {
     const redPairs = [];
     pairs.forEach((p, idx) => {
@@ -1937,7 +1963,6 @@
     }
   }
 
-  // Reloj ligero de 1 segundo para activar el parpadeo de persistencia en cuanto se cumple el umbral
   setInterval(() => {
     if (!paused && redAlertStart.size > 0) {
       renderRedOverlayList();
@@ -1999,6 +2024,11 @@
   }
 
   /* ---------- Eventos de Interfaz y Controles Flotantes ---------- */
+  // Botón de restablecer vista a toda España
+  el.btnResetView.addEventListener("click", () => {
+    map.flyTo(SPAIN_DEFAULT_CENTER, SPAIN_DEFAULT_ZOOM, { duration: 0.8 });
+  });
+
   $("btnHelp").addEventListener("click", () => el.helpModal.classList.add("open"));
   $("btnCloseHelp").addEventListener("click", () => el.helpModal.classList.remove("open"));
   el.helpModal.addEventListener("click", e => { if (e.target === el.helpModal) el.helpModal.classList.remove("open"); });
@@ -2079,7 +2109,6 @@
     el.proxy.value = "/api?url={url}";
   }
 
-  // Cargar geometría en segundo plano (sin pintarla) para cálculo de distancias y trazado de alertas sobre raíl
   loadTrackLayer("av");
   loadTrackLayer("md");
   updateTrackStatus();
