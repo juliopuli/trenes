@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.27</title>
+<title>Alertas Ferrocarril · v1.28</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -54,7 +54,7 @@
   .pair .d{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
   .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
 
-  /* Contadores resumen compactos en el faldón (ajustados al ancho exacto sin desbordar) */
+  /* Contadores resumen compactos en el faldón */
   .stat-pills{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px;width:100%}
   .stat-pill{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:5px 6px;border-radius:7px;background:var(--bg);border:1px solid var(--line);font-size:11.5px;font-weight:600;min-width:0;white-space:nowrap}
 
@@ -278,8 +278,9 @@
     display:flex;align-items:center;justify-content:space-between;gap:6px;
   }
 
-  /* Marcadores de trenes y flecha direccional (solo para alertas naranja y roja) */
-  .tm{background:none;border:0;position:relative}
+  /* Marcadores de trenes: ¡IMPORTANTE! No poner position:relative en .tm porque rompe el position:absolute de Leaflet */
+  .tm{background:none;border:0}
+  .tm-wrap{position:relative;width:28px;height:28px}
   .tm .b{width:28px;height:28px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.45);transition:transform .15s;position:relative;z-index:2}
   .tm:hover .b{transform:scale(1.25)}
   .tm.red .b{background:#e53935;width:34px;height:34px;margin:-3px;animation:pulsoRojo 0.9s infinite}
@@ -293,6 +294,7 @@
     inset:0;
     pointer-events:none;
     z-index:3;
+    transform-origin:14px 14px;
   }
   .tm .dir-arrow svg{
     position:absolute;
@@ -346,7 +348,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.27</span>
+          <span class="ver">v1.28</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -578,7 +580,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.27";
+  const VERSION = "1.28";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -845,6 +847,7 @@
   ];
 
   const toNum = v => (v === null || v === undefined || v === "") ? NaN : parseFloat(String(v).replace(",", "."));
+  const isNum = v => typeof v === "number" && Number.isFinite(v);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const R = 6371.0088, rad = x => x * Math.PI / 180;
   function haversine(la1, lo1, la2, lo2) {
@@ -854,7 +857,7 @@
   }
   const fmtKm = d => d < 1 ? Math.round(d * 1000) + " m" : d.toFixed(2) + " km";
   const fmtImpactTime = sec => {
-    if (!isFinite(sec) || sec <= 0) return "Vel. igualada";
+    if (!isNum(sec) || sec <= 0) return "Vel. igualada";
     const s = Math.round(sec);
     if (s < 60) return `${s} s`;
     const m = Math.floor(s / 60);
@@ -1401,7 +1404,7 @@
     }
 
     const rawVel = toNum(trainObj.raw && (trainObj.raw.velocidad ?? trainObj.raw.vel ?? trainObj.raw.speed ?? trainObj.raw["Velocidad (km/h)"]));
-    if (h.calcSpeed === null && isFinite(rawVel) && rawVel >= 0) {
+    if (h.calcSpeed === null && isNum(rawVel) && rawVel >= 0) {
       h.calcSpeed = Math.min(maxSpeed, Math.round(rawVel));
       h.measures = 2;
     }
@@ -1420,7 +1423,7 @@
     const findKey = (o, re) => { for (const k of Object.keys(o)) if (re.test(k) && o[k] !== null && o[k] !== "" && typeof o[k] !== "object") return o[k]; };
     const lat = toNum(pos.latitud ?? pos.lat ?? pos.latitude ?? pos.Latitud ?? findKey(pos, /^lat/i));
     const lon = toNum(pos.longitud ?? pos.lon ?? pos.lng ?? pos.long ?? pos.longitude ?? pos.Longitud ?? findKey(pos, /^(lon|lng)/i));
-    if (!isFinite(lat) || !isFinite(lon)) return null;
+    if (!isNum(lat) || !isNum(lon)) return null;
     if (lat < SPAIN_BOUNDS.latMin || lat > SPAIN_BOUNDS.latMax || lon < SPAIN_BOUNDS.lonMin || lon > SPAIN_BOUNDS.lonMax) return null;
 
     let id, label, raw = {};
@@ -1465,13 +1468,13 @@
     const orig = resolveStation(origRaw), dest = resolveStation(destRaw), sig = resolveStation(sigRaw), ant = resolveStation(antRaw);
     const horaSal = r.horaSalida ?? r.salida ?? get(/hora.*sal/i) ?? "", horaLleg = r.horaLlegada ?? r.llegada ?? get(/hora.*lleg/i) ?? "";
     const maxSpd = t.maxAllowedSpeed || getMaxSpeedForTrain(t.tipo, t.lat, t.lon);
-    const rawVel = t.calcSpeed !== null && t.calcSpeed !== undefined ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
-    const vel = isFinite(rawVel) && rawVel >= 0 ? Math.min(maxSpd, Math.round(rawVel)) : null;
+    const rawVel = isNum(t.calcSpeed) ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
+    const vel = isNum(rawVel) && rawVel >= 0 ? Math.min(maxSpd, Math.round(rawVel)) : null;
     const ret = toNum(r.retraso ?? r.demora ?? r.delay ?? get(/retraso|demora/i));
     const mat = r.mat ?? r.material ?? r.composicion ?? "", corredor = r.corredor ?? r.linea ?? r.nucleo ?? r.Línea ?? "";
 
     let retHtml = "";
-    if (isFinite(ret)) {
+    if (isNum(ret)) {
       retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
     }
 
@@ -1512,7 +1515,7 @@
       } else if (dMD <= 1.2 && dMD < dAV * 0.85) {
         group = "CONV";
         bestSnap = sMD;
-      } else if (isFinite(t.calcSpeed) && t.calcSpeed > 220) {
+      } else if (isNum(t.calcSpeed) && t.calcSpeed > 220) {
         group = "AV";
         bestSnap = sAV;
       } else {
@@ -1525,7 +1528,7 @@
       ? (group === "CONV" ? 220 : 250)
       : getMaxSpeedForTrain(tipo, t.lat, t.lon);
     t.maxAllowedSpeed = maxSpeed;
-    if (t.calcSpeed !== null && t.calcSpeed > maxSpeed) {
+    if (isNum(t.calcSpeed) && t.calcSpeed > maxSpeed) {
       t.calcSpeed = maxSpeed;
     }
     if (t.speedsList && t.speedsList.length) {
@@ -1681,7 +1684,7 @@
       const avg = (t.speedsList[0] + t.speedsList[1]) / 2;
       return avg > minSpeedKmh && t.speedsList[1] > minSpeedKmh * 0.85;
     }
-    if (t.speedMeasures >= 2 && isFinite(t.calcSpeed)) {
+    if (t.speedMeasures >= 2 && isNum(t.calcSpeed)) {
       return t.calcSpeed > minSpeedKmh;
     }
     return false;
@@ -1753,8 +1756,8 @@
         if (order) {
           trailing = order.trailing;
           leading = order.leading;
-          const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
-          const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
+          const vTrail = isNum(trailing.calcSpeed) ? trailing.calcSpeed : 0;
+          const vLead  = isNum(leading.calcSpeed)  ? leading.calcSpeed  : 0;
           const closingSpeed = vTrail - vLead;
 
           if (trailing.isFast && closingSpeed >= 0) {
@@ -1800,7 +1803,7 @@
     }
 
     trains.forEach(t => {
-      if (t.inStation || !isFinite(t.d) || t.d >= tO) {
+      if (t.inStation || !isNum(t.d) || t.d >= tO) {
         t.color = "green";
       } else {
         t.color = t.hasRedPair ? "red" : "orange";
@@ -1832,7 +1835,7 @@
     const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "otro tren";
     const roleTxt = t.roleInfo ? ` (${t.roleInfo})` : "";
     let near = "";
-    if (!t.inStation && isFinite(t.d)) {
+    if (!t.inStation && isNum(t.d)) {
       if (t.color === "red") {
         const ttiTxt = t.impactSec !== null ? ` · ⏱ Impacto: ${fmtImpactTime(t.impactSec)}` : "";
         near = `<div style="color:#e53935;font-weight:700;margin-top:3px">🚨 PELIGRO ALCANCE: A ${fmtKm(t.d)} por vía${esc(roleTxt)}${esc(ttiTxt)}</div>`;
@@ -1865,7 +1868,7 @@
     if (x.retHtml) mainRows.push(["Puntualidad", x.retHtml, true]);
     if (t.roleInfo) mainRows.push(["Posición en vía", t.roleInfo]);
     mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.color === "red" ? "ROJO (Alcance a >100 km/h)" : (t.color === "orange" ? "AMARILLO/NARANJA (<5 km sin alcance)" : "Normal en ruta"))]);
-    if (!t.inStation && isFinite(t.d)) mainRows.push(["Distancia por vía", `${fmtKm(t.d)}`]);
+    if (!t.inStation && isNum(t.d)) mainRows.push(["Distancia por vía", `${fmtKm(t.d)}`]);
     if (t.color === "red" && t.impactSec !== null) {
       mainRows.push(["Tiempo hasta impacto", `<b style="color:#e53935">⏱ ${esc(fmtImpactTime(t.impactSec))}</b>`, true]);
     }
@@ -1881,10 +1884,10 @@
 
   const TRAIN_SVG = '<svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>';
 
-  // Crea el icono del tren; si está en alerta naranja o roja y tiene rumbo conocido, añade delante una flecha del mismo color
+  // Crea el icono del tren usando .tm-wrap como contenedor relativo interno (para no interferir con el posicionamiento absoluto de Leaflet)
   function makeIcon(color, bearing) {
     let arrowHtml = "";
-    if ((color === "red" || color === "orange") && bearing !== null && isFinite(bearing)) {
+    if ((color === "red" || color === "orange") && isNum(bearing)) {
       const fillCol = color === "red" ? "#e53935" : "#f59e0b";
       arrowHtml = `<div class="dir-arrow" style="transform:rotate(${Math.round(bearing)}deg)">` +
         `<svg viewBox="0 0 24 24"><path d="M12 1L21 19L12 14.5L3 19Z" fill="${fillCol}" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/></svg>` +
@@ -1892,7 +1895,7 @@
     }
     return L.divIcon({
       className: "tm " + color,
-      html: arrowHtml + '<div class="b">' + TRAIN_SVG + '</div>',
+      html: `<div class="tm-wrap">${arrowHtml}<div class="b">${TRAIN_SVG}</div></div>`,
       iconSize: [28, 28],
       iconAnchor: [14, 14]
     });
@@ -1902,8 +1905,8 @@
     if (p.hasOrder) {
       const tr = `${p.trailing.tipo ? p.trailing.tipo + " " : ""}${p.trailing.label}`;
       const ld = `${p.leading.tipo ? p.leading.tipo + " " : ""}${p.leading.label}`;
-      const vT = isFinite(p.trailing.calcSpeed) ? `${p.trailing.calcSpeed}` : "?";
-      const vL = isFinite(p.leading.calcSpeed) ? `${p.leading.calcSpeed}` : "?";
+      const vT = isNum(p.trailing.calcSpeed) ? `${p.trailing.calcSpeed}` : "0";
+      const vL = isNum(p.leading.calcSpeed) ? `${p.leading.calcSpeed}` : "0";
       return `${esc(tr)} (${vT} km/h) ➔ ${esc(ld)} (${vL} km/h)`;
     }
     const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label;
@@ -1918,8 +1921,8 @@
     });
 
     redPairs.sort((a, b) => {
-      const tA = (a.p.impactSec !== null && isFinite(a.p.impactSec)) ? a.p.impactSec : Infinity;
-      const tB = (b.p.impactSec !== null && isFinite(b.p.impactSec)) ? b.p.impactSec : Infinity;
+      const tA = isNum(a.p.impactSec) ? a.p.impactSec : Infinity;
+      const tB = isNum(b.p.impactSec) ? b.p.impactSec : Infinity;
       if (tA !== tB) return tA - tB;
       return a.p.d - b.p.d;
     });
@@ -1978,7 +1981,7 @@
       const z = t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0;
       const pos = [t.drawLat ?? t.lat, t.drawLon ?? t.lon];
       // Solo aplicamos rumbo de flecha si el tren está en naranja o rojo
-      const arrowDeg = (t.color === "red" || t.color === "orange") && t.bearing !== null && isFinite(t.bearing)
+      const arrowDeg = (t.color === "red" || t.color === "orange") && isNum(t.bearing)
         ? Math.round(t.bearing)
         : null;
       const iconKey = `${t.color}|${arrowDeg ?? ""}`;
