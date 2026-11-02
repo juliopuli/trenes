@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.29</title>
+<title>Alertas Ferrocarril · v1.30</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -418,7 +418,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.29</span>
+          <span class="ver">v1.30</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -443,7 +443,7 @@
       <div class="help">
         • <b>Distancia por vía:</b> medida sobre los raíles entre ambos trenes.<br>
         • <b>Velocidad limitada por tipo:</b> AVE 320, ALVIA 250/220, AVANT 250, MD 160, Cercanías/Reg. 140 km/h.<br>
-        • <b>Etiqueta y foco:</b> los trenes en alerta muestran su número directamente en el mapa y se iluminan en azul al pulsar la alerta.
+        • <b>Prioridad roja:</b> cuando coinciden en un mismo tramo, la alerta roja siempre prevalece sobre la naranja.
       </div>
     </fieldset>
 
@@ -631,7 +631,7 @@
       <div class="hm-box" style="border-left:5px solid #e53935">
         <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO con flecha roja y Parpadeo por Persistencia</div>
         <div>
-          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) y los trenes afectados muestran una <b>flecha roja y su número en etiqueta</b> cuando:
+          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) y prevalece siempre en pantalla sobre cualquier alerta naranja cuando:
           <ol style="margin:4px 0 0;padding-left:18px">
             <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> y van en el <b>mismo sentido</b> a <b>menos de 5 km</b>.</li>
             <li>El tren que viene por <b>detrás supera los 100 km/h</b> y va <b>más rápido (o igual) que el de delante</b>.</li>
@@ -654,7 +654,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.29";
+  const VERSION = "1.30";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1337,7 +1337,6 @@
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
   const redAlertStart = new Map();
-  // Guarda los IDs de los 2 trenes de la alerta sobre la que el usuario ha hecho clic
   let selectedPairKey = null;
   let selectedTrainIds = new Set();
 
@@ -1778,6 +1777,7 @@
 
     trains.forEach(t => {
       t.d = Infinity;
+      t.redD = Infinity;
       t.nearTrain = null;
       t.hasRedPair = false;
       t.roleInfo = "";
@@ -1847,27 +1847,52 @@
         const pairKey = makePairKey(a.id, b.id);
         let redStartMs = null;
 
+        // La alerta ROJA prevalece siempre sobre la NARANJA en los atributos del tren
         if (pairSeverity === "red") {
           activeRedKeys.add(pairKey);
           if (!redAlertStart.has(pairKey)) {
             redAlertStart.set(pairKey, now);
           }
           redStartMs = redAlertStart.get(pairKey);
-        }
 
-        if (d < a.d) { a.d = d; a.nearTrain = b; }
-        if (d < b.d) { b.d = d; b.nearTrain = a; }
-        if (pairSeverity === "red") {
+          if (!a.hasRedPair || d < a.redD) {
+            a.redD = d;
+            a.d = d;
+            a.nearTrain = b;
+            if (order) {
+              a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            }
+          }
+          if (!b.hasRedPair || d < b.redD) {
+            b.redD = d;
+            b.d = d;
+            b.nearTrain = a;
+            if (order) {
+              b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            }
+          }
           a.hasRedPair = true;
           b.hasRedPair = true;
           if (impactSec !== null) {
             if (a.impactSec === null || impactSec < a.impactSec) a.impactSec = impactSec;
             if (b.impactSec === null || impactSec < b.impactSec) b.impactSec = impactSec;
           }
-        }
-        if (order) {
-          trailing.roleInfo = `Detrás de ${leading.tipo} ${leading.label}`;
-          leading.roleInfo  = `Delante de ${trailing.tipo} ${trailing.label}`;
+        } else {
+          // Solo actualizar con datos de alerta naranja si el tren no tiene ya una alerta roja prioritaria
+          if (!a.hasRedPair && d < a.d) {
+            a.d = d;
+            a.nearTrain = b;
+            if (order) {
+              a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            }
+          }
+          if (!b.hasRedPair && d < b.d) {
+            b.d = d;
+            b.nearTrain = a;
+            if (order) {
+              b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            }
+          }
         }
 
         pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, pathCoords, severity: pairSeverity, impactSec, pairKey, redStartMs });
@@ -1960,7 +1985,6 @@
 
   const TRAIN_SVG = '<svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>';
 
-  // Crea el icono del tren con flecha de sentido y etiqueta identificativa en los trenes en alerta (naranja/roja) o seleccionados
   function makeIcon(color, bearing, tagText, isSelected) {
     let arrowHtml = "";
     if ((color === "red" || color === "orange") && isNum(bearing)) {
@@ -2063,7 +2087,6 @@
         ? Math.round(t.bearing)
         : null;
 
-      // Mostrar etiqueta permanente en los trenes en alerta (naranja/roja) o seleccionados
       let tagText = "";
       if (t.color === "red" || t.color === "orange" || isSelected) {
         const vStr = isNum(t.calcSpeed) ? ` · ${t.calcSpeed} km/h` : "";
@@ -2090,10 +2113,15 @@
     });
     for (const [id, m] of markers) if (!alive.has(id)) { map.removeLayer(m); markers.delete(id); }
 
-    // Dibujar unión gruesa y destacada siguiendo los vértices de la vía entre ambos trenes
+    // Dibujar las líneas sobre la vía garantizando que las ROJAS se pinten SIEMPRE ENCIMA de las NARANJAS
     linesLayer.clearLayers();
     if (el.showLines.checked) {
-      pairs.forEach(p => {
+      const drawList = [...pairs].sort((x, y) => {
+        const score = p => (p.severity === "red" ? 10 : 0) + (selectedPairKey && p.pairKey === selectedPairKey ? 5 : 0);
+        return score(x) - score(y);
+      });
+
+      drawList.forEach(p => {
         if (!p.a.visible || !p.b.visible || !p.pathCoords || p.pathCoords.length < 2) return;
         const isRed = p.severity === "red";
         const isSel = selectedPairKey && p.pairKey === selectedPairKey;
@@ -2196,7 +2224,6 @@
     if (!paused) timer = setInterval(refresh, 10000);
   }
 
-  // Encuadre inteligente con flyToBounds sobre el par de trenes seleccionado y resaltado visual
   function flyToPairIndex(idx) {
     const p = pairs[idx];
     if (!p) return;
@@ -2217,7 +2244,6 @@
   }
 
   /* ---------- Eventos de Interfaz y Controles Flotantes ---------- */
-  // Limpiar selección al hacer clic en una zona libre del mapa o al restablecer vista
   map.on("click", () => {
     if (selectedPairKey !== null) {
       selectedPairKey = null;
