@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.20</title>
+<title>Trenes Renfe en tiempo real · v1.21</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -256,7 +256,7 @@
     <div>
       <div class="side-top">
         <button class="help-btn" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
-        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.20</span></h1>
+        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.21</span></h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
@@ -270,7 +270,7 @@
       <div class="help">
         • <b>Distancia por vía:</b> medida sobre los raíles entre ambos trenes.<br>
         • <b>Unión sobre vía:</b> el trazo naranja/rojo dibuja la vía que los separa.<br>
-        • <b>Rojo:</b> el tren trasero va a &gt; 100 km/h y más rápido que el delantero, mostrando el <b>tiempo estimado de impacto</b>.
+        • <b>Rojo:</b> ordenado de menor a mayor <b>tiempo de impacto</b>.
       </div>
     </fieldset>
 
@@ -300,6 +300,9 @@
       <input type="checkbox" id="showRed" checked>
       <input type="checkbox" id="showOrange" checked>
       <input type="checkbox" id="showGreen" checked>
+      <input type="checkbox" id="showTrackAV" checked>
+      <input type="checkbox" id="showTrackMD" checked>
+      <button id="btnReloadTrack"></button>
     </div>
   </aside>
 
@@ -367,21 +370,16 @@
         </div>
       </div>
 
-      <!-- 3. Capas de vías -->
+      <!-- 3. Capas de vías (Solo Detalle Adif / OpenRailwayMap) -->
       <div class="fl-wrap">
         <button class="fl-btn" data-pop="popTracks" title="Capas de vías ferroviarias">
           <svg viewBox="0 0 24 24"><path d="M5 3v18h2v-6.5l7 6.5h3l-8-7.5V3H5zm12 0v8.5l-3.5 3.2 1.4 1.5L19 12.4V3h-2z"/></svg>
           <span class="lbl">Capas de vías</span>
         </button>
-        <div class="fl-pop" id="popTracks" style="min-width:265px">
-          <div class="fl-title">Trazado ferroviario real</div>
-          <label class="chk"><input type="checkbox" id="showTrackAV" checked>Vía Alta Velocidad<span class="n" style="color:#7b1fa2;font-weight:700">▬▬</span></label>
-          <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía Convencional / MD<span class="n" style="color:#0066cc;font-weight:700">▬▬</span></label>
+        <div class="fl-pop" id="popTracks" style="min-width:255px">
+          <div class="fl-title">Capa de infraestructura</div>
           <label class="chk"><input type="checkbox" id="showOrmTiles" checked>Detalle Adif / OpenRailwayMap<span class="n" style="color:#d97706;font-weight:700">┼┼</span></label>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding-top:6px;border-top:1px solid var(--line)">
-            <div class="help" id="trackStatus" style="margin:0">Cargando vías…</div>
-            <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías reales">Recargar</button>
-          </div>
+          <div class="help" id="trackStatus" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)">Cargando geometría para cálculo…</div>
         </div>
       </div>
 
@@ -450,7 +448,7 @@
       <div class="hm-box" style="border-left:5px solid #e53935">
         <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO PARPADEANTE (¡Peligro por alcance y Tiempo de Impacto!)</div>
         <div>
-          Salta la <b>Alerta Roja</b> arriba en el mapa cuando se cumplen estas 4 cosas a la vez:
+          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) cuando se cumplen estas 4 cosas a la vez:
           <ol style="margin:4px 0 0;padding-left:18px">
             <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> (un AVE nunca puede chocar con un Media Distancia convencional aunque sus vías pasen juntas).</li>
             <li>Van en el <b>mismo sentido de la marcha</b> a <b>menos de 5 km medidos siguiendo las curvas de la vía</b>.</li>
@@ -474,7 +472,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.20";
+  const VERSION = "1.21";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -664,7 +662,7 @@
     lblSource: $("lblSource"), lblBase: $("lblBase"), helpModal: $("helpModal")
   };
 
-  /* ---------- Mapa Base y Capa Oficial OpenRailwayMap ---------- */
+  /* ---------- Mapa Base y Capa Oficial OpenRailwayMap (Única capa visual de vías) ---------- */
   const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const BASES = {
@@ -683,12 +681,9 @@
   const ormTileLayer = L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png", {
     subdomains: ["a", "b", "c"],
     maxZoom: 19,
-    opacity: 0.78,
+    opacity: 0.85,
     attribution: "&copy; OpenRailwayMap"
   }).addTo(map);
-
-  const trackCanvas = L.canvas({ padding: 0.5 });
-  const trackLayer = L.layerGroup().addTo(map);
 
   const alertPane = map.createPane("alertTrackPane");
   alertPane.style.zIndex = 460;
@@ -698,20 +693,21 @@
 
   const GRID_SIZE = 0.08;
 
+  // Geometrías en memoria (no se pintan como capas sueltas, solo se usan para imantar los trenes y pintar el tramo de alerta sobre el raíl)
   const TRACKS = {
     av: {
-      name: "AV", color: "#7b1fa2", weight: 3.0, opacity: 0.85, minKm: 0.015, key: "avTrack_v18",
+      name: "AV", minKm: 0.015, key: "avTrack_v18",
       queries: [
         '[out:json][timeout:40][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'
       ],
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map(), ways: []
+      loaded: false, osmLoaded: false, loading: false, n: 0, grid: new Map(), ways: []
     },
     md: {
-      name: "MD/Conv", color: "#0066cc", weight: 2.2, opacity: 0.8, minKm: 0.025, key: "mdTrack_v18",
+      name: "MD/Conv", minKm: 0.025, key: "mdTrack_v18",
       queries: [
         '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;'
       ],
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map(), ways: []
+      loaded: false, osmLoaded: false, loading: false, n: 0, grid: new Map(), ways: []
     }
   };
 
@@ -743,7 +739,7 @@
   };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Indexación Espacial de Sub-segmentos y Enrutamiento Local Exacto sobre la Vía ---------- */
+  /* ---------- Indexación Espacial en Memoria para Cálculo por Vía ---------- */
   function indexTrackWays(st, lines) {
     st.grid.clear();
     st.ways = lines;
@@ -985,15 +981,13 @@
   }
 
   function updateTrackStatus() {
-    const part = st => {
-      if (st.loading) return `${st.name}: descargando trazado real…`;
-      if (st.osmLoaded) return `${st.name}: ${st.n} tramos reales`;
-      return `${st.name}: pendiente`;
-    };
-    const parts = [];
-    if (el.showTrackAV.checked) parts.push(part(TRACKS.av));
-    if (el.showTrackMD.checked) parts.push(part(TRACKS.md));
-    el.trackStatus.textContent = parts.length ? parts.join(" · ") : "Vías vectoriales ocultas";
+    if (!el.showOrmTiles.checked) {
+      el.trackStatus.textContent = "Capa Adif oculta";
+    } else if (TRACKS.av.loading || TRACKS.md.loading) {
+      el.trackStatus.textContent = "Capa Adif activa · indexando geometría…";
+    } else {
+      el.trackStatus.textContent = "Capa Adif activa y geometría lista";
+    }
   }
 
   function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
@@ -1059,19 +1053,12 @@
     return out;
   }
 
-  function syncTrackVisibility() {
-    trackLayer.clearLayers();
-    if (el.showTrackMD.checked && TRACKS.md.poly) TRACKS.md.poly.addTo(trackLayer);
-    if (el.showTrackAV.checked && TRACKS.av.poly) TRACKS.av.poly.addTo(trackLayer);
-  }
-
   function applyTrackWays(st, ways) {
+    // Solo indexamos en memoria para cálculo de distancias y trazado de alertas (sin pintar polilíneas moradas/azules sobre el mapa)
     indexTrackWays(st, ways);
-    st.poly = L.polyline(ways, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
     st.n = ways.length;
     st.loaded = true;
     st.osmLoaded = true;
-    syncTrackVisibility();
     updateTrackStatus();
     if (trains.length) { computeProximity(); render(); }
   }
@@ -1113,20 +1100,10 @@
     }
   }
 
-  function onTrackToggle(kind, chk) {
-    if (chk.checked && !TRACKS[kind].osmLoaded) loadTrackLayer(kind);
-    syncTrackVisibility();
-    updateTrackStatus();
-  }
-  el.showTrackAV.addEventListener("change", () => onTrackToggle("av", el.showTrackAV));
-  el.showTrackMD.addEventListener("change", () => onTrackToggle("md", el.showTrackMD));
   el.showOrmTiles.addEventListener("change", () => {
     if (el.showOrmTiles.checked) ormTileLayer.addTo(map);
     else map.removeLayer(ormTileLayer);
-  });
-  el.btnReloadTrack.addEventListener("click", () => {
-    if (el.showTrackAV.checked) loadTrackLayer("av", true);
-    if (el.showTrackMD.checked) loadTrackLayer("md", true);
+    updateTrackStatus();
   });
 
   /* ---------- Estado de Trenes ---------- */
@@ -1580,11 +1557,10 @@
           leading = order.leading;
           const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
           const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
-          const closingSpeed = vTrail - vLead; // Velocidad de aproximación (km/h)
+          const closingSpeed = vTrail - vLead;
 
           if (trailing.isFast && closingSpeed >= 0) {
             pairSeverity = "red";
-            // Tiempo hasta impacto en segundos = (distancia_km / velocidad_cierre_kmh) * 3600
             impactSec = closingSpeed > 0 ? (d / closingSpeed) * 3600 : Infinity;
           } else {
             pairSeverity = "orange";
@@ -1782,7 +1758,15 @@
       else orangePairs.push({ p, idx });
     });
 
-    // 1. Recuadro superior izquierdo del mapa (Solo Alertas Rojas por alcance + Tiempo hasta impacto al final)
+    // Ordenar las Alertas Rojas de MENOR tiempo de impacto a MAYOR tiempo de impacto (desempate por menor distancia)
+    redPairs.sort((a, b) => {
+      const tA = (a.p.impactSec !== null && isFinite(a.p.impactSec)) ? a.p.impactSec : Infinity;
+      const tB = (b.p.impactSec !== null && isFinite(b.p.impactSec)) ? b.p.impactSec : Infinity;
+      if (tA !== tB) return tA - tB;
+      return a.p.d - b.p.d;
+    });
+
+    // 1. Recuadro superior izquierdo del mapa (Solo Alertas Rojas ordenadas por menor tiempo de impacto)
     el.roCount.textContent = redPairs.length;
     if (!redPairs.length) {
       el.redOverlay.classList.add("empty");
@@ -1898,10 +1882,6 @@
     $("sourceSwitch").querySelectorAll(".sw-opt").forEach(b => b.classList.toggle("active", b === opt));
     el.source.value = val;
     el.lblSource.textContent = val === "ld" ? "LD / Alta Velocidad" : "Cercanías";
-    if (val === "visor" && !el.showTrackMD.checked) {
-      el.showTrackMD.checked = true;
-      onTrackToggle("md", el.showTrackMD);
-    }
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     trainHistory.clear();
     stationsTried = false;
@@ -1947,8 +1927,9 @@
     el.proxy.value = "/api?url={url}";
   }
 
-  if (el.showTrackAV.checked) loadTrackLayer("av");
-  if (el.showTrackMD.checked) loadTrackLayer("md");
+  // Cargar geometría en segundo plano (sin pintarla) para cálculo de distancias y trazado de alertas sobre raíl
+  loadTrackLayer("av");
+  loadTrackLayer("md");
   updateTrackStatus();
   refresh();
   schedule();
