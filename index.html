@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.28</title>
+<title>Alertas Ferrocarril · v1.29</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -16,7 +16,7 @@
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
   #app{display:grid;grid-template-columns:340px 1fr;height:100%}
-  #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden;padding:14px 12px 24px;display:flex;flex-direction:column;gap:14px}
+  #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden;padding:14px 12px 18px;display:flex;flex-direction:column;gap:14px}
   #mapWrap{position:relative;height:100%;width:100%}
   #map{height:100%;width:100%;background:#cfd8e3}
   h1{font-size:18px;margin:0;display:flex;align-items:center;gap:8px;flex:1;min-width:0}
@@ -48,11 +48,26 @@
   button:hover{filter:brightness(.96)}
   #status{font-size:12px;color:var(--muted);line-height:1.4;margin-top:4px}
   #status.err{color:var(--red)}
-  #pairs{max-height:280px;overflow-y:auto;font-size:12px}
-  .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+  #pairs{max-height:240px;overflow-y:auto;font-size:12px}
+  .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:5px}
   .pair:hover{background:var(--bg)}
+  .pair.active-pair{background:rgba(29,78,216,.12);outline:1.5px solid var(--accent)}
   .pair .d{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
   .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
+
+  /* Aviso legal inferior en el faldón izquierdo */
+  .disclaimer{
+    margin-top:auto;
+    padding:9px 10px;
+    border-radius:8px;
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-left:3.5px solid var(--orange);
+    font-size:11px;
+    color:var(--muted);
+    line-height:1.4;
+  }
+  .disclaimer b{color:var(--text)}
 
   /* Contadores resumen compactos en el faldón */
   .stat-pills{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px;width:100%}
@@ -120,6 +135,7 @@
     transition:background .15s;
   }
   .ro-item:hover{background:var(--bg)}
+  .ro-item.active-pair{outline:2px solid var(--accent);background:rgba(29,78,216,.1)}
   .ro-item .ro-right{display:flex;align-items:center;gap:6px;white-space:nowrap}
   .ro-item .ro-d{color:var(--red);font-variant-numeric:tabular-nums}
   .ro-item .ro-tti{
@@ -169,7 +185,7 @@
     border:1px solid currentColor;
   }
 
-  /* Botones flotantes superior derecha (Restablecer vista, Actualizar, Pausar y debajo ?) */
+  /* Botones flotantes superior derecha */
   #topRightControls{
     position:absolute;
     top:12px;
@@ -278,7 +294,7 @@
     display:flex;align-items:center;justify-content:space-between;gap:6px;
   }
 
-  /* Marcadores de trenes: ¡IMPORTANTE! No poner position:relative en .tm porque rompe el position:absolute de Leaflet */
+  /* Marcadores de trenes: sin position:relative en .tm para no interferir con Leaflet */
   .tm{background:none;border:0}
   .tm-wrap{position:relative;width:28px;height:28px}
   .tm .b{width:28px;height:28px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.45);transition:transform .15s;position:relative;z-index:2}
@@ -287,6 +303,60 @@
   .tm.orange .b{background:#f59e0b;width:30px;height:30px;margin:-1px}
   .tm.green .b{background:#43a047}
   .tm .b svg{width:17px;height:17px;fill:#fff}
+
+  /* Anillo de foco cuando el usuario hace clic sobre una alerta para distinguir esos 2 trenes del resto */
+  @keyframes pulsoSeleccion{
+    0%,100%{transform:scale(1);opacity:1}
+    50%{transform:scale(1.22);opacity:0.75}
+  }
+  .tm.selected-pair .tm-wrap::before{
+    content:"";
+    position:absolute;
+    inset:-9px;
+    border-radius:50%;
+    border:3.5px solid #2563eb;
+    box-shadow:0 0 14px rgba(37,99,235,.95), inset 0 0 8px rgba(37,99,235,.6);
+    animation:pulsoSeleccion 0.9s infinite ease-in-out;
+    z-index:1;
+    pointer-events:none;
+  }
+
+  /* Etiqueta identificativa permanente bajo los trenes en alerta (naranja/rojo) o seleccionados */
+  .tm-tag{
+    position:absolute;
+    top:31px;
+    left:50%;
+    transform:translateX(-50%);
+    background:rgba(20,23,27,.92);
+    color:#fff;
+    font-size:10.5px;
+    font-weight:700;
+    padding:1.5px 6px;
+    border-radius:4px;
+    white-space:nowrap;
+    pointer-events:none;
+    z-index:4;
+    border:1.5px solid #fff;
+    box-shadow:0 2px 5px rgba(0,0,0,.45);
+    letter-spacing:.01em;
+  }
+  .tm.red .tm-tag{
+    top:34px;
+    background:#b91c1c;
+    border-color:#fecaca;
+  }
+  .tm.orange .tm-tag{
+    top:32px;
+    background:#b45309;
+    border-color:#fde68a;
+  }
+  .tm.selected-pair .tm-tag{
+    background:#1d4ed8 !important;
+    border-color:#ffffff !important;
+    font-size:11.5px;
+    padding:2px 7px;
+    box-shadow:0 0 12px rgba(29,78,216,.95);
+  }
 
   /* Contenedor rotatorio de la flecha delante del tren */
   .tm .dir-arrow{
@@ -348,7 +418,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.28</span>
+          <span class="ver">v1.29</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -373,7 +443,7 @@
       <div class="help">
         • <b>Distancia por vía:</b> medida sobre los raíles entre ambos trenes.<br>
         • <b>Velocidad limitada por tipo:</b> AVE 320, ALVIA 250/220, AVANT 250, MD 160, Cercanías/Reg. 140 km/h.<br>
-        • <b>Flecha de sentido:</b> indica la dirección de avance en los trenes en alerta naranja y roja.
+        • <b>Etiqueta y foco:</b> los trenes en alerta muestran su número directamente en el mapa y se iluminan en azul al pulsar la alerta.
       </div>
     </fieldset>
 
@@ -394,6 +464,10 @@
       <legend>Trenes en precaución (amarillo/naranja)</legend>
       <div id="pairs"><div class="sub">Sin datos todavía.</div></div>
     </fieldset>
+
+    <div class="disclaimer">
+      ⚠️ <b>Aviso importante:</b> Esta aplicación no es oficial. Los datos mostrados provienen de las fuentes públicas de Renfe (sujetas a posibles retrasos o imprecisiones de GPS) y <b>no debe utilizarse como sistema infalible ni oficial de alertas o seguridad ferroviaria</b>.
+    </div>
 
     <!-- Controles internos ocultos -->
     <div style="display:none">
@@ -539,9 +613,9 @@
       </div>
 
       <div class="hm-box" style="border-left:5px solid #f59e0b">
-        <div class="hm-box-title"><span class="dot" style="background:#f59e0b;width:14px;height:14px"></span> 2. Trenes en NARANJA con flecha naranja (Precaución)</div>
+        <div class="hm-box-title"><span class="dot" style="background:#f59e0b;width:14px;height:14px"></span> 2. Trenes en NARANJA con flecha y etiqueta (Precaución)</div>
         <div>
-          Dos trenes van por la <b>misma vía y en el mismo sentido</b> a <b>menos de 5 km sobre el raíl</b> (mostrando una <b>flecha naranja delante</b> con su sentido de avance), pero <b>NO hay peligro inminente</b> porque:
+          Dos trenes van por la <b>misma vía y en el mismo sentido</b> a <b>menos de 5 km sobre el raíl</b> (mostrando una <b>flecha naranja delante</b> y su número debajo), pero <b>NO hay peligro inminente</b> porque:
           <ul style="margin:4px 0 0;padding-left:18px">
             <li>Ambos van despacito (a menos de 100 km/h) o están parados esperando señal.</li>
             <li>O bien <b>el tren que va delante corre más que el que va detrás</b>, así que cada vez se alejan más el uno del otro.</li>
@@ -557,11 +631,11 @@
       <div class="hm-box" style="border-left:5px solid #e53935">
         <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO con flecha roja y Parpadeo por Persistencia</div>
         <div>
-          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) y los trenes afectados muestran una <b>flecha roja apuntando hacia su dirección de avance</b> cuando:
+          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) y los trenes afectados muestran una <b>flecha roja y su número en etiqueta</b> cuando:
           <ol style="margin:4px 0 0;padding-left:18px">
             <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> y van en el <b>mismo sentido</b> a <b>menos de 5 km</b>.</li>
             <li>El tren que viene por <b>detrás supera los 100 km/h</b> y va <b>más rápido (o igual) que el de delante</b>.</li>
-            <li><b>Aviso de Persistencia:</b> Si una misma alerta roja se mantiene activa de forma ininterrumpida durante más segundos de los configurados en <b>Persistencia (s)</b>, su fila en el panel superior del mapa comienza a <b>parpadear intensamente en rojo</b> para alertar al operador.</li>
+            <li><b>Al pulsar sobre cualquier alerta:</b> el mapa encuadra automáticamente a los dos trenes implicados y los rodea con un <b>halo azul brillante</b> para distinguirlos de cualquier otro tren cercano.</li>
           </ol>
         </div>
         <div class="hm-diagram" style="border-color:#e53935">
@@ -580,7 +654,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.28";
+  const VERSION = "1.29";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -792,7 +866,7 @@
     lblSource: $("lblSource"), lblBase: $("lblBase"), helpModal: $("helpModal")
   };
 
-  /* ---------- Mapa Base y Capa Oficial OpenRailwayMap (Única capa visual de vías) ---------- */
+  /* ---------- Mapa Base y Capa Oficial OpenRailwayMap ---------- */
   const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView(SPAIN_DEFAULT_CENTER, SPAIN_DEFAULT_ZOOM);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const BASES = {
@@ -1259,10 +1333,13 @@
     updateTrackStatus();
   });
 
-  /* ---------- Estado de Trenes y Memoria de Persistencia de Alertas Rojas ---------- */
+  /* ---------- Estado de Trenes, Persistencia y Par Seleccionado ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
   const redAlertStart = new Map();
+  // Guarda los IDs de los 2 trenes de la alerta sobre la que el usuario ha hecho clic
+  let selectedPairKey = null;
+  let selectedTrainIds = new Set();
 
   const stations = new Map();
   function registerStation(code, name) {
@@ -1572,7 +1649,6 @@
     return null;
   }
 
-  // Calcula el rumbo en grados (0° = Norte, 90° = Este, 180° = Sur, 270° = Oeste) para orientar la flecha delantera
   function computeTrainBearing(t) {
     let vLat = 0, vLon = 0;
     if (t.hasVector && (Math.abs(t.dLat) > 1e-7 || Math.abs(t.dLon) > 1e-7)) {
@@ -1884,8 +1960,8 @@
 
   const TRAIN_SVG = '<svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>';
 
-  // Crea el icono del tren usando .tm-wrap como contenedor relativo interno (para no interferir con el posicionamiento absoluto de Leaflet)
-  function makeIcon(color, bearing) {
+  // Crea el icono del tren con flecha de sentido y etiqueta identificativa en los trenes en alerta (naranja/roja) o seleccionados
+  function makeIcon(color, bearing, tagText, isSelected) {
     let arrowHtml = "";
     if ((color === "red" || color === "orange") && isNum(bearing)) {
       const fillCol = color === "red" ? "#e53935" : "#f59e0b";
@@ -1893,9 +1969,10 @@
         `<svg viewBox="0 0 24 24"><path d="M12 1L21 19L12 14.5L3 19Z" fill="${fillCol}" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/></svg>` +
         `</div>`;
     }
+    const tagHtml = tagText ? `<div class="tm-tag">${esc(tagText)}</div>` : "";
     return L.divIcon({
-      className: "tm " + color,
-      html: `<div class="tm-wrap">${arrowHtml}<div class="b">${TRAIN_SVG}</div></div>`,
+      className: "tm " + color + (isSelected ? " selected-pair" : ""),
+      html: `<div class="tm-wrap">${arrowHtml}<div class="b">${TRAIN_SVG}</div>${tagHtml}</div>`,
       iconSize: [28, 28],
       iconAnchor: [14, 14]
     });
@@ -1942,6 +2019,7 @@
         const elapsedSec = p.redStartMs ? (now - p.redStartMs) / 1000 : 0;
         const isPersistent = elapsedSec >= persistThresholdSec;
         if (isPersistent) anyPersistent = true;
+        const isSel = selectedPairKey && p.pairKey === selectedPairKey;
 
         const ttiBadge = p.impactSec !== null
           ? `<span class="ro-tti" title="Tiempo estimado hasta el impacto manteniendo velocidades actuales">⏱ Impacto: ${esc(fmtImpactTime(p.impactSec))}</span>`
@@ -1950,7 +2028,7 @@
           ? `<span class="ro-pers" title="Esta alerta roja lleva más de ${persistThresholdSec} s activa de forma continua">🔥 ${esc(fmtDuration(elapsedSec))}</span>`
           : "";
 
-        return `<div class="ro-item${isPersistent ? " persistent-blink" : ""}" data-i="${idx}">` +
+        return `<div class="ro-item${isPersistent ? " persistent-blink" : ""}${isSel ? " active-pair" : ""}" data-i="${idx}">` +
           `<span>🔴 ${formatPairText(p)}</span>` +
           `<span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span>` +
           `</div>`;
@@ -1978,16 +2056,24 @@
       visible++;
       alive.add(t.id);
       let m = markers.get(t.id);
-      const z = t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0;
+      const isSelected = selectedTrainIds.has(t.id);
+      const z = (isSelected ? 2500 : 0) + (t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0);
       const pos = [t.drawLat ?? t.lat, t.drawLon ?? t.lon];
-      // Solo aplicamos rumbo de flecha si el tren está en naranja o rojo
       const arrowDeg = (t.color === "red" || t.color === "orange") && isNum(t.bearing)
         ? Math.round(t.bearing)
         : null;
-      const iconKey = `${t.color}|${arrowDeg ?? ""}`;
+
+      // Mostrar etiqueta permanente en los trenes en alerta (naranja/roja) o seleccionados
+      let tagText = "";
+      if (t.color === "red" || t.color === "orange" || isSelected) {
+        const vStr = isNum(t.calcSpeed) ? ` · ${t.calcSpeed} km/h` : "";
+        tagText = `${t.tipo ? t.tipo + " " : ""}${t.label}${vStr}`;
+      }
+
+      const iconKey = `${t.color}|${arrowDeg ?? ""}|${tagText}|${isSelected ? 1 : 0}`;
 
       if (!m) {
-        m = L.marker(pos, { icon: makeIcon(t.color, arrowDeg), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
+        m = L.marker(pos, { icon: makeIcon(t.color, arrowDeg, tagText, isSelected), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
         m.bindTooltip(() => tipHtml(m._train), { direction: "top", offset: [0, -16], className: "trtip" });
         m.bindPopup(() => popupHtml(m._train), { maxWidth: 340 });
         m._iconKey = iconKey;
@@ -1995,7 +2081,7 @@
       } else {
         m.setLatLng(pos);
         if (m._iconKey !== iconKey) {
-          m.setIcon(makeIcon(t.color, arrowDeg));
+          m.setIcon(makeIcon(t.color, arrowDeg, tagText, isSelected));
           m.setZIndexOffset(z);
           m._iconKey = iconKey;
         }
@@ -2010,12 +2096,13 @@
       pairs.forEach(p => {
         if (!p.a.visible || !p.b.visible || !p.pathCoords || p.pathCoords.length < 2) return;
         const isRed = p.severity === "red";
+        const isSel = selectedPairKey && p.pairKey === selectedPairKey;
         const col = isRed ? "#ff1744" : "#ff9100";
-        const coreCol = isRed ? "#ffebee" : "#fff8e1";
+        const coreCol = isSel ? "#2563eb" : (isRed ? "#ffebee" : "#fff8e1");
 
         L.polyline(p.pathCoords, {
           pane: "alertTrackPane", renderer: alertCanvas,
-          color: "#ffffff", weight: isRed ? 16 : 14, opacity: 0.95,
+          color: isSel ? "#2563eb" : "#ffffff", weight: (isRed ? 16 : 14) + (isSel ? 4 : 0), opacity: 0.95,
           lineCap: "round", lineJoin: "round", interactive: false
         }).addTo(linesLayer);
 
@@ -2027,7 +2114,7 @@
 
         L.polyline(p.pathCoords, {
           pane: "alertTrackPane", renderer: alertCanvas,
-          color: coreCol, weight: 3, opacity: 0.95, dashArray: "6, 8",
+          color: coreCol, weight: isSel ? 4 : 3, opacity: 0.98, dashArray: "6, 8",
           lineCap: "round", lineJoin: "round", interactive: false
         }).addTo(linesLayer);
       });
@@ -2049,7 +2136,8 @@
       el.pairs.innerHTML = '<div class="sub">Ningún par en precaución (amarillo/naranja).</div>';
     } else {
       el.pairs.innerHTML = orangePairs.slice(0, 100).map(({ p, idx }) => {
-        return `<div class="pair" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
+        const isSel = selectedPairKey && p.pairKey === selectedPairKey;
+        return `<div class="pair${isSel ? " active-pair" : ""}" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
       }).join("");
     }
   }
@@ -2108,14 +2196,40 @@
     if (!paused) timer = setInterval(refresh, 10000);
   }
 
+  // Encuadre inteligente con flyToBounds sobre el par de trenes seleccionado y resaltado visual
   function flyToPairIndex(idx) {
     const p = pairs[idx];
     if (!p) return;
-    map.flyTo([(p.a.lat + p.b.lat) / 2, (p.a.lon + p.b.lon) / 2], Math.max(map.getZoom(), 12), { duration: 0.8 });
+    selectedPairKey = p.pairKey;
+    selectedTrainIds = new Set([p.a.id, p.b.id]);
+    render();
+
+    const pts = (p.pathCoords && p.pathCoords.length >= 2)
+      ? p.pathCoords
+      : [[p.a.drawLat ?? p.a.lat, p.a.drawLon ?? p.a.lon], [p.b.drawLat ?? p.b.lat, p.b.drawLon ?? p.b.lon]];
+    const bounds = L.latLngBounds(pts);
+    map.flyToBounds(bounds.pad(0.35), {
+      paddingTopLeft: [70, 130],
+      paddingBottomRight: [70, 80],
+      maxZoom: 15,
+      duration: 0.85
+    });
   }
 
   /* ---------- Eventos de Interfaz y Controles Flotantes ---------- */
+  // Limpiar selección al hacer clic en una zona libre del mapa o al restablecer vista
+  map.on("click", () => {
+    if (selectedPairKey !== null) {
+      selectedPairKey = null;
+      selectedTrainIds.clear();
+      render();
+    }
+  });
+
   el.btnResetView.addEventListener("click", () => {
+    selectedPairKey = null;
+    selectedTrainIds.clear();
+    render();
     map.flyTo(SPAIN_DEFAULT_CENTER, SPAIN_DEFAULT_ZOOM, { duration: 0.8 });
   });
 
@@ -2155,6 +2269,8 @@
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     trainHistory.clear();
     redAlertStart.clear();
+    selectedPairKey = null;
+    selectedTrainIds.clear();
     stationsTried = false;
     refresh();
   });
