@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.21</title>
+<title>Trenes Renfe en tiempo real · v1.22</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -256,7 +256,7 @@
     <div>
       <div class="side-top">
         <button class="help-btn" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
-        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.21</span></h1>
+        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.22</span></h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
@@ -269,7 +269,7 @@
       </div>
       <div class="help">
         • <b>Distancia por vía:</b> medida sobre los raíles entre ambos trenes.<br>
-        • <b>Unión sobre vía:</b> el trazo naranja/rojo dibuja la vía que los separa.<br>
+        • <b>Velocidad limitada por tipo:</b> AVE 320, ALVIA 250/220, AVANT 250, MD 160, Cercanías/Reg. 140 km/h.<br>
         • <b>Rojo:</b> ordenado de menor a mayor <b>tiempo de impacto</b>.
       </div>
     </fieldset>
@@ -452,7 +452,7 @@
           <ol style="margin:4px 0 0;padding-left:18px">
             <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> (un AVE nunca puede chocar con un Media Distancia convencional aunque sus vías pasen juntas).</li>
             <li>Van en el <b>mismo sentido de la marcha</b> a <b>menos de 5 km medidos siguiendo las curvas de la vía</b>.</li>
-            <li>El tren que viene por <b>detrás va lanzado a más de 100 km/h</b>.</li>
+            <li>El tren que viene por <b>detrás va lanzado a más de 100 km/h</b> (aplicando siempre el techo real de cada tren: AVE 320, ALVIA 250/220, AVANT 250, MD 160 y Cercanías/Regional 140 km/h).</li>
             <li>El tren de <b>atrás va más rápido (o igual) que el de delante</b>, calculándose al instante el <b>tiempo que tardarían en impactar</b> según la distancia y la diferencia de velocidad.</li>
           </ol>
         </div>
@@ -472,7 +472,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.21";
+  const VERSION = "1.22";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -693,7 +693,7 @@
 
   const GRID_SIZE = 0.08;
 
-  // Geometrías en memoria (no se pintan como capas sueltas, solo se usan para imantar los trenes y pintar el tramo de alerta sobre el raíl)
+  // Geometrías en memoria (para imantar los trenes, saber si un ALVIA va por vía AVE o Convencional y pintar el tramo de alerta sobre el raíl)
   const TRACKS = {
     av: {
       name: "AV", minKm: 0.015, key: "avTrack_v18",
@@ -807,6 +807,35 @@
       }
     }
     return best;
+  }
+
+  /* ---------- Límite de Velocidad Máxima por Tipo de Tren e Infraestructura ---------- */
+  function getMaxSpeedForTrain(tipoStr, lat, lon) {
+    const tipo = (tipoStr || "").toUpperCase();
+    // AVE / AVLO: 320 km/h
+    if (tipo === "AVE" || tipo === "AVLO") return 320;
+    // AVANT: 250 km/h
+    if (tipo === "AVANT") return 250;
+    // MD: 160 km/h
+    if (tipo === "MD") return 160;
+    // Cercanías, Regional y Regional Express: 140 km/h
+    if (tipo === "CERCANÍAS" || tipo === "REGIONAL" || tipo === "REG.EXP") return 140;
+
+    // ALVIA (y otros híbridos como EUROMED / INTERCITY / ALTARIA / TALGO):
+    // 250 km/h si va por vía AVE, 220 km/h si va por vía convencional
+    const sAV = TRACKS.av.loaded ? snapToTrackLayer(TRACKS.av, lat, lon) : null;
+    const sMD = TRACKS.md.loaded ? snapToTrackLayer(TRACKS.md, lat, lon) : null;
+    const dAV = sAV ? sAV.distToTrack : Infinity;
+    const dMD = sMD ? sMD.distToTrack : Infinity;
+
+    if (dAV <= 1.2 && dAV <= dMD) {
+      return 250; // En vía AVE
+    }
+    if (dMD <= 1.2 && dMD < dAV) {
+      return 220; // En vía convencional
+    }
+    // Si aún se está cargando la geometría de vías, por defecto para ALVIA en red mixta permitimos hasta 250
+    return 250;
   }
 
   function computeLocalTrackRoute(a, b, maxAllowedKm) {
@@ -1054,7 +1083,6 @@
   }
 
   function applyTrackWays(st, ways) {
-    // Solo indexamos en memoria para cálculo de distancias y trazado de alertas (sin pintar polilíneas moradas/azules sobre el mapa)
     indexTrackWays(st, ways);
     st.n = ways.length;
     st.loaded = true;
@@ -1207,6 +1235,9 @@
   function updateTrainKinematics(trainObj) {
     const now = Date.now();
     const id = trainObj.id;
+    const maxSpeed = getMaxSpeedForTrain(trainObj.tipo, trainObj.lat, trainObj.lon);
+    trainObj.maxAllowedSpeed = maxSpeed;
+
     let h = trainHistory.get(id);
     if (!h) {
       h = { pts: [{ lat: trainObj.lat, lon: trainObj.lon, t: now }], speeds: [], dLat: 0, dLon: 0, hasVector: false, calcSpeed: null, measures: 0 };
@@ -1217,14 +1248,16 @@
       const distKm = haversine(lastPt.lat, lastPt.lon, trainObj.lat, trainObj.lon);
 
       if (distKm >= 0.015 && dtSec >= 1.5) {
-        const vKmh = (distKm / dtSec) * 3600;
-        if (vKmh <= 380) {
+        const rawV = (distKm / dtSec) * 3600;
+        // Si no es un salto de teletransporte absurdo (> 600 km/h), aplicamos el techo máximo real del tipo de tren
+        if (rawV <= 600) {
+          const cappedV = Math.min(rawV, maxSpeed);
           h.dLat = trainObj.lat - lastPt.lat;
           h.dLon = trainObj.lon - lastPt.lon;
           h.hasVector = true;
           h.pts.push({ lat: trainObj.lat, lon: trainObj.lon, t: now });
           if (h.pts.length > 4) h.pts.shift();
-          h.speeds.push(vKmh);
+          h.speeds.push(cappedV);
           if (h.speeds.length > 2) h.speeds.shift();
         }
       } else if (dtSec > 95) {
@@ -1233,17 +1266,22 @@
         h.pts[h.pts.length - 1].t = now;
       }
 
+      // Asegurar que ninguna medida histórica supere el límite de la vía actual (por ejemplo, si un ALVIA acaba de entrar en vía convencional)
+      for (let i = 0; i < h.speeds.length; i++) {
+        if (h.speeds[i] > maxSpeed) h.speeds[i] = maxSpeed;
+      }
+
       h.measures = h.speeds.length;
       if (h.speeds.length === 2) {
-        h.calcSpeed = Math.round((h.speeds[0] + h.speeds[1]) / 2);
+        h.calcSpeed = Math.min(maxSpeed, Math.round((h.speeds[0] + h.speeds[1]) / 2));
       } else if (h.speeds.length === 1) {
-        h.calcSpeed = Math.round(h.speeds[0]);
+        h.calcSpeed = Math.min(maxSpeed, Math.round(h.speeds[0]));
       }
     }
 
     const rawVel = toNum(trainObj.raw && (trainObj.raw.velocidad ?? trainObj.raw.vel ?? trainObj.raw.speed ?? trainObj.raw["Velocidad (km/h)"]));
     if (h.calcSpeed === null && isFinite(rawVel) && rawVel >= 0) {
-      h.calcSpeed = Math.round(rawVel);
+      h.calcSpeed = Math.min(maxSpeed, Math.round(rawVel));
       h.measures = 2;
     }
 
@@ -1305,7 +1343,9 @@
 
     const orig = resolveStation(origRaw), dest = resolveStation(destRaw), sig = resolveStation(sigRaw), ant = resolveStation(antRaw);
     const horaSal = r.horaSalida ?? r.salida ?? get(/hora.*sal/i) ?? "", horaLleg = r.horaLlegada ?? r.llegada ?? get(/hora.*lleg/i) ?? "";
-    const vel = t.calcSpeed !== null && t.calcSpeed !== undefined ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
+    const maxSpd = t.maxAllowedSpeed || getMaxSpeedForTrain(t.tipo, t.lat, t.lon);
+    const rawVel = t.calcSpeed !== null && t.calcSpeed !== undefined ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
+    const vel = isFinite(rawVel) && rawVel >= 0 ? Math.min(maxSpd, Math.round(rawVel)) : null;
     const ret = toNum(r.retraso ?? r.demora ?? r.delay ?? get(/retraso|demora/i));
     const mat = r.mat ?? r.material ?? r.composicion ?? "", corredor = r.corredor ?? r.linea ?? r.nucleo ?? r.Línea ?? "";
 
@@ -1319,7 +1359,8 @@
       numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "",
       orig, dest, sig, ant,
       horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(),
-      vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null,
+      vel,
+      maxSpd,
       measures: t.speedMeasures || 0,
       speedsList: t.speedsList || [],
       ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim()
@@ -1344,21 +1385,33 @@
       group = "CONV";
       bestSnap = sMD;
     } else {
-      if (isFinite(t.calcSpeed) && t.calcSpeed > 205) {
-        group = "AV";
-        bestSnap = sAV;
-      } else if (dAV <= 1.2 && dAV < dMD * 0.85) {
+      if (dAV <= 1.2 && dAV < dMD * 0.85) {
         group = "AV";
         bestSnap = sAV;
       } else if (dMD <= 1.2 && dMD < dAV * 0.85) {
         group = "CONV";
         bestSnap = sMD;
+      } else if (isFinite(t.calcSpeed) && t.calcSpeed > 220) {
+        group = "AV";
+        bestSnap = sAV;
       } else {
         bestSnap = dAV <= dMD ? sAV : sMD;
       }
     }
 
     t.trackGroup = group;
+    // Re-evaluar el techo de velocidad con la vía ya asignada (para ALVIA: 250 en AV, 220 en CONV)
+    const maxSpeed = (tipo === "ALVIA" || group === "HYB")
+      ? (group === "CONV" ? 220 : 250)
+      : getMaxSpeedForTrain(tipo, t.lat, t.lon);
+    t.maxAllowedSpeed = maxSpeed;
+    if (t.calcSpeed !== null && t.calcSpeed > maxSpeed) {
+      t.calcSpeed = maxSpeed;
+    }
+    if (t.speedsList && t.speedsList.length) {
+      t.speedsList = t.speedsList.map(v => Math.min(v, maxSpeed));
+    }
+
     if (bestSnap && bestSnap.distToTrack <= 0.8) {
       t.drawLat = bestSnap.snapLat;
       t.drawLon = bestSnap.snapLon;
@@ -1507,9 +1560,9 @@
       t.roleInfo = "";
       t.impactSec = null;
       t.inStation = isInStationArea(t.lat, t.lon, 2.2);
+      assignTrainTrackAndSnap(t);
       t.isFast = isConfirmedHighSpeed(t, minSpeed);
       t._info = trainInfo(t);
-      assignTrainTrackAndSnap(t);
       t.routeVec = getRouteVector(t);
     });
 
@@ -1608,7 +1661,7 @@
     const paradas = [];
     if (x.sig) paradas.push(`Próxima: <b>${esc(x.sig)}</b>`);
     if (x.vel !== null) {
-      const mTag = x.measures >= 2 ? " (2 med.)" : " (1 med.)";
+      const mTag = x.measures >= 2 ? ` (máx. ${x.maxSpd})` : " (1 med.)";
       paradas.push(`Vel. GPS: <b>${x.vel} km/h</b>${mTag}`);
     } else {
       paradas.push(`Vel. GPS: <i>calculando…</i>`);
@@ -1634,7 +1687,7 @@
     const x = t._info || trainInfo(t);
     const vGrp = t.trackGroup === "AV" ? "Alta Velocidad (UIC)" : (t.trackGroup === "CONV" ? "Convencional (Ibérico)" : "Ancho Variable / Mixto");
     const mainRows = [
-      ["Tipo de servicio", x.tipo],
+      ["Tipo de servicio", `${x.tipo} (Límite: ${x.maxSpd} km/h)`],
       ["Infraestructura", vGrp],
       ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
       ["Origen", x.orig || "—"],
@@ -1758,7 +1811,7 @@
       else orangePairs.push({ p, idx });
     });
 
-    // Ordenar las Alertas Rojas de MENOR tiempo de impacto a MAYOR tiempo de impacto (desempate por menor distancia)
+    // Ordenar las Alertas Rojas de MENOR tiempo de impacto a MAYOR tiempo de impacto
     redPairs.sort((a, b) => {
       const tA = (a.p.impactSec !== null && isFinite(a.p.impactSec)) ? a.p.impactSec : Infinity;
       const tB = (b.p.impactSec !== null && isFinite(b.p.impactSec)) ? b.p.impactSec : Infinity;
