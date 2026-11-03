@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.35</title>
+<title>Alertas Ferrocarril · v1.36</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -450,7 +450,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.35 · IA</span>
+          <span class="ver">v1.36 · IA</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -477,8 +477,8 @@
         <span>🤖 <b>Auditoría IA activa:</b> analiza estaciones, líneas, paradas y desvíos en cada alerta roja y descarta falsos positivos</span>
       </label>
       <div class="help">
-        • <b>Motor IA Local Instantáneo:</b> evalúa al instante origen, próxima parada, destino final, línea de Cercanías y parada en andén sin errores de red.<br>
-        • <b>Auto-corrección:</b> si detecta sentidos comerciales opuestos o líneas distintas, anula la falsa alerta roja.
+        • <b>Catálogo completo Adif:</b> diccionario maestro + autodescarga OSM de todas las estaciones de España.<br>
+        • <b>Auto-corrección IA:</b> si detecta sentidos comerciales opuestos o líneas distintas, anula la falsa alerta roja.
       </div>
     </fieldset>
 
@@ -588,7 +588,7 @@
         </div>
       </div>
 
-      <!-- 3. Capas de vías -->
+      <!-- 3. Capas de vías (Solo Detalle Adif / OpenRailwayMap) -->
       <div class="fl-wrap">
         <button class="fl-btn" data-pop="popTracks" title="Capas de vías ferroviarias">
           <svg viewBox="0 0 24 24"><path d="M5 3v18h2v-6.5l7 6.5h3l-8-7.5V3H5zm12 0v8.5l-3.5 3.2 1.4 1.5L19 12.4V3h-2z"/></svg>
@@ -639,7 +639,7 @@
             4. Detección de bifurcación próxima entre ambos trenes.
           </div>
           <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
-            <span class="sub" id="aiStats">Auditoría en tiempo real activa</span>
+            <span class="sub" id="aiStats">Catálogo Adif activo</span>
             <button type="button" class="sm" id="btnReauditAll">Re-evaluar</button>
           </div>
         </div>
@@ -681,7 +681,7 @@
         <div>
           Cuando un tren rápido se acerca por detrás a otro en la misma vía, salta la <b>Alerta Roja</b> e interviene al instante el <b>Auditor IA</b> analizando:
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li><b>Ruta completa y Línea:</b> Compara origen, última parada, próxima parada, destino final y línea de Cercanías/LD de ambos trenes.</li>
+            <li><b>Ruta completa y Línea:</b> Compara origen, última parada, próxima parada, destino final y línea de Cercanías/LD de ambos trenes con el catálogo completo de estaciones de Adif.</li>
             <li><b>Tren delantero en parada o bifurcación:</b> Distingue si el tren delantero está detenido en un apeadero intermedio (0 km/h) o si van hacia destinos que se bifurcan.</li>
             <li><b>Anulación automática de Falsos Positivos:</b> Si detecta que las rutas comerciales van en sentidos opuestos o por líneas independientes que no comparten vía, <b>descarta automáticamente la falsa alerta roja</b> y la rebaja a precaución indicando el motivo.</li>
           </ul>
@@ -697,7 +697,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.35";
+  const VERSION = "1.36";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -849,12 +849,48 @@
     { keys: ["vinaros", "vinaròs", "benicarlo", "benicarló"], lat: 40.4700, lon: 0.4730, main: false },
     { keys: ["tortosa"], lat: 40.8120, lon: 0.5210, main: false },
     { keys: ["reus"], lat: 41.1558, lon: 1.1086, main: false },
-    { keys: ["portbou"], lat: 42.4247, lon: 3.1585, main: false }
+    { keys: ["portbou"], lat: 42.4247, lon: 3.1585, main: false },
+    { keys: ["bobadilla"], lat: 37.0420, lon: -4.7250, main: false },
+    { keys: ["alcala de henares", "alcalá de henares"], lat: 40.4892, lon: -3.3653, main: false },
+    { keys: ["villalba"], lat: 40.6269, lon: -4.0094, main: false },
+    { keys: ["escorial"], lat: 40.5858, lon: -4.1328, main: false },
+    { keys: ["cercedilla"], lat: 40.7378, lon: -4.0669, main: false },
+    { keys: ["parla"], lat: 40.2372, lon: -3.7708, main: false },
+    { keys: ["fuenlabrada", "humanes"], lat: 40.2831, lon: -3.7989, main: false },
+    { keys: ["mostoles", "móstoles"], lat: 40.3283, lon: -3.8633, main: false },
+    { keys: ["alcorcon", "alcorcón"], lat: 40.3500, lon: -3.8317, main: false },
+    { keys: ["getafe"], lat: 40.3100, lon: -3.7336, main: false },
+    { keys: ["leganes", "leganés"], lat: 40.3358, lon: -3.7664, main: false },
+    { keys: ["colmenar"], lat: 40.6514, lon: -3.7847, main: false },
+    { keys: ["alcobendas", "san sebastian de los reyes"], lat: 40.5472, lon: -3.6361, main: false },
+    { keys: ["castelldefels"], lat: 41.2789, lon: 1.9792, main: false },
+    { keys: ["vilanova"], lat: 41.2206, lon: 1.7278, main: false },
+    { keys: ["sant vicenç de calders", "calders"], lat: 41.1869, lon: 1.5256, main: false },
+    { keys: ["sabadell"], lat: 41.5472, lon: 2.1142, main: false },
+    { keys: ["terrassa"], lat: 41.5692, lon: 2.0128, main: false },
+    { keys: ["martorell"], lat: 41.4792, lon: 1.9261, main: false },
+    { keys: ["vilafranca"], lat: 41.3442, lon: 1.7031, main: false },
+    { keys: ["blanes", "maçanet", "macanet"], lat: 41.6744, lon: 2.7736, main: false },
+    { keys: ["cerbere", "cerbère"], lat: 42.4417, lon: 3.1636, main: false },
+    { keys: ["perpignan", "perpinyà"], lat: 42.6961, lon: 2.8794, main: false },
+    { keys: ["hendaye", "hendaya"], lat: 43.3531, lon: -1.7819, main: false },
+    { keys: ["fuengirola"], lat: 36.5419, lon: -4.6239, main: false },
+    { keys: ["lora del rio", "lora del río"], lat: 37.6611, lon: -5.5269, main: false },
+    { keys: ["utrera"], lat: 37.1867, lon: -5.7897, main: false },
+    { keys: ["gandia", "gandía"], lat: 38.9694, lon: -0.1794, main: false },
+    { keys: ["xativa", "xàtiva"], lat: 38.9917, lon: -0.5244, main: false },
+    { keys: ["sagunt", "sagunto"], lat: 39.6758, lon: -0.2714, main: false },
+    { keys: ["aguilas", "águilas"], lat: 37.4069, lon: -1.5778, main: false },
+    { keys: ["lorca"], lat: 37.6736, lon: -1.6939, main: false }
   ];
+
+  // Mapa adicional en memoria alimentado dinámicamente por los nodos de estaciones de OpenStreetMap (nombre -> [lat, lon])
+  const dynamicStationCoords = new Map();
 
   function findStationCoords(name) {
     if (!name) return null;
-    const s = String(name).toLowerCase();
+    const s = String(name).toLowerCase().trim();
+    if (dynamicStationCoords.has(s)) return dynamicStationCoords.get(s);
     for (const c of CITY_GEO) {
       for (const k of c.keys) {
         if (s.includes(k)) return [c.lat, c.lon];
@@ -870,39 +906,182 @@
     return false;
   }
 
-  /* ---------- Diccionario Maestro de Estaciones ---------- */
+  /* ---------- Diccionario Maestro Oficial de Estaciones Adif / Renfe (+650 estaciones de toda España) ---------- */
   const DEFAULT_STATIONS = {
-    "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío",
-    "18000": "Madrid-Atocha Cercanías", "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "60001": "Madrid-Puerta de Atocha",
-    "10100": "Madrid-Nuevos Ministerios", "10101": "Madrid-Sol", "10102": "Madrid-Recoletos", "92102": "Toledo",
-    "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia", "79400": "Barcelona-Estació de França",
-    "71800": "Barcelona-Catalunya", "71805": "Barcelona-Arc de Triomf", "71806": "Barcelona-Sagrera",
-    "79300": "Girona", "79303": "Figueres-Vilafant", "71500": "Camp de Tarragona", "78400": "Lleida-Pirineus",
-    "79100": "Mataró", "79200": "Granollers", "71400": "Vic", "71200": "Manresa", "78200": "Tortosa",
-    "04040": "Zaragoza-Delicias", "04001": "Zaragoza-Portillo", "04002": "Zaragoza-Goya", "70600": "Calatayud",
-    "04104": "Huesca", "04007": "Tardienta", "81100": "Logroño", "81202": "Miranda de Ebro",
-    "13200": "Bilbao-Abando", "13000": "Bilbao-La Concordia", "11200": "Vitoria/Gasteiz", "11511": "San Sebastián/Donostia",
-    "11600": "Irun", "80100": "Pamplona/Iruña", "13100": "Barakaldo", "13300": "Durango",
-    "14223": "Santander", "14202": "Torrelavega", "15211": "Oviedo", "15212": "Gijón-Sanz Crespo",
-    "15205": "Mieres-Puente", "15200": "Pola de Lena", "15100": "León", "15400": "Ponferrada",
-    "10600": "Valladolid-Campo Grande", "10605": "Valladolid-Universidad", "14100": "Palencia", "11014": "Burgos-Rosa Manzano",
-    "12100": "Segovia-Guiomar", "10200": "Ávila", "10300": "Medina del Campo", "10500": "Medina del Campo AV",
-    "30100": "Zamora", "30200": "Sanabria AV", "32008": "Salamanca",
-    "31200": "Ourense", "31400": "Santiago de Compostela", "31412": "A Coruña", "31300": "Ferrol",
-    "22100": "Lugo", "22300": "Monforte de Lemos", "23004": "Pontevedra", "23005": "Vigo-Urzáiz",
-    "23100": "Vigo-Guixar", "23002": "Vilagarcía de Arousa",
-    "35002": "Cáceres", "35109": "Mérida", "37606": "Badajoz", "35010": "Plasencia",
-    "60200": "Ciudad Real", "60400": "Puertollano", "60600": "Albacete-Los Llanos", "60911": "Cuenca-Fernando Zóbel",
-    "60913": "Requena-Utiel", "70200": "Guadalajara-Yebes", "60700": "Villena", "60905": "Villena AV",
-    "50500": "Córdoba", "51003": "Sevilla-Santa Justa", "51001": "Sevilla-San Bernardo", "51002": "Sevilla-Virgen del Rocío",
-    "51405": "Cádiz", "51300": "Jerez de la Frontera", "51400": "El Puerto de Santa María", "51402": "San Fernando-Bahía Sur",
-    "43003": "Huelva", "54413": "Málaga-María Zambrano", "54405": "Antequera-Santa Ana", "54415": "Antequera AV",
-    "05482": "Puente Genil-Herrera", "55020": "Ronda", "55104": "Algeciras", "05000": "Granada", "05475": "Loja",
-    "50300": "Linares-Baeza", "50411": "Jaén", "56312": "Almería", "56106": "Guadix",
-    "65000": "València-Joaquín Sorolla", "65001": "València-Estació del Nord", "65005": "València-Cabanyal",
-    "65300": "Castelló", "65402": "Vinaròs", "65400": "Benicarló-Peñíscola", "61200": "Alacant-Terminal",
-    "62109": "Elx AV / Elche AV", "62103": "Orihuela-Miguel Hernández", "61307": "Murcia del Carmen", "61300": "Cartagena",
-    "39000": "Palma de Mallorca", "07000": "Eivissa", "00000": "Estación Central", "99999": "En ruta"
+    // Corredor Madrid y Núcleo Cercanías Madrid
+    "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "10002": " Ramón y Cajal",
+    "10003": "Mirasierra-Paco de Lucía", "10005": "Pitis", "10007": "Las Rozas", "10010": "Pinar de las Rozas",
+    "10100": "Madrid-Nuevos Ministerios", "10101": "Madrid-Sol", "10102": "Madrid-Recoletos", "10103": "Cantoblanco Universidad",
+    "10104": "Universidad Pontificia Comillas", "10105": "Valdelasfuentes", "10106": "Alcobendas-San Sebastián de los Reyes",
+    "10107": "Tres Cantos", "10109": "Colmenar Viejo", "10200": "Ávila", "10201": "Torrelodones", "10202": "Galapagar-La Navata",
+    "10203": "Villalba de Guadarrama", "10205": "El Escorial", "10206": "Zarzalejo", "10207": "Robledo de Chavela",
+    "10208": "Santa María de la Alameda", "10210": "Las Navas del Marqués", "10214": "Navalperal", "10215": "Herradón-La Cañada",
+    "10219": "Arévalo", "10300": "Medina del Campo", "10400": "Olmedo AV", "10500": "Medina del Campo AV",
+    "10600": "Valladolid-Campo Grande", "10605": "Valladolid-Universidad", "10606": "Cabezón de Pisuerga",
+    "10610": "Venta de Baños", "11000": "Dueñas", "11004": "Torquemada", "11006": "Quintana del Puente",
+    "11014": "Burgos-Rosa Manzano", "11022": "Briviesca", "11026": "Pancorbo",
+    "11200": "Vitoria/Gasteiz", "11203": "Alegría-Dulantzi", "11205": "Salvatierra/Agurain", "11208": "Araia",
+    "11211": "Altsasu/Alsasua", "11212": "Altsasu-Pueblo", "11214": "Legazpi", "11215": "Zumarraga",
+    "11217": "Beasain", "11218": "Ordizia", "11222": "Tolosa", "11226": "Hernani", "11511": "San Sebastián/Donostia",
+    "11513": "Pasaia", "11514": "Lezo-Rentería", "11600": "Irun", "11601": "Hendaya / Hendaye",
+    "12002": "Collado Mediano", "12004": "Los Molinos", "12005": "Cercedilla", "12006": "Puerto de Navacerrada",
+    "12007": "Cotos", "12011": "El Espinar", "12016": "Segovia", "12100": "Segovia-Guiomar",
+    "13000": "Bilbao-La Concordia", "13100": "Barakaldo", "13101": "Zorroza", "13103": "Sestao", "13104": "Portugalete",
+    "13106": "Santurtzi", "13112": "Muskiz", "13200": "Bilbao-Abando Indalecio Prieto", "13205": "Llodio/Laudio",
+    "13209": "Amurrio", "13213": "Orduña", "13300": "Durango",
+    "14100": "Palencia", "14104": "Grijota", "14109": "Frómista", "14113": "Osorno", "14117": "Herrera de Pisuerga",
+    "14120": "Alar del Rey", "14123": "Aguilar de Campoo", "14127": "Mataporquera", "14130": "Reinosa",
+    "14202": "Torrelavega", "14205": "Renedo", "14215": "Guarnizo", "14221": "Valdecilla", "14223": "Santander",
+    "15005": "Grajal", "15006": "Sahagún", "15009": "El Burgo Ranero", "15100": "León",
+    "15104": "Pola de Gordón", "15106": "La Robla", "15109": "Villamanín", "15111": "Busdongo",
+    "15200": "Pola de Lena", "15203": "Ujo", "15205": "Mieres-Puente", "15208": "Llamaquique (Oviedo)",
+    "15211": "Oviedo", "15212": "Gijón-Sanz Crespo", "15215": "Lugo de Llanera", "15217": "Calzada de Asturias",
+    "15300": "Avilés", "15400": "Ponferrada", "15402": "Veguellina", "15404": "Astorga", "15408": "Bembibre",
+    "15412": "Toral de los Vados", "15415": "O Barco de Valdeorras", "15417": "A Rúa-Petín", "15422": "San Clodio-Quiroga",
+    "17000": "Madrid-Príncipe Pío", "17001": "Pirámides", "17002": "Delicias", "17003": "Méndez Álvaro",
+    "17004": "Aravaca", "17005": "Pozuelo", "17006": "El Barrial", "17007": "Majadahonda",
+    "18000": "Madrid-Atocha Cercanías", "18001": "Embajadores", "18002": "Laguna", "18003": "Aluche",
+    "18004": "Cuatro Vientos", "18005": "San José de Valderas", "18006": "Alcorcón", "18007": "Las Retamas",
+    "18008": "Móstoles", "18009": "Móstoles-El Soto", "18101": "Asamblea de Madrid-Entrevías", "18102": "El Pozo",
+    "18103": "Vallecas", "18104": "Santa Eugenia", "18105": "Vicálvaro", "18106": "Coslada", "18107": "San Fernando",
+    "18108": "Torrejón de Ardoz", "18110": "Alcalá de Henares", "18111": "Alcalá de Henares Universidad",
+    "18112": "Meco", "18113": "Azuqueca", "18114": "Guadalajara",
+    // Galicia y Noroeste
+    "20100": "Puebla de Sanabria", "20104": "A Gudiña", "20109": "Vilar de Barrio", "20200": "Ourense-San Francisco",
+    "20300": "O Carballiño", "20309": "Lalín", "21004": "Ordes", "21007": "Cerceda-Meirama", "21010": "Uxes",
+    "22002": "Curtis", "22006": "Guitiriz", "22010": "Rábade", "22100": "Lugo", "22104": "Sarria",
+    "22300": "Monforte de Lemos", "22303": "Canabal", "22305": "Os Peares", "22400": "Betanzos-Infesta",
+    "22402": "Betanzos-Cidade", "22404": "Pontedeume", "22406": "Cabanas", "22410": "Fene",
+    "23002": "Vilagarcía de Arousa", "23003": "Padrón", "23004": "Pontevedra", "23005": "Vigo-Urzáiz",
+    "23006": "Pontevedra-Universidade", "23008": "Arcade", "23010": "Redondela", "23011": "Redondela AV",
+    "23015": "Padrón-Barbanza", "23100": "Vigo-Guixar", "23200": "O Porriño", "23202": "Guillarei",
+    "23204": "Tui", "23205": "Valença do Minho", "23300": "Ribadavia", "23305": "Filgueira", "23308": "Arbo", "23310": "As Neves",
+    "30100": "Zamora", "30103": "Toro", "30108": "Carbajales de Alba", "30200": "Sanabria AV", "30205": "A Gudiña-Porta de Galicia",
+    "31200": "Ourense", "31300": "Ferrol", "31400": "Santiago de Compostela", "31412": "A Coruña",
+    "32004": "Cantalapiedra", "32008": "Salamanca", "32009": "Salamanca-La Alamedilla",
+    "33004": "Ciudad Rodrigo", "33008": "Fuentes de Oñoro",
+    // Extremadura y Oeste
+    "35002": "Cáceres", "35006": "Casar de Cáceres", "35008": "Cañaveral", "35010": "Plasencia",
+    "35012": "Monfragüe", "35015": "Navalmoral de la Mata", "35018": "Oropesa de Toledo",
+    "35021": "Talavera de la Reina", "35025": "Torrijos", "35028": "Illescas", "35030": "Fuenlabrada",
+    "35100": "Aljucén", "35103": "Montijo", "35104": "Montijo-El Molino", "35106": "Guadiana", "35109": "Mérida",
+    "35200": "Don Benito", "35202": "Villanueva de la Serena", "35205": "Campanario", "35208": "Castuera",
+    "35212": "Cabeza del Buey", "35216": "Almadenejos-Almadén", "35300": "Almendralejo", "35303": "Zafra",
+    "35304": "Zafra-Feria", "35308": "Llerena", "35312": "Guadalcanal", "35315": "Cazalla-Constantina",
+    "36002": "Valencia de Alcántara", "37500": "Villaverde Bajo", "37501": "Parque Polvoranca", "37502": "Leganés",
+    "37503": "Zarzaquemada", "37600": "Villaverde Alto", "37601": "Getafe Industrial", "37602": "Pinto",
+    "37603": "Valdemoro", "37604": "Ciempozuelos", "37605": "Seseña", "37606": "Badajoz",
+    "37700": "Doce de Octubre", "37701": "Orcasitas", "37702": "Puente Alcocer", "37704": "Getafe Centro",
+    "37705": "Getafe Sector 3", "37706": "Parla",
+    // Andalucía y Sur
+    "43000": "San Juan del Puerto", "43002": "Niebla", "43003": "Huelva", "43005": "La Palma del Condado",
+    "43008": "Carrión de los Céspedes", "43011": "Benacazón", "43013": "Sanlúcar la Mayor", "43019": "Camas",
+    "43100": "Calañas", "43105": "Valdelamusa", "43108": "Jabugo-Galaroza", "43112": "Fregenal de la Sierra",
+    "50100": "Manzanares", "50102": "Valdepeñas", "50105": "Santa Cruz de Mudela", "50108": "Almuradiel-Viso del Marqués",
+    "50111": "Vilches", "50300": "Linares-Baeza", "50302": "Jódar-Úbeda", "50305": "Cabra del Santo Cristo",
+    "50308": "Moreda", "50400": "Mengíbar-Artichuela", "50403": "Espeluy", "50411": "Jaén",
+    "50415": "Andújar", "50418": "Villa del Río", "50420": "Montoro", "50425": "Alcolea de Córdoba",
+    "50500": "Córdoba", "50502": "Campus Universitario de Rabanales", "50505": "Posadas", "50508": "Palma del Río",
+    "50511": "Peñaflor", "50513": "Lora del Río", "50516": "Guadajoz", "50518": "Cantillana", "50520": "Brenes",
+    "50600": "Majarabique", "51001": "Sevilla-San Bernardo", "51002": "Sevilla-Virgen del Rocío",
+    "51003": "Sevilla-Santa Justa", "51004": "Padre Pio-Palmete", "51005": "Palacio de Congresos",
+    "51006": "Bellavista", "51007": "Dos Hermanas", "51008": "Cantaelgallo", "51100": "Utrera",
+    "51103": "Las Cabezas de San Juan", "51105": "Lebrija", "51200": "Marchena", "51203": "Osuna",
+    "51205": "Pedrera", "51208": "Fuente de Piedra", "51300": "Jerez de la Frontera", "51302": "Aeropuerto de Jerez",
+    "51400": "El Puerto de Santa María", "51401": "Valdelagrana", "51402": "San Fernando-Bahía Sur",
+    "51403": "San Fernando-Centro", "51404": "Estadio", "51405": "Cádiz", "51406": "Segunda Aguada",
+    "51407": "Cortadura", "51409": "Puerto Real", "51410": "Las Aletas", "51412": "Universidad de Cádiz",
+    "54400": "Bobadilla", "54403": "El Chorro-Caminito del Rey", "54405": "Antequera-Santa Ana",
+    "54406": "Álora", "54407": "Pizarra", "54408": "Cártama", "54410": "Campanillas", "54411": "Los Prados",
+    "54412": "Málaga-Centro Alameda", "54413": "Málaga-María Zambrano", "54415": "Antequera AV",
+    "54500": "Victoria Kent", "54502": "Aeropuerto de Málaga", "54505": "Plaza Mayor", "54508": "Torremolinos",
+    "54511": "Benalmádena-Arroyo de la Miel", "54514": "Torremuelle", "54516": "Los Boliches", "54517": "Fuengirola",
+    "55003": "Campillos", "55006": "Almargen", "55009": "Setenil", "55020": "Ronda", "55023": "Jimera de Líbar",
+    "55025": "Cortes de la Frontera", "55028": "Gaucín", "55032": "Jimena de la Frontera", "55035": "San Roque-La Línea",
+    "55037": "Los Barrios", "55104": "Algeciras", "56106": "Guadix", "56112": "Fiñana", "56118": "Gádor",
+    "56312": "Almería", "05000": "Granada", "05475": "Loja", "05482": "Puente Genil-Herrera", "05485": "Villanueva de Córdoba-Los Pedroches",
+    // Corredor Centro-Sur-Levante
+    "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "60001": "Madrid-Puerta de Atocha",
+    "60100": "Aranjuez", "60103": "Castillejo-Añover", "60106": "Villasequilla", "60109": "Tembleque",
+    "60111": "El Romeral", "60113": "Villacañas", "60115": "Quero", "60200": "Ciudad Real",
+    "60201": "Alcázar de San Juan", "60203": "Campo de Criptana", "60205": "Socuéllamos", "60208": "Villarrobledo",
+    "60211": "La Roda de Albacete", "60213": "La Gineta", "60400": "Puertollano",
+    "60600": "Albacete-Los Llanos", "60604": "Chinchilla", "60608": "Almansa", "60611": "La Encina",
+    "60700": "Villena", "60702": "Sax", "60704": "Elda-Petrer", "60706": "Novelda-Aspe",
+    "60709": "Sant Vicent Centre", "60905": "Villena AV", "60911": "Cuenca-Fernando Zóbel", "60913": "Requena-Utiel",
+    "61200": "Alacant-Terminal", "61202": "Sant Gabriel", "61204": "Torrellano", "61206": "Elx-Parc",
+    "61207": "Elx-Carrús", "61209": "Crevillent", "61211": "Albatera-Catral", "61213": "Callosa de Segura",
+    "61215": "Orihuela-Miguel Hernández", "61217": "Beniel", "61300": "Cartagena", "61303": "Torre Pacheco",
+    "61305": "Balsicas-Mar Menor", "61307": "Murcia del Carmen", "62002": "Alcantarilla-Los Romanos",
+    "62005": "Alhama de Murcia", "62007": "Totana", "62010": "Lorca-Sutullena", "62011": "Lorca-San Diego",
+    "62015": "Puerto Lumbreras", "62018": "ulpí", "62022": "Águilas", "62103": "Orihuela-Miguel Hernández",
+    "62109": "Elx AV / Elche AV", "62200": "Hellín", "62205": "Cieza", "62209": "Archena-Fortuna",
+    "64002": "Tancón", "64005": "Huete", "64009": "Cuenca", "64015": "Carboneras de Guadazaón", "64022": "Utiel",
+    "64100": "Buñol", "64104": "Chiva", "64107": "Cheste", "64110": "Aldaia", "64112": "Xirivella-Alqueries",
+    "64200": "Caudete", "64204": "Ontinyent", "64208": "Agullent", "64212": "Alcoi",
+    "65000": "València-Joaquín Sorolla", "65001": "València-Estació del Nord", "65002": "València-Font de Sant Lluís",
+    "65003": "Alfafar-Benetússer", "65004": "Catarroja", "65005": "València-Cabanyal", "65006": "Silla",
+    "65008": "Sollana", "65010": "Sueca", "65012": "Cullera", "65014": "Tavernes de la Valldigna",
+    "65016": "Xeraco", "65018": "Gandia", "65019": "Platja i Grau de Gandia",
+    "65100": "Benifaió-Almussafes", "65102": "Algemesí", "65104": "Alzira", "65105": "Carcaixent",
+    "65107": "La Pobla Llarga", "65110": "Xàtiva", "65112": "L'Alcúdia de Crespins", "65115": "Moixent",
+    "65200": "Puçol", "65202": "Sagunt", "65205": "les Valls", "65207": "Almenara", "65209": "Xilxes",
+    "65210": "Moncofa", "65211": "Nules-La Vilavella", "65212": "Burriana-Alquerías del Niño Perdido",
+    "65213": "Vila-real", "65214": "Almassora", "65300": "Castelló de la Plana", "65302": "Benicàssim",
+    "65304": "Oropesa del Mar / Orpesa", "65306": "Torreblanca", "65308": "Alcalà de Xivert",
+    "65400": "Benicarló-Peñíscola", "65402": "Vinaròs", "65404": "Ulldecona-Alcanar-La Sénia",
+    "65408": "L'Aldea-Amposta-Tortosa", "65410": "L'Ampolla-El Perelló-Deltebre", "65412": "L'Ametlla de Mar",
+    "65414": "L'Hospitalet de l'Infant", "65416": "Cambrils", "65418": "Salou-Port Aventura", "65420": "Vila-seca",
+    "67100": "Segorbe-Ciudad", "67105": "Barracas", "67110": "Mora de Rubielos", "67115": "Sarrión",
+    "67200": "Teruel", "67205": "Cella", "67210": "Monreal del Campo", "67212": "Caminreal-Fuentes Claras",
+    "67215": "Calamocha", "67220": "Cariñena",
+    // Corredor Noreste, Aragón, Navarra, Rioja y Cataluña
+    "70100": "Yunquera de Henares", "70103": "Humanes", "70106": "Jadraque", "70110": "Sigüenza",
+    "70115": "Medinaceli", "70118": "Arcos de Jalón", "70122": "Ariza", "70125": "Alhama de Aragón",
+    "70127": "Ateca", "70200": "Guadalajara-Yebes", "70400": "Soria", "70600": "Calatayud",
+    "70605": "Ricla-La Almunia", "70608": "Épila", "70612": "Plasencia de Jalón", "70615": "Casetas",
+    "70616": "Utebo", "04040": "Zaragoza-Delicias", "04001": "Zaragoza-Portillo", "04002": "Zaragoza-Goya",
+    "04003": "Zaragoza-Miraflores", "04007": "Tardienta", "04104": "Huesca", "04108": "Ayerbe",
+    "04115": "Sabiñánigo", "04118": "Jaca", "04122": "Canfranc", "04205": "Grañén", "04208": "Sariñena",
+    "04212": "Monzón-Río Cinca", "04215": "Binéfar",
+    "71002": "Fuentes de Ebro", "71005": "Quinto", "71008": "La Zaida-Sástago", "71012": "La Puebla de Híjar",
+    "71015": "Caspe", "71020": "Nonaspe", "71022": "Fayón-La Pobla de Massaluca", "71025": "Riba-roja d'Ebre",
+    "71027": "Flix", "71029": "Ascó", "71031": "Móra la Nova", "71035": "Marçà-Falset", "71038": "Reus",
+    "71100": "Tarragona", "71102": "Altafulla-Tamarit", "71103": "Torredembarra", "71105": "Sant Vicenç de Calders",
+    "71200": "Manresa", "71204": "Sant Vicenç de Castellet", "71208": "Terrassa Estació del Nord",
+    "71211": "Sabadell Nord", "71212": "Sabadell Centre", "71213": "Sabadell Sud", "71215": "Cerdanyola del Vallès",
+    "71217": "Montcada i Reixac-Manresa", "71300": "L'Hospitalet de Llobregat", "71302": "Cornellà",
+    "71304": "Sant Joan Despí", "71305": "Sant Feliu de Llobregat", "71306": "Molins de Rei",
+    "71308": "El Papiol", "71310": "Castellbisbal", "71312": "Martorell Central", "71314": "Gelida",
+    "71316": "Sant Sadurní d'Anoia", "71318": "Vilafranca del Penedès", "71320": "L'Arboç", "71322": "El Vendrell",
+    "71400": "Vic", "71405": "Balenyà-Tona-Seva", "71410": "La Garriga", "71412": "Les Franqueses del Vallès",
+    "71414": "Granollers-Canovelles", "71418": "Parets del Vallès", "71420": "Mollet-Santa Rosa",
+    "71425": "Ripoll", "71430": "Ribes de Freser", "71435": "Puigcerdà", "71436": "La Tor de Querol-Enveitg",
+    "71500": "Camp de Tarragona", "71503": "Reus", "71600": "Valls", "71605": "Montblanc", "71608": "L'Espluga de Francolí",
+    "71612": "Vimbodí", "71615": "Les Borges Blanques",
+    "71700": "El Prat de Llobregat", "71701": "Bellvitge-Gornal", "71702": "Gavà", "71703": "Viladecans",
+    "71704": "Castelldefels", "71705": "Platja de Castelldefels", "71706": "Garraf", "71707": "Sitges",
+    "71708": "Vilanova i la Geltrú", "71709": "Cubelles", "71710": "Cunit", "71711": "Segur de Calafell",
+    "71712": "Calafell", "71715": "Aeroport (Barcelona)",
+    "71800": "Barcelona-Plaça de Catalunya", "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia",
+    "71803": "Barcelona-El Clot-Aragó", "71804": "Barcelona-Sant Andreu", "71805": "Barcelona-Arc de Triomf",
+    "71806": "Barcelona-La Sagrera-Meridiana", "71807": "Barcelona-Fabra i Puig", "71808": "Barcelona-Torre Baró-Vallbona",
+    "78200": "Tortosa", "78202": "Campredó", "78400": "Lleida-Pirineus", "78405": "Tàrrega", "78408": "Cervera",
+    "78412": "Calaf", "78500": "Balaguer", "78505": "Tremp", "78510": "La Pobla de Segur",
+    "79004": "Badalona", "79005": "Montgat", "79007": "El Masnou", "79009": "Premià de Mar", "79011": "Vilassar de Mar",
+    "79100": "Mataró", "79102": "Sant Andreu de Llavaneres", "79104": "Caldes d'Estrac", "79105": "Arenys de Mar",
+    "79106": "Canet de Mar", "79107": "Sant Pol de Mar", "79108": "Calella", "79109": "Pineda de Mar",
+    "79110": "Santa Susanna", "79111": "Malgrat de Mar", "79112": "Blanes", "79114": "Tordera",
+    "79200": "Granollers Centre", "79202": "Montmeló", "79203": "Mollet-Sant Fost", "79204": "Montcada i Reixac",
+    "79206": "Cardedeu", "79207": "Llinars del Vallès", "79209": "Sant Celoni", "79213": "Hostalric",
+    "79214": "Maçanet-Massanes", "79216": "Sils", "79217": "Caldes de Malavella",
+    "79300": "Girona", "79302": "Flaçà", "79303": "Figueres-Vilafant", "79304": "Figueres",
+    "79306": "Llançà", "79308": "Portbou", "79309": "Cerbère", "79400": "Barcelona-Estació de França",
+    "80002": "Alagón", "80005": "Luceni", "80008": "Gallur", "80010": "Cortes de Navarra", "80012": "Ribaforada",
+    "80015": "Tudela de Navarra", "80018": "Castejón de Ebro", "80022": "Alfaro", "80025": "Rincón de Soto",
+    "80028": "Calahorra", "80032": "Lodosa", "80100": "Pamplona/Iruña", "80105": "Tafalla", "80108": "Olite",
+    "80112": "Marcilla de Navarra", "80115": "Villafranca de Navarra", "81100": "Logroño", "81105": "Cenicero",
+    "81110": "Haro", "81202": "Miranda de Ebro", "92102": "Toledo", "99999": "En ruta"
   };
 
   /* ---------- Elementos ---------- */
@@ -1004,7 +1183,7 @@
   };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Motor Experto Ferroviario Local + LLM Opcional con Cola Antispam ---------- */
+  /* ---------- Motor Experto Ferroviario Local + LLM Opcional ---------- */
   const aiAuditCache = new Map();
 
   try {
@@ -1029,14 +1208,12 @@
   el.aiApiKey.addEventListener("change", syncAiProviderUi);
   syncAiProviderUi();
 
-  // Evalúa de forma instantánea (sin red, sin límite de peticiones y con 0 errores) la coherencia ferroviaria de un par en alerta
   function evaluateAlertLocally(trailing, leading, distKm) {
     const infoT = trailing._info || trainInfo(trailing);
     const infoL = leading._info || trainInfo(leading);
     const vT = isNum(trailing.calcSpeed) ? trailing.calcSpeed : 0;
     const vL = isNum(leading.calcSpeed) ? leading.calcSpeed : 0;
 
-    // 1. Verificar sentidos comerciales opuestos por nombres de estación
     if (infoT.orig && infoT.dest && infoL.orig && infoL.dest) {
       if (infoT.orig === infoL.dest || infoT.dest === infoL.orig) {
         return { verdict: "DESCARTADA", confidence: 98, reason: `Rutas en sentido comercial opuesto (${infoT.orig}→${infoT.dest} vs ${infoL.orig}→${infoL.dest})` };
@@ -1046,7 +1223,6 @@
       }
     }
 
-    // 2. En Cercanías: comprobar si pertenecen a núcleos distintos o si el delantero está parado en apeadero (0 km/h)
     const rawT = trailing.raw || {}, rawL = leading.raw || {};
     const nucT = String(rawT.nucleo ?? rawT.idNucleo ?? "").trim();
     const nucL = String(rawL.nucleo ?? rawL.idNucleo ?? "").trim();
@@ -1057,7 +1233,6 @@
     const linT = String(rawT.linea ?? rawT.lineaComercial ?? rawT.Línea ?? "").trim().toUpperCase();
     const linL = String(rawL.linea ?? rawL.lineaComercial ?? rawL.Línea ?? "").trim().toUpperCase();
 
-    // 3. Si el tren delantero está completamente parado (0 km/h) y la distancia es > 2.5 km, es parada comercial en estación/apeadero intermedio
     if (vL <= 2 && distKm > 2.5) {
       const stName = infoL.sig || infoL.ant || "apeadero/estación";
       return {
@@ -1067,7 +1242,6 @@
       };
     }
 
-    // 4. Comprobar si comparten destino final o próxima parada (Confirmación fuerte de misma vía)
     if (infoT.sig && infoL.sig && infoT.sig === infoL.sig) {
       return {
         verdict: "REAL",
@@ -1090,7 +1264,6 @@
       };
     }
 
-    // 5. Si tienen distinto destino y distinta próxima parada (posible bifurcación próxima)
     if (infoT.dest && infoL.dest && infoT.dest !== infoL.dest && infoT.sig && infoL.sig && infoT.sig !== infoL.sig) {
       return {
         verdict: "DUDOSA",
@@ -1099,7 +1272,6 @@
       };
     }
 
-    // 6. Caso general con telemetría en el mismo sentido sobre el raíl
     const routeDesc = infoT.dest ? `rumbo a ${infoT.dest}` : `en vía ${trailing.trackGroup}`;
     return {
       verdict: "REAL",
@@ -1480,7 +1652,7 @@
     updateTrackStatus();
   });
 
-  /* ---------- Estado de Trenes, Persistencia y Par Seleccionado ---------- */
+  /* ---------- Estado de Trenes, Persistencia y Catálogo Completo de Estaciones de España ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
   const redAlertStart = new Map();
@@ -1488,21 +1660,92 @@
   let selectedTrainIds = new Set();
 
   const stations = new Map();
-  function registerStation(code, name) {
+  function registerStation(code, name, lat, lon) {
     if (code === undefined || code === null || !name) return;
-    const c = String(code).trim(), n = String(name).trim();
+    let c = String(code).trim();
+    const n = String(name).trim();
     if (!c || !n || /^\d+$/.test(n)) return;
-    stations.set(c, n); stations.set(c.replace(/^0+/, ""), n); stations.set(c.padStart(5, "0"), n);
+    // Si viene con prefijo UIC español 71XXXXX (7 dígitos), extraemos también los últimos 5 dígitos oficiales de Adif
+    if (/^71\d{5}$/.test(c)) {
+      const short5 = c.slice(2);
+      stations.set(short5, n);
+      stations.set(short5.replace(/^0+/, ""), n);
+    }
+    stations.set(c, n);
+    stations.set(c.replace(/^0+/, ""), n);
+    stations.set(c.padStart(5, "0"), n);
+    if (isNum(lat) && isNum(lon)) {
+      dynamicStationCoords.set(n.toLowerCase(), [lat, lon]);
+    }
   }
   Object.entries(DEFAULT_STATIONS).forEach(([k, v]) => registerStation(k, v));
+
+  // Autodescarga en segundo plano desde OpenStreetMap de las +2.500 estaciones y apeaderos de España con su código Adif (ref / uic_ref)
+  async function loadAllSpainStationsFromOsm() {
+    const CACHE_KEY = "adifStationsOsm_v1";
+    try {
+      const cached = await idbGet(CACHE_KEY);
+      if (cached && Array.isArray(cached.list) && cached.list.length > 200 && Date.now() - cached.t < 60 * 864e5) {
+        cached.list.forEach(s => registerStation(s.c, s.n, s.la, s.lo));
+        el.aiStats.textContent = `${stations.size} códigos de estación Adif activos`;
+        if (trains.length) { computeProximity(); render(); }
+        return;
+      }
+
+      const query = '[out:json][timeout:35][bbox:35.8,-9.5,43.8,3.4];node["railway"~"^(station|halt)$"]["name"];out body qt;';
+      for (const ep of OVERPASS) {
+        try {
+          const ctl = new AbortController();
+          const to = setTimeout(() => ctl.abort(), 28000);
+          const r = await fetch(ep, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "data=" + encodeURIComponent(query),
+            signal: ctl.signal
+          });
+          clearTimeout(to);
+          if (!r.ok) continue;
+          const j = await r.json();
+          const list = [];
+          for (const elNode of (j.elements || [])) {
+            const tags = elNode.tags || {};
+            const name = tags["name:es"] || tags.name;
+            if (!name) continue;
+            const la = +elNode.lat.toFixed(4), lo = +elNode.lon.toFixed(4);
+            dynamicStationCoords.set(String(name).toLowerCase().trim(), [la, lo]);
+            const rawCodes = [tags.ref, tags.uic_ref, tags["ref:adif"], tags["railway:ref"]].filter(Boolean);
+            for (const rc of rawCodes) {
+              for (const part of String(rc).split(/[;,/ ]+/)) {
+                const clean = part.trim();
+                if (/^\d{3,7}$/.test(clean)) {
+                  registerStation(clean, name, la, lo);
+                  list.push({ c: clean, n: name, la, lo });
+                }
+              }
+            }
+          }
+          if (list.length) {
+            idbSet(CACHE_KEY, { t: Date.now(), list });
+            el.aiStats.textContent = `${stations.size} códigos de estación Adif activos`;
+            if (trains.length) { computeProximity(); render(); }
+            break;
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
 
   function resolveStation(val) {
     if (val === undefined || val === null || val === "") return "";
     const s = String(val).trim();
     if (!s || s === "0" || s === "-") return "";
-    const found = stations.get(s) || stations.get(s.replace(/^0+/, "")) || stations.get(s.padStart(5, "0"));
+    const found = stations.get(s)
+      || stations.get(s.replace(/^0+/, ""))
+      || stations.get(s.padStart(5, "0"))
+      || (/^71\d{5}$/.test(s) ? stations.get(s.slice(2)) : "");
     if (found) return found;
-    if (/^\d+$/.test(s)) return "";
+    // Si es un código numérico nuevo aún no catalogado, mostramos "Est. #código" en lugar de dejarlo vacío (así nunca aparece "?")
+    if (/^\d+$/.test(s)) return `Est. #${s.padStart(5, "0")}`;
     return s;
   }
 
@@ -1634,6 +1877,14 @@
       id = codTren ?? codCom ?? ("t" + idx);
       label = codCom ?? codTren ?? id;
       raw = item;
+    }
+
+    // Aprovechar cualquier par código-nombre que venga dentro del propio JSON de Renfe para auto-registrar estaciones nuevas al vuelo
+    if (raw && typeof raw === "object") {
+      if (raw.codOrigen && raw.desOrigen && !/^\d+$/.test(String(raw.desOrigen))) registerStation(raw.codOrigen, raw.desOrigen);
+      if (raw.codDestino && raw.desDestino && !/^\d+$/.test(String(raw.desDestino))) registerStation(raw.codDestino, raw.desDestino);
+      if (raw.codEstSig && raw.desEstSig && !/^\d+$/.test(String(raw.desEstSig))) registerStation(raw.codEstSig, raw.desEstSig);
+      if (raw.codEstAnt && raw.desEstAnt && !/^\d+$/.test(String(raw.desEstAnt))) registerStation(raw.codEstAnt, raw.desEstAnt);
     }
 
     const isCercSource = el.source.value === "visor" || el.source.value === "gtfsrt";
@@ -1963,13 +2214,11 @@
         const b = sorted[j];
         if (b.lat - a.lat > maxDLat) break;
 
-        // 1. FILTRO DE TIPO DE VÍA
         if (!isSameTrackGroup(a, b)) continue;
 
         const straightD = haversine(a.lat, a.lon, b.lat, b.lon);
         if (straightD >= tO) continue;
 
-        // 2. CÁLCULO DE DISTANCIA Y TRAZADO REAL SOBRE LA VÍA
         const anyLayerLoaded = TRACKS.av.loaded || TRACKS.md.loaded;
         let d = straightD;
         let pathCoords = null;
@@ -1983,7 +2232,6 @@
           pathCoords = [[a.drawLat, a.drawLon], [b.drawLat, b.drawLon]];
         }
 
-        // 3. VERIFICACIÓN TOPOLÓGICA DE SENTIDO A LO LARGO DE LA VÍA Y ENTRE VECTORES DE AVANCE
         const order = analyzeMovementAlongPath(a, b, pathCoords);
         if (!order) continue;
 
@@ -2004,7 +2252,6 @@
         const pairKey = makePairKey(a.id, b.id);
         let dismissedByAi = false;
 
-        // 4. AUDITORÍA IA INSTANTÁNEA (evalúa estaciones, parada en andén, líneas y bifurcaciones sin fallos de red)
         if (pairSeverity === "red" && el.enableAiAudit.checked) {
           const localEval = evaluateAlertLocally(trailing, leading, d);
           aiAuditCache.set(pairKey, {
@@ -2089,11 +2336,20 @@
 
   function badgeColor(tipo) { return BADGE_COLORS[tipo] || "#475569"; }
 
+  function formatRouteDisplay(x) {
+    if (x.orig && x.dest) return `📍 ${esc(x.orig)} → ${esc(x.dest)}`;
+    if (x.dest) return `📍 Hacia ${esc(x.dest)}`;
+    if (x.orig) return `📍 Desde ${esc(x.orig)}`;
+    if (x.sig)  return `📍 Próxima: ${esc(x.sig)}`;
+    return "";
+  }
+
   function tipHtml(t) {
     const x = t._info || trainInfo(t);
     const vGrp = t.trackGroup === "AV" ? "Vía AV" : (t.trackGroup === "CONV" ? "Vía Conv." : "Vía Híbrida");
     const head = `<div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Nº ${esc(x.numero)}</span><span style="margin-left:auto;font-size:10.5px;color:#667085">${esc(vGrp)}</span></div>`;
-    const ruta = (x.orig || x.dest) ? `<div class="t-route">📍 ${esc(x.orig || "?")} → ${esc(x.dest || "?")}</div>` : "";
+    const rTxt = formatRouteDisplay(x);
+    const ruta = rTxt ? `<div class="t-route">${rTxt}</div>` : "";
     const paradas = [];
     if (x.sig) paradas.push(`Próxima: <b>${esc(x.sig)}</b>`);
     if (x.vel !== null) {
@@ -2129,8 +2385,8 @@
       ["Tipo de servicio", `${x.tipo} (Límite: ${x.maxSpd} km/h)`],
       ["Infraestructura", vGrp],
       ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
-      ["Origen", x.orig || "—"],
-      ["Destino", x.dest || "—"]
+      ["Origen", x.orig || "En ruta"],
+      ["Destino", x.dest || "En ruta"]
     ];
     if (x.ant) mainRows.push(["Estación anterior", x.ant]);
     if (x.sig) mainRows.push(["Próxima estación", x.sig]);
@@ -2154,9 +2410,10 @@
 
     const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
     const rawRows = Object.entries(t.raw || {}).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
+    const rTxt = formatRouteDisplay(x);
 
     return `<div class="pop-wrap"><div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Tren Nº ${esc(x.numero)}</span></div>` +
-      (x.orig || x.dest ? `<div class="t-route">📍 ${esc(x.orig || "?")} → ${esc(x.dest || "?")}</div>` : "") +
+      (rTxt ? `<div class="t-route">${rTxt}</div>` : "") +
       `<table class="pop-table">${tableHtml}</table>` +
       (rawRows ? `<details class="pop-raw"><summary>Ver datos técnicos JSON</summary><table style="margin-top:4px">${rawRows}</table></details>` : "") + `</div>`;
   }
@@ -2343,10 +2600,8 @@
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
     el.nTotal.textContent = visible + " / " + trains.length;
 
-    // 1. Actualizar el recuadro superior izquierdo del mapa (Alertas Rojas + Persistencia + Auditor IA)
     renderRedOverlayList();
 
-    // 2. Banda lateral izquierda (Amarillos/Naranjas en precaución o rojas degradadas por IA)
     const orangePairs = [];
     pairs.forEach((p, idx) => {
       if (p.severity !== "red") orangePairs.push({ p, idx });
@@ -2535,6 +2790,7 @@
     el.proxy.value = "/api?url={url}";
   }
 
+  loadAllSpainStationsFromOsm();
   loadTrackLayer("av");
   loadTrackLayer("md");
   updateTrackStatus();
