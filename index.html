@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.33</title>
+<title>Alertas Ferrocarril · v1.34</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
     --bg:#f6f7f9; --panel:#ffffff; --text:#1b1f24; --muted:#667085; --line:#e3e6ea;
-    --accent:#1d4ed8; --red:#e53935; --orange:#f59e0b; --green:#43a047;
+    --accent:#1d4ed8; --red:#e53935; --orange:#f59e0b; --green:#43a047; --ai:#7c3aed;
   }
   @media (prefers-color-scheme: dark){
-    :root{ --bg:#14171b; --panel:#1c2026; --text:#e8eaed; --muted:#9aa3ad; --line:#2d333b; --accent:#6ea0ff; }
+    :root{ --bg:#14171b; --panel:#1c2026; --text:#e8eaed; --muted:#9aa3ad; --line:#2d333b; --accent:#6ea0ff; --ai:#a78bfa; }
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
@@ -37,7 +37,7 @@
   fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin:0;min-width:0;width:100%;max-width:100%}
   legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
   label{display:block;font-size:11.5px;margin:6px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  input[type=text],input[type=number],select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px}
+  input[type=text],input[type=number],input[type=password],select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px}
   .row{display:flex;gap:8px}
   .row>*{flex:1;min-width:0}
   .chk{display:flex;align-items:center;gap:7px;font-size:12.5px;margin:6px 0;cursor:pointer;white-space:normal;line-height:1.3}
@@ -50,9 +50,10 @@
   #status{font-size:12px;color:var(--muted);line-height:1.4;margin-top:4px}
   #status.err{color:var(--red)}
   #pairs{max-height:240px;overflow-y:auto;font-size:12px}
-  .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:5px}
+  .pair{display:flex;flex-direction:column;gap:3px;padding:6px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:5px}
   .pair:hover{background:var(--bg)}
   .pair.active-pair{background:rgba(29,78,216,.12);outline:1.5px solid var(--accent)}
+  .pair-main{display:flex;justify-content:space-between;align-items:center;gap:6px;width:100%}
   .pair .d{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
   .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
 
@@ -84,9 +85,9 @@
     border:2px solid var(--red);
     border-radius:10px;
     box-shadow:0 4px 16px rgba(0,0,0,.28);
-    min-width:340px;
-    max-width:560px;
-    max-height:270px;
+    min-width:360px;
+    max-width:600px;
+    max-height:310px;
     display:flex;
     flex-direction:column;
     overflow:hidden;
@@ -121,14 +122,13 @@
     font-size:12px;
     display:flex;
     flex-direction:column;
-    gap:3px;
+    gap:5px;
   }
   .ro-item{
     display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:8px;
-    padding:6px 7px;
+    flex-direction:column;
+    gap:4px;
+    padding:6px 8px;
     border-radius:6px;
     border:1px solid var(--line);
     cursor:pointer;
@@ -137,6 +137,7 @@
   }
   .ro-item:hover{background:var(--bg)}
   .ro-item.active-pair{outline:2px solid var(--accent);background:rgba(29,78,216,.1)}
+  .ro-top{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%}
   .ro-item .ro-right{display:flex;align-items:center;gap:6px;white-space:nowrap}
   .ro-item .ro-d{color:var(--red);font-variant-numeric:tabular-nums}
   .ro-item .ro-tti{
@@ -158,6 +159,38 @@
     font-variant-numeric:tabular-nums;
   }
 
+  /* Etiquetas y dictamen del Auditor IA en las alertas */
+  .ai-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:11px;
+    font-weight:500;
+    padding:3px 6px;
+    border-radius:5px;
+    background:rgba(124,58,237,.08);
+    border-left:3px solid var(--ai);
+    color:var(--text);
+    line-height:1.3;
+  }
+  .ai-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:3px;
+    font-size:10px;
+    font-weight:800;
+    padding:1.5px 5px;
+    border-radius:4px;
+    text-transform:uppercase;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  .ai-badge.pending{background:#6d28d9;color:#fff}
+  .ai-badge.real{background:#b91c1c;color:#fff}
+  .ai-badge.doubt{background:#d97706;color:#fff}
+  .ai-badge.dismissed{background:#15803d;color:#fff}
+  .ai-reason{flex:1;overflow:hidden;text-overflow:ellipsis}
+
   /* Parpadeo intenso en el mapa para alertas rojas que superan el tiempo de persistencia */
   @keyframes blinkPersistentAlert{
     0%, 100%{
@@ -176,9 +209,9 @@
   .ro-item.persistent-blink{
     animation:blinkPersistentAlert 0.75s infinite ease-in-out;
   }
-  .ro-item.persistent-blink .ro-d{
+  .ro-item.persistent-blink .ro-d,
+  .ro-item.persistent-blink .ai-row{
     color:inherit;
-    font-weight:800;
   }
   .ro-item.persistent-blink .ro-tti{
     background:rgba(0,0,0,.28);
@@ -242,6 +275,7 @@
   }
   .fl-btn:hover,.fl-btn.active{border-color:var(--accent);background:var(--bg)}
   .fl-btn svg{width:19px;height:19px;fill:currentColor;flex-shrink:0}
+  .fl-btn.ai-btn{border-color:var(--ai)}
   .fl-pop{
     position:absolute;
     bottom:50px;
@@ -251,7 +285,7 @@
     border-radius:12px;
     box-shadow:0 6px 24px rgba(0,0,0,.28);
     padding:12px;
-    min-width:240px;
+    min-width:250px;
     display:none;
     z-index:1002;
   }
@@ -278,7 +312,7 @@
   #helpModal.open{display:flex}
   .hm-card{
     background:var(--panel);color:var(--text);border:1px solid var(--line);
-    border-radius:16px;max-width:580px;width:100%;max-height:88vh;
+    border-radius:16px;max-width:600px;width:100%;max-height:88vh;
     display:flex;flex-direction:column;box-shadow:0 16px 40px rgba(0,0,0,.4);overflow:hidden;
   }
   .hm-head{
@@ -305,7 +339,6 @@
   .tm.green .b{background:#43a047}
   .tm .b svg{width:17px;height:17px;fill:#fff}
 
-  /* Anillo de foco cuando el usuario hace clic sobre una alerta para distinguir esos 2 trenes del resto */
   @keyframes pulsoSeleccion{
     0%,100%{transform:scale(1);opacity:1}
     50%{transform:scale(1.22);opacity:0.75}
@@ -322,7 +355,6 @@
     pointer-events:none;
   }
 
-  /* Etiqueta identificativa permanente bajo los trenes en alerta (naranja/rojo) o seleccionados */
   .tm-tag{
     position:absolute;
     top:31px;
@@ -359,7 +391,6 @@
     box-shadow:0 0 12px rgba(29,78,216,.95);
   }
 
-  /* Contenedor rotatorio de la flecha delante del tren */
   .tm .dir-arrow{
     position:absolute;
     inset:0;
@@ -419,14 +450,14 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.33</span>
+          <span class="ver">v1.34 · IA</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
 
     <fieldset>
-      <legend>Reglas de alerta (por trazado de vía)</legend>
+      <legend>Reglas de alerta + Auditor IA</legend>
       <div class="row">
         <div>
           <label for="thOrange" title="Distancia de seguridad medida siguiendo las curvas reales de la vía">Distancia &lt; (km)</label>
@@ -441,10 +472,13 @@
           <input type="number" id="thPersist" value="30" min="5" step="5">
         </div>
       </div>
+      <label class="chk" style="margin-top:8px">
+        <input type="checkbox" id="enableAiAudit" checked>
+        <span>🤖 <b>Auditoría IA activa:</b> verifica estaciones, rutas y desvíos en cada alerta roja y descarta falsos positivos</span>
+      </label>
       <div class="help">
-        • <b>Sentido sobre la vía:</b> verifica la tangente real del raíl y evita rebotes en doble vía o cruces en sentido contrario.<br>
-        • <b>Velocidad limitada por tipo:</b> AVE 320, ALVIA 250/220, AVANT 250, MD 160, Cercanías/Reg. 140 km/h.<br>
-        • <b>Prioridad roja:</b> la alerta roja siempre prevalece sobre la naranja.
+        • <b>IA gratuita integrada:</b> analiza origen, estación anterior, próxima parada, destino final y compatibilidad de vía.<br>
+        • <b>Auto-corrección:</b> si la IA detecta que van en sentidos comerciales opuestos o se bifurcan, anula la falsa alerta roja.
       </div>
     </fieldset>
 
@@ -554,7 +588,7 @@
         </div>
       </div>
 
-      <!-- 3. Capas de vías (Solo Detalle Adif / OpenRailwayMap) -->
+      <!-- 3. Capas de vías -->
       <div class="fl-wrap">
         <button class="fl-btn" data-pop="popTracks" title="Capas de vías ferroviarias">
           <svg viewBox="0 0 24 24"><path d="M5 3v18h2v-6.5l7 6.5h3l-8-7.5V3H5zm12 0v8.5l-3.5 3.2 1.4 1.5L19 12.4V3h-2z"/></svg>
@@ -578,6 +612,38 @@
           <div id="types"><div class="sub">Aparecerán al cargar los datos.</div></div>
         </div>
       </div>
+
+      <!-- 5. Configuración del Motor de IA -->
+      <div class="fl-wrap">
+        <button class="fl-btn ai-btn" data-pop="popAi" title="Configurar Auditor IA de Alertas">
+          <span>🤖</span>
+          <span class="lbl" id="lblAiProvider">IA: Pollinations (Gratis)</span>
+        </button>
+        <div class="fl-pop" id="popAi" style="min-width:285px">
+          <div class="fl-title">🤖 Motor de Inteligencia Artificial</div>
+          <label for="aiProvider" style="margin-top:0">Proveedor IA</label>
+          <select id="aiProvider">
+            <option value="pollinations" selected>Pollinations AI · Gratis sin API Key (OpenAI)</option>
+            <option value="gemini">Google Gemini 2.5 Flash (API Key gratis)</option>
+            <option value="groq">Groq · Llama 3.3 70B (API Key gratis)</option>
+          </select>
+          <div id="aiKeyWrap" style="display:none;margin-top:6px">
+            <label for="aiApiKey">API Key (se guarda solo en tu navegador)</label>
+            <input type="password" id="aiApiKey" placeholder="Pega tu clave gratuita aquí…">
+          </div>
+          <div class="help" style="margin-top:8px">
+            <b>¿Qué audita la IA en cada alerta?</b><br>
+            1. Origen, estación anterior, próxima parada y destino.<br>
+            2. Si ambos trenes comparten corredor o van a bifurcarse.<br>
+            3. Si llevan sentidos comerciales opuestos.<br>
+            4. Si un tren híbrido (ALVIA) va por ancho distinto.
+          </div>
+          <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+            <span class="sub" id="aiStats">0 auditorías realizadas</span>
+            <button type="button" class="sm" id="btnReauditAll">Re-analizar ahora</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="map"></div>
@@ -588,61 +654,37 @@
 <div id="helpModal">
   <div class="hm-card">
     <div class="hm-head">
-      <span>❓ ¿Cómo funciona el radar de trenes?</span>
+      <span>❓ ¿Cómo funciona el radar + Auditor IA?</span>
       <button class="hm-close" id="btnCloseHelp" title="Cerrar">×</button>
     </div>
     <div class="hm-body">
       <p style="margin:0">
-        Esta aplicación es un <b>sistema inteligente de alertas de proximidad de trenes en España</b>. Cada 10 segundos mira dónde está cada tren por GPS, lo coloca exactamente sobre su vía real y mide la distancia y el sentido de avance siguiendo todas las curvas del trazado ferroviario.
+        Esta aplicación combina un <b>motor geométrico sobre las vías reales de Adif</b> con un <b>Auditor de Inteligencia Artificial gratuito en tiempo real</b> que revisa cada alerta como un controlador de tráfico ferroviario (CTC).
       </p>
 
       <div class="hm-box" style="border-left:5px solid #43a047">
         <div class="hm-box-title"><span class="dot" style="background:#43a047;width:14px;height:14px"></span> 1. Trenes en VERDE (Todo tranquilo · sin flecha)</div>
         <div>
-          El tren viaja con total normalidad:
-          <ul style="margin:4px 0 0;padding-left:18px">
-            <li>No tiene ningún otro tren cerca (a menos de <b>5 km medidos por la vía</b>) avanzando en su mismo sentido sobre el raíl.</li>
-            <li>Si dos trenes se cruzan en sentido contrario o se alejan en una curva, <b>se mantienen en verde</b>.</li>
-            <li>Si llega a una estación grande (como Atocha, Sants o Málaga), también se pone en verde porque allí los trenes van muy despacio para aparcar en su andén.</li>
-          </ul>
-        </div>
-        <div class="hm-diagram">
-          <span>🚆 Tren A</span>
-          <span style="color:#43a047;font-weight:700">─── Más de 5 km por vía (Seguro) ───</span>
-          <span>🚆 Tren B</span>
+          El tren viaja con total normalidad a más de 5 km por vía de otros trenes en su mismo sentido, se cruza por vía paralela en sentido contrario, o maniobra dentro de una estación principal.
         </div>
       </div>
 
       <div class="hm-box" style="border-left:5px solid #f59e0b">
-        <div class="hm-box-title"><span class="dot" style="background:#f59e0b;width:14px;height:14px"></span> 2. Trenes en NARANJA con flecha y etiqueta (Precaución)</div>
+        <div class="hm-box-title"><span class="dot" style="background:#f59e0b;width:14px;height:14px"></span> 2. Trenes en NARANJA (Precaución, sin peligro de choque)</div>
         <div>
-          Dos trenes avanzan por la <b>misma vía y en el mismo sentido de recorrido del raíl</b> a <b>menos de 5 km</b> (uno detrás del otro), pero <b>NO hay peligro inminente</b> porque:
-          <ul style="margin:4px 0 0;padding-left:18px">
-            <li>Ambos van despacito (a menos de 100 km/h) o están parados esperando señal.</li>
-            <li>O bien <b>el tren que va delante corre más que el que va detrás</b>, así que cada vez se alejan más el uno del otro.</li>
-          </ul>
-        </div>
-        <div class="hm-diagram">
-          <span>🚆🟠➤ Detrás (90 km/h)</span>
-          <span style="color:#d97706;font-weight:700">── 3 km por vía (Se aleja) ──</span>
-          <span>🚆🟠➤ Delante (130 km/h)</span>
+          Dos trenes avanzan por la <b>misma vía y en el mismo sentido</b> a <b>menos de 5 km</b>, pero ambos van a baja velocidad (&lt;100 km/h) o el tren delantero es más rápido y se está alejando.
         </div>
       </div>
 
       <div class="hm-box" style="border-left:5px solid #e53935">
-        <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO con flecha roja y Parpadeo por Persistencia</div>
+        <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO + Verificación por Inteligencia Artificial 🤖</div>
         <div>
-          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) y prevalece siempre en pantalla sobre cualquier alerta naranja cuando:
-          <ol style="margin:4px 0 0;padding-left:18px">
-            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> y avanzan en el <b>mismo sentido sobre el raíl</b> a <b>menos de 5 km</b>.</li>
-            <li>El tren que viene por <b>detrás supera los 100 km/h</b> y va <b>más rápido (o igual) que el de delante</b>.</li>
-            <li><b>Al pulsar sobre cualquier alerta:</b> el mapa encuadra automáticamente a los dos trenes implicados y los rodea con un <b>halo azul brillante</b> para distinguirlos de cualquier otro tren cercano.</li>
-          </ol>
-        </div>
-        <div class="hm-diagram" style="border-color:#e53935">
-          <span style="color:#e53935;font-weight:700">🚆🔴➤ Detrás (180 km/h)</span>
-          <span style="color:#e53935;font-weight:700">── 3 km · ⏱ Impacto: 1m 48s ──</span>
-          <span>🚆🔴➤ Delante (80 km/h)</span>
+          Cuando un tren rápido (&gt;100 km/h) se acerca por detrás a otro en la misma vía a menos de 5 km, salta la <b>Alerta Roja</b> e inmediatamente interviene el <b>Auditor IA</b> analizando:
+          <ul style="margin:4px 0 0;padding-left:18px">
+            <li><b>Ruta completa:</b> Estación de salida, última parada, próxima parada y destino final de ambos trenes.</li>
+            <li><b>Coincidencia real de vía o bifurcación:</b> Comprueba si ambos trenes siguen el mismo corredor o si uno va a desviarse hacia otra línea.</li>
+            <li><b>Anulación automática de Falsos Positivos:</b> Si la IA detecta que las rutas comerciales van en sentidos opuestos o por infraestructuras incompatibles, <b>descarta automáticamente la falsa alerta roja</b> y la rebaja a precaución indicando el motivo.</li>
+          </ul>
         </div>
       </div>
     </div>
@@ -655,7 +697,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.33";
+  const VERSION = "1.34";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -719,23 +761,18 @@
 
   /* ---------- Coordenadas Geográficas Desglosadas por Estación Exacta ---------- */
   const CITY_GEO = [
-    // Madrid desglosado
     { keys: ["principe pio", "príncipe pío"], lat: 40.4213, lon: -3.7205, main: true },
     { keys: ["atocha", "madrid-puerta", "madrid atocha", "almudena grandes"], lat: 40.4065, lon: -3.6896, main: true },
     { keys: ["chamartin", "chamartín", "madrid-chamartin", "clara campoamor", "madrid"], lat: 40.4722, lon: -3.6822, main: true },
-    // Barcelona desglosado
     { keys: ["frança", "franca", "estació de frança", "estacio de franca"], lat: 41.3840, lon: 2.1856, main: true },
     { keys: ["passeig de gracia", "passeig de gràcia"], lat: 41.3920, lon: 2.1653, main: true },
     { keys: ["clot", "sagrera", "sant andreu"], lat: 41.4116, lon: 2.1873, main: true },
     { keys: ["sants", "barcelona-sants", "barcelona"], lat: 41.3791, lon: 2.1401, main: true },
-    // Valencia desglosado
     { keys: ["cabanyal"], lat: 39.4705, lon: -0.3340, main: false },
     { keys: ["estacio del nord", "estació del nord"], lat: 39.4668, lon: -0.3772, main: true },
     { keys: ["sorolla", "valencia", "valència"], lat: 39.4601, lon: -0.3816, main: true },
-    // Sevilla desglosado
     { keys: ["san bernardo"], lat: 37.3788, lon: -5.9793, main: true },
     { keys: ["santa justa", "sevilla"], lat: 37.3919, lon: -5.9753, main: true },
-    // Resto de España
     { keys: ["malaga", "málaga", "zambrano"], lat: 36.7115, lon: -4.4316, main: true },
     { keys: ["zaragoza", "delicias", "portillo"], lat: 41.6587, lon: -0.9114, main: true },
     { keys: ["bilbao", "abando", "concordia"], lat: 43.2614, lon: -2.9277, main: true },
@@ -874,6 +911,8 @@
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
     interval: $("interval"), btnResetView: $("btnResetView"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
     thOrange: $("thOrange"), thSpeed: $("thSpeed"), thPersist: $("thPersist"),
+    enableAiAudit: $("enableAiAudit"), aiProvider: $("aiProvider"), aiKeyWrap: $("aiKeyWrap"), aiApiKey: $("aiApiKey"),
+    lblAiProvider: $("lblAiProvider"), aiStats: $("aiStats"), btnReauditAll: $("btnReauditAll"),
     showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"), showOrmTiles: $("showOrmTiles"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
@@ -964,6 +1003,206 @@
     return remS > 0 ? `${m}m ${remS}s` : `${m}m`;
   };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
+
+  /* ---------- Motor de Auditoría por Inteligencia Artificial (Pollinations Gratis / Gemini / Groq) ---------- */
+  // Caché de auditorías por pairKey: { status: 'pending'|'done', verdict: 'REAL'|'DUDOSA'|'DESCARTADA', confidence: 85, reason: '...', ts: Date.now(), signature: '...' }
+  const aiAuditCache = new Map();
+  let totalAiAudits = 0;
+
+  try {
+    const savedProv = localStorage.getItem("aiProviderRenfe");
+    const savedKey  = localStorage.getItem("aiApiKeyRenfe");
+    if (savedProv) el.aiProvider.value = savedProv;
+    if (savedKey)  el.aiApiKey.value = savedKey;
+  } catch (e) {}
+
+  function syncAiProviderUi() {
+    const prov = el.aiProvider.value;
+    el.aiKeyWrap.style.display = prov === "pollinations" ? "none" : "block";
+    el.lblAiProvider.textContent = prov === "pollinations"
+      ? "IA: Pollinations (Gratis)"
+      : (prov === "gemini" ? "IA: Gemini Flash" : "IA: Groq Llama 3.3");
+    try {
+      localStorage.setItem("aiProviderRenfe", prov);
+      localStorage.setItem("aiApiKeyRenfe", el.aiApiKey.value.trim());
+    } catch (e) {}
+  }
+  el.aiProvider.addEventListener("change", syncAiProviderUi);
+  el.aiApiKey.addEventListener("change", syncAiProviderUi);
+  syncAiProviderUi();
+
+  function buildAiPromptForPair(p) {
+    const tr = p.trailing, ld = p.leading;
+    const infoT = tr._info || trainInfo(tr);
+    const infoL = ld._info || trainInfo(ld);
+
+    return `Eres un Ingeniero Jefe de Seguridad Ferroviaria del CTC de Adif/Renfe en España.
+Analiza esta alerta de proximidad entre dos trenes y determina si es un RIESGO REAL de alcance en la misma vía, una situación DUDOSA (p.ej. aproximación a bifurcación o entrada controlada a estación) o un FALSO POSITIVO (p.ej. rutas que van en sentidos comerciales opuestos, corredores distintos que solo se cruzan o anchos de vía incompatibles).
+
+DATOS DEL TREN TRASERO (el que se acerca por detrás):
+- Tren: ${infoT.tipo} ${infoT.numero} (Infraestructura estimada: ${tr.trackGroup})
+- Origen: "${infoT.orig || "Desconocido"}" -> Destino final: "${infoT.dest || "Desconocido"}"
+- Estación anterior: "${infoT.ant || "N/D"}" -> Próxima parada: "${infoT.sig || "N/D"}"
+- Velocidad GPS: ${infoT.vel ?? 0} km/h (Rumbo: ${Math.round(tr.bearing ?? 0)}°)
+- Coordenadas: [${tr.lat.toFixed(4)}, ${tr.lon.toFixed(4)}]
+
+DATOS DEL TREN DELANTERO (el que va delante):
+- Tren: ${infoL.tipo} ${infoL.numero} (Infraestructura estimada: ${ld.trackGroup})
+- Origen: "${infoL.orig || "Desconocido"}" -> Destino final: "${infoL.dest || "Desconocido"}"
+- Estación anterior: "${infoL.ant || "N/D"}" -> Próxima parada: "${infoL.sig || "N/D"}"
+- Velocidad GPS: ${infoL.vel ?? 0} km/h (Rumbo: ${Math.round(ld.bearing ?? 0)}°)
+- Coordenadas: [${ld.lat.toFixed(4)}, ${ld.lon.toFixed(4)}]
+
+DATOS GEOMÉTRICOS DEL ENCUENTRO:
+- Distancia medida sobre vía: ${fmtKm(p.d)}
+- Tiempo estimado hasta alcance: ${fmtImpactTime(p.impactSec)}
+
+REGLAS DE EVALUACIÓN:
+1. Compara Origen, Estación Anterior, Próxima Parada y Destino Final de ambos. Si uno viaja en sentido inverso al otro (ej. Madrid->Barcelona vs Barcelona->Madrid), es "DESCARTADA".
+2. Si ambos van hacia destinos que se separan en una bifurcación cercana y llevan servicios distintos, márcalo como "DUDOSA".
+3. Si un tren de Alta Velocidad pura (AVE/AVLO/AVANT) se compara con un tren convencional (MD/REGIONAL/CERCANÍAS), es "DESCARTADA" (distinto ancho de vía).
+4. Si ambos comparten el mismo corredor en el mismo sentido hacia la misma zona/estación y el trasero va más rápido, es "REAL".
+
+Responde EXCLUSIVAMENTE con un objeto JSON válido (sin bloques markdown) con este formato exacto:
+{"verdict":"REAL"|"DUDOSA"|"DESCARTADA","confidence":85,"reason":"Explicación técnica muy clara en español de máximo 16 palabras"}`;
+  }
+
+  async function callFreeAiApi(promptText) {
+    const prov = el.aiProvider.value;
+    const apiKey = el.aiApiKey.value.trim();
+
+    if (prov === "gemini" && apiKey) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+        })
+      });
+      if (!r.ok) throw new Error("Gemini HTTP " + r.status);
+      const j = await r.json();
+      return j.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
+
+    if (prov === "groq" && apiKey) {
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          temperature: 0.1,
+          response_format: { type: "json_object" },
+          messages: [{ role: "user", content: promptText }]
+        })
+      });
+      if (!r.ok) throw new Error("Groq HTTP " + r.status);
+      const j = await r.json();
+      return j.choices?.[0]?.message?.content || "";
+    }
+
+    // Por defecto: Pollinations AI (100% gratuito, sin API Key, OpenAI-compatible y con CORS abierto)
+    const r = await fetch("https://text.pollinations.ai/openai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "openai",
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: "Eres un auditor experto en tráfico ferroviario de Adif/Renfe. Respondes siempre en JSON puro." },
+          { role: "user", content: promptText }
+        ]
+      })
+    });
+    if (!r.ok) throw new Error("Pollinations HTTP " + r.status);
+    const j = await r.json();
+    return j.choices?.[0]?.message?.content || "";
+  }
+
+  function parseAiVerdict(rawText) {
+    const cleaned = String(rawText || "").replace(/```json|```/gi, "").trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    const jsonStr = match ? match[0] : cleaned;
+    const obj = JSON.parse(jsonStr);
+    const vRaw = String(obj.verdict || "REAL").toUpperCase();
+    const verdict = vRaw.includes("DESCART") || vRaw.includes("FALS") ? "DESCARTADA"
+      : (vRaw.includes("DUD") ? "DUDOSA" : "REAL");
+    const confidence = Math.min(99, Math.max(50, parseInt(obj.confidence, 10) || 85));
+    const reason = String(obj.reason || "Rutas verificadas por el auditor IA.").trim();
+    return { verdict, confidence, reason };
+  }
+
+  async function auditPairWithAi(p, force = false) {
+    if (!el.enableAiAudit.checked) return;
+    const key = p.pairKey;
+    const infoT = p.trailing._info || trainInfo(p.trailing);
+    const infoL = p.leading._info || trainInfo(p.leading);
+    const sig = `${infoT.orig}|${infoT.sig}|${infoT.dest}|${infoL.orig}|${infoL.sig}|${infoL.dest}`;
+
+    const existing = aiAuditCache.get(key);
+    // No volver a consultar si ya se auditó con las mismas estaciones hace menos de 90 segundos
+    if (!force && existing && (existing.status === "pending" || (existing.signature === sig && Date.now() - existing.ts < 90000))) {
+      return;
+    }
+
+    aiAuditCache.set(key, {
+      status: "pending",
+      verdict: existing?.verdict || "PENDING",
+      confidence: existing?.confidence || 0,
+      reason: "IA analizando estaciones, vía y sentido comercial…",
+      ts: Date.now(),
+      signature: sig
+    });
+    renderRedOverlayList();
+
+    try {
+      const prompt = buildAiPromptForPair(p);
+      const rawResp = await callFreeAiApi(prompt);
+      const res = parseAiVerdict(rawResp);
+      totalAiAudits++;
+      el.aiStats.textContent = `${totalAiAudits} auditoría${totalAiAudits === 1 ? "" : "s"} IA completada${totalAiAudits === 1 ? "" : "s"}`;
+
+      aiAuditCache.set(key, {
+        status: "done",
+        verdict: res.verdict,
+        confidence: res.confidence,
+        reason: res.reason,
+        ts: Date.now(),
+        signature: sig
+      });
+
+      // Si la IA dictamina con alta confianza (>= 75%) que es un FALSO POSITIVO (DESCARTADA),
+      // recalculamos la proximidad para degradar automáticamente esa alerta roja a naranja amortiguada
+      if (res.verdict === "DESCARTADA" && res.confidence >= 75) {
+        computeProximity();
+        render();
+      } else {
+        renderRedOverlayList();
+      }
+    } catch (e) {
+      aiAuditCache.set(key, {
+        status: "error",
+        verdict: "REAL",
+        confidence: 0,
+        reason: "Auditoría geométrica activa (IA sin respuesta temporal)",
+        ts: Date.now(),
+        signature: sig
+      });
+      renderRedOverlayList();
+    }
+  }
+
+  el.btnReauditAll.addEventListener("click", () => {
+    aiAuditCache.clear();
+    computeProximity();
+    render();
+  });
+  el.enableAiAudit.addEventListener("change", () => {
+    computeProximity();
+    render();
+  });
 
   /* ---------- Indexación Espacial en Memoria para Cálculo por Vía ---------- */
   function indexTrackWays(st, lines) {
@@ -1790,6 +2029,7 @@
       t.hasRedPair = false;
       t.roleInfo = "";
       t.impactSec = null;
+      t.aiNote = "";
       t.inStation = isInStationArea(t.lat, t.lon, 1.6);
       assignTrainTrackAndSnap(t);
       t.isFast = isConfirmedHighSpeed(t, minSpeed);
@@ -1848,9 +2088,18 @@
         }
 
         const pairKey = makePairKey(a.id, b.id);
+        const aiAudit = el.enableAiAudit.checked ? aiAuditCache.get(pairKey) : null;
+
+        // Si el Auditor IA ya analizó esta pareja y dictaminó con >=75% de confianza que es un FALSO POSITIVO (DESCARTADA),
+        // la degradamos automáticamente a precaución naranja para no mantener una falsa alarma roja activa
+        let dismissedByAi = false;
+        if (pairSeverity === "red" && aiAudit && aiAudit.status === "done" && aiAudit.verdict === "DESCARTADA" && aiAudit.confidence >= 75) {
+          pairSeverity = "orange";
+          dismissedByAi = true;
+        }
+
         let redStartMs = null;
 
-        // La alerta ROJA prevalece siempre sobre la NARANJA en los atributos del tren
         if (pairSeverity === "red") {
           activeRedKeys.add(pairKey);
           if (!redAlertStart.has(pairKey)) {
@@ -1863,12 +2112,14 @@
             a.d = d;
             a.nearTrain = b;
             a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (aiAudit?.reason) a.aiNote = aiAudit.reason;
           }
           if (!b.hasRedPair || d < b.redD) {
             b.redD = d;
             b.d = d;
             b.nearTrain = a;
             b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (aiAudit?.reason) b.aiNote = aiAudit.reason;
           }
           a.hasRedPair = true;
           b.hasRedPair = true;
@@ -1881,15 +2132,23 @@
             a.d = d;
             a.nearTrain = b;
             a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (aiAudit?.reason) a.aiNote = aiAudit.reason;
           }
           if (!b.hasRedPair && d < b.d) {
             b.d = d;
             b.nearTrain = a;
             b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (aiAudit?.reason) b.aiNote = aiAudit.reason;
           }
         }
 
-        pairs.push({ a, b, trailing, leading, hasOrder: true, d, pathCoords, severity: pairSeverity, impactSec, pairKey, redStartMs });
+        const pairObj = { a, b, trailing, leading, hasOrder: true, d, pathCoords, severity: pairSeverity, impactSec, pairKey, redStartMs, dismissedByAi };
+        pairs.push(pairObj);
+
+        // Disparar auditoría IA asíncrona para todas las alertas rojas activas
+        if (pairSeverity === "red" && el.enableAiAudit.checked) {
+          auditPairWithAi(pairObj);
+        }
       }
     }
 
@@ -1937,6 +2196,9 @@
       } else {
         near = `<div style="color:#d97706;font-weight:700;margin-top:3px">⚠ Precaución: A ${fmtKm(t.d)} por vía de ${esc(nearName)}${esc(roleTxt)}</div>`;
       }
+      if (t.aiNote) {
+        near += `<div style="color:#7c3aed;font-weight:600;font-size:11px;margin-top:2px">🤖 IA: ${esc(t.aiNote)}</div>`;
+      }
     }
     return head + ruta + meta + ret + statNote + near;
   }
@@ -1966,6 +2228,9 @@
     if (!t.inStation && isNum(t.d)) mainRows.push(["Distancia por vía", `${fmtKm(t.d)}`]);
     if (t.color === "red" && t.impactSec !== null) {
       mainRows.push(["Tiempo hasta impacto", `<b style="color:#e53935">⏱ ${esc(fmtImpactTime(t.impactSec))}</b>`, true]);
+    }
+    if (t.aiNote) {
+      mainRows.push(["Dictamen Auditor IA", `<b style="color:#7c3aed">🤖 ${esc(t.aiNote)}</b>`, true]);
     }
 
     const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
@@ -2009,6 +2274,23 @@
     return `${esc(la)} ↔ ${esc(lb)}`;
   }
 
+  function formatAiRowHtml(p) {
+    if (!el.enableAiAudit.checked) return "";
+    const audit = aiAuditCache.get(p.pairKey);
+    if (!audit) return "";
+
+    if (audit.status === "pending") {
+      return `<div class="ai-row"><span class="ai-badge pending">🤖 IA Auditando…</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+    }
+    if (audit.verdict === "DESCARTADA") {
+      return `<div class="ai-row"><span class="ai-badge dismissed">🛡️ Falso Positivo (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+    }
+    if (audit.verdict === "DUDOSA") {
+      return `<div class="ai-row"><span class="ai-badge doubt">⚠️ IA: Dudosa (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+    }
+    return `<div class="ai-row"><span class="ai-badge real">✅ IA: Confirmada (${audit.confidence || 90}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+  }
+
   function renderRedOverlayList() {
     const redPairs = [];
     pairs.forEach((p, idx) => {
@@ -2047,8 +2329,8 @@
           : "";
 
         return `<div class="ro-item${isPersistent ? " persistent-blink" : ""}${isSel ? " active-pair" : ""}" data-i="${idx}">` +
-          `<span>🔴 ${formatPairText(p)}</span>` +
-          `<span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span>` +
+          `<div class="ro-top"><span>🔴 ${formatPairText(p)}</span><span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span></div>` +
+          formatAiRowHtml(p) +
           `</div>`;
       }).join("");
       el.redOverlay.classList.toggle("has-persistent", anyPersistent);
@@ -2145,10 +2427,10 @@
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
     el.nTotal.textContent = visible + " / " + trains.length;
 
-    // 1. Actualizar el recuadro superior izquierdo del mapa (Alertas Rojas + Persistencia)
+    // 1. Actualizar el recuadro superior izquierdo del mapa (Alertas Rojas + Persistencia + Auditor IA)
     renderRedOverlayList();
 
-    // 2. Banda lateral izquierda (Solo Amarillos/Naranjas en precaución o alejándose)
+    // 2. Banda lateral izquierda (Amarillos/Naranjas en precaución o rojas degradadas por IA)
     const orangePairs = [];
     pairs.forEach((p, idx) => {
       if (p.severity !== "red") orangePairs.push({ p, idx });
@@ -2159,7 +2441,10 @@
     } else {
       el.pairs.innerHTML = orangePairs.slice(0, 100).map(({ p, idx }) => {
         const isSel = selectedPairKey && p.pairKey === selectedPairKey;
-        return `<div class="pair${isSel ? " active-pair" : ""}" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
+        return `<div class="pair${isSel ? " active-pair" : ""}" data-i="${idx}">` +
+          `<div class="pair-main"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>` +
+          (p.dismissedByAi ? formatAiRowHtml(p) : "") +
+          `</div>`;
       }).join("");
     }
   }
@@ -2288,6 +2573,7 @@
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     trainHistory.clear();
     redAlertStart.clear();
+    aiAuditCache.clear();
     selectedPairKey = null;
     selectedTrainIds.clear();
     refresh();
