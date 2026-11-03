@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.32</title>
+<title>Alertas Ferrocarril · v1.33</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -418,7 +419,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.32</span>
+          <span class="ver">v1.33</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -654,7 +655,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.32";
+  const VERSION = "1.33";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -716,13 +717,13 @@
     return "AVE";
   }
 
-  /* ---------- Coordenadas Geográficas Desglosadas por Estación Exacta (evita vectores invertidos dentro de una misma ciudad) ---------- */
+  /* ---------- Coordenadas Geográficas Desglosadas por Estación Exacta ---------- */
   const CITY_GEO = [
     // Madrid desglosado
     { keys: ["principe pio", "príncipe pío"], lat: 40.4213, lon: -3.7205, main: true },
     { keys: ["atocha", "madrid-puerta", "madrid atocha", "almudena grandes"], lat: 40.4065, lon: -3.6896, main: true },
     { keys: ["chamartin", "chamartín", "madrid-chamartin", "clara campoamor", "madrid"], lat: 40.4722, lon: -3.6822, main: true },
-    // Barcelona desglosado (crucial para túneles urbanos Sants - Passeig de Gràcia - Estació de França - Clot/Sagrera)
+    // Barcelona desglosado
     { keys: ["frança", "franca", "estació de frança", "estacio de franca"], lat: 41.3840, lon: 2.1856, main: true },
     { keys: ["passeig de gracia", "passeig de gràcia"], lat: 41.3920, lon: 2.1653, main: true },
     { keys: ["clot", "sagrera", "sant andreu"], lat: 41.4116, lon: 2.1873, main: true },
@@ -1065,7 +1066,6 @@
       const sA = snapA.seg, sB = snapB.seg;
       const directSnapD = haversine(snapA.snapLat, snapA.snapLon, snapB.snapLat, snapB.snapLon);
 
-      // Si están separados por menos de 350 metros sobre vías paralelas, devolver el segmento directo sin buscar horquillas lejanas
       if (sA.id === sB.id || directSnapD <= 0.35) {
         if (directSnapD <= maxAllowedKm) {
           return {
@@ -1210,8 +1210,6 @@
       }
 
       if (found && dist[targetNode] <= maxAllowedKm) {
-        // Evitar el rebote en "V" en doble vía: si la ruta por el grafo da un rodeo absurdo (> 1.65x la distancia directa entre ambos puntos),
-        // significa que ha ido hasta una aguja lejana y ha vuelto hacia atrás por la vía paralela
         if (directSnapD > 0.05 && dist[targetNode] > directSnapD * 1.65 && directSnapD <= 1.2) {
           return {
             distKm: directSnapD,
@@ -1270,31 +1268,6 @@
     throw lastErr || new Error("sin datos");
   }
 
-  async function fetchRenfeOfficialLines() {
-    const base = SOURCES.ld.replace("flotaLD.json", "");
-    for (const file of ["lineas.geojson", "lineasLD.geojson"]) {
-      try {
-        const r = await fetch(proxify(base + file));
-        if (!r.ok) continue;
-        const g = await r.json();
-        const ways = [];
-        for (const f of (g.features || [])) {
-          const geom = f.geometry;
-          if (!geom) continue;
-          if (geom.type === "LineString" && geom.coordinates.length > 1) {
-            ways.push(geom.coordinates.map(c => [+c[1].toFixed(5), +c[0].toFixed(5)]));
-          } else if (geom.type === "MultiLineString") {
-            for (const line of geom.coordinates) {
-              if (line.length > 1) ways.push(line.map(c => [+c[1].toFixed(5), +c[0].toFixed(5)]));
-            }
-          }
-        }
-        if (ways.length) return ways;
-      } catch (e) {}
-    }
-    return null;
-  }
-
   function decimate(pts, minKm) {
     const out = [pts[0]]; let last = pts[0];
     for (let i = 1; i < pts.length - 1; i++) {
@@ -1335,10 +1308,6 @@
             const dec = raw.map(w => decimate(w, st.minKm));
             allWays.push(...dec);
           } catch (e) {}
-        }
-        if (!allWays.length && kind === "av") {
-          const renfeWays = await fetchRenfeOfficialLines();
-          if (renfeWays) allWays.push(...renfeWays);
         }
         if (!allWays.length) throw new Error("sin respuesta OSM");
         ways = allWays;
@@ -1382,32 +1351,6 @@
     if (found) return found;
     if (/^\d+$/.test(s)) return "";
     return s;
-  }
-
-  let stationsTried = false;
-  function proxify(url) {
-    const p = el.proxy.value.trim();
-    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
-  }
-  async function loadStations() {
-    if (stationsTried || el.source.value !== "ld") return;
-    stationsTried = true;
-    const base = SOURCES.ld.replace("flotaLD.json", "");
-    for (const file of ["estacionesEstatico.geojson", "estaciones.geojson"]) {
-      try {
-        const r = await fetch(proxify(base + file));
-        if (!r.ok) continue;
-        const g = await r.json();
-        (g.features || []).forEach(f => {
-          const pr = f.properties || {};
-          const keys = Object.keys(pr);
-          const kc = keys.find(k => /(cod|id|estacion|clave)/i.test(k) && (typeof pr[k] === "number" || /^\d+$/.test(String(pr[k]).trim())));
-          const kn = keys.find(k => /(nom|name|desc|titulo|label)/i.test(k) && typeof pr[k] === "string" && !/^\d+$/.test(pr[k].trim()));
-          if (kc && kn) registerStation(pr[kc], pr[kn]);
-        });
-        break;
-      } catch (e) {}
-    }
   }
 
   function extractList(data) {
@@ -1749,14 +1692,12 @@
   /* ---------- Verificación Estricta de Sentido sobre la Vía y entre Rumbo de Trenes ---------- */
   function analyzeMovementAlongPath(a, b, pathCoords) {
     const infoA = a._info, infoB = b._info;
-    // 1. Descarte inmediato si origen/destino o estaciones anterior/siguiente están invertidas
     if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
       if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return null;
       if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return null;
       if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return null;
     }
 
-    // 2. Si ambos trenes tienen ruta comercial conocida (origen -> destino), sus vectores globales no pueden ser opuestos
     if (a.routeVec && b.routeVec) {
       const refLat = (a.lat + b.lat) / 2;
       const kLon = Math.cos(refLat * Math.PI / 180);
@@ -1773,8 +1714,6 @@
     const mvB = getTrainMotionVector(b);
     if (!mvA || !mvB) return null;
 
-    // 3. Si los dos vectores de rumbo de las flechas forman un ángulo opuesto (> 90°, cos <= 0), NUNCA van en el mismo sentido
-    // (Esto bloquea cualquier falso positivo por rebote en "U" de la polilínea en vías dobles paralelas)
     const cosArrows = mvA.vx * mvB.vx + mvA.vy * mvB.vy;
     if (cosArrows < 0.25) return null;
 
@@ -1787,7 +1726,6 @@
 
       if (Math.abs(projA) < 0.35 || Math.abs(projB) < 0.35) return null;
 
-      // Si uno entra hacia la curva y el otro se aleja en sentido contrario sobre el raíl -> DESCARTAR
       if ((projA > 0 && projB < 0) || (projA < 0 && projB > 0)) {
         return null;
       }
@@ -2260,7 +2198,6 @@
     el.btnRefresh.disabled = true;
     el.btnRefresh.classList.add("spinning");
     try {
-      await loadStations();
       allTrains = await fetchTrains();
       updateTypes();
       trains = allTrains.filter(inTypes);
@@ -2353,7 +2290,6 @@
     redAlertStart.clear();
     selectedPairKey = null;
     selectedTrainIds.clear();
-    stationsTried = false;
     refresh();
   });
 
