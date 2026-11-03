@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.39</title>
+<title>Alertas Ferrocarril · v1.40</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -212,18 +212,28 @@
     flex-shrink:0;
   }
   .ai-badge.pending{background:#6d28d9;color:#fff}
+  .ai-badge.queued{background:#475569;color:#fff}
   .ai-badge.real{background:#b91c1c;color:#fff}
   .ai-badge.promoted{background:#7c3aed;color:#fff}
   .ai-badge.downgraded{background:#d97706;color:#fff}
   .ai-source-tag{
     font-size:9.5px;
     font-weight:700;
-    padding:1px 4px;
+    padding:1px 5px;
     border-radius:3px;
-    background:rgba(0,0,0,.12);
+    background:rgba(0,0,0,.14);
     color:inherit;
     margin-left:auto;
     flex-shrink:0;
+    white-space:nowrap;
+  }
+  .ai-source-tag.consulting{
+    background:#7c3aed;
+    color:#fff;
+  }
+  .ai-source-tag.queued{
+    background:#64748b;
+    color:#fff;
   }
   .ai-reason{flex:1;overflow:hidden;text-overflow:ellipsis}
 
@@ -502,7 +512,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.39 · LLM</span>
+          <span class="ver">v1.40 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -526,11 +536,11 @@
       </div>
       <label class="chk" style="margin-top:8px">
         <input type="checkbox" id="enableAiAudit" checked>
-        <span>🤖 <b>Auditoría Híbrida (Reglas CTC + LLM Neuronal):</b> analiza cada alerta crítica con pre-filtro instantáneo y consulta LLM con cola antispam</span>
+        <span>🤖 <b>Auditoría Híbrida (Reglas CTC + Cola LLM Secuencial):</b> consulta de una en una sin pisarse y cancela si el tren pasa a verde/naranja</span>
       </label>
       <div class="help">
-        • <b>Rebajadas a Naranja en panel rojo:</b> si la geometría era roja pero la IA descarta peligro, se pinta en naranja en el panel superior y deja de parpadear.<br>
-        • <b>Ascendidas a Roja:</b> informa si era 🟢 Verde o 🟠 Naranja y la IA la subió a 🔴 Roja.
+        • <b>Cola estricta 1 a 1:</b> muestra <b>🧠 Consultando LLM…</b> en la activa y <b>⏳ En cola LLM (#1, #2…)</b> en las que esperan.<br>
+        • <b>Auto-cancelación:</b> si una alerta en cola o en vuelo pasa a verde o naranja, se aborta al instante y pasa a la siguiente.
       </div>
     </fieldset>
 
@@ -672,10 +682,10 @@
           <span class="lbl" id="lblAiProvider">IA: Híbrido + LLM</span>
         </button>
         <div class="fl-pop" id="popAi" style="min-width:340px">
-          <div class="fl-title">🤖 Arquitectura IA (Reglas CTC + LLM Real)</div>
+          <div class="fl-title">🤖 Arquitectura IA (Reglas CTC + Cola LLM)</div>
           <label for="aiProvider" style="margin-top:0">Proveedor LLM Neuronal</label>
           <select id="aiProvider">
-            <option value="pollinations" selected>🌐 Pollinations OpenAI (GPT-4o-mini Gratis con Cola Antispam)</option>
+            <option value="pollinations" selected>🌐 Pollinations OpenAI (GPT-4o-mini Gratis · Cola 1 a 1)</option>
             <option value="gemini">✨ Google Gemini 2.5 Flash (Con tu API Key gratis)</option>
             <option value="groq">⚡ Groq · Llama 3.3 70B (Con tu API Key gratis)</option>
             <option value="local">🛡️ Solo Reglas CTC Locales (Sin llamadas externas)</option>
@@ -686,10 +696,10 @@
           </div>
           <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
             <span class="sub" id="aiStats">Cargando catálogo Adif…</span>
-            <button type="button" class="sm" id="btnReauditAll">Forzar análisis LLM</button>
+            <button type="button" class="sm" id="btnReauditAll">Re-analizar cola LLM</button>
           </div>
           <label style="margin-top:8px">Último Prompt enviado y respuesta del LLM:</label>
-          <div class="llm-log-box" id="llmDebugLog">Esperando la primera alerta en el panel superior para enviar el prompt al LLM…</div>
+          <div class="llm-log-box" id="llmDebugLog">Esperando la primera alerta roja para enviar el prompt al LLM…</div>
         </div>
       </div>
     </div>
@@ -702,29 +712,32 @@
 <div id="helpModal">
   <div class="hm-card">
     <div class="hm-head">
-      <span>❓ ¿Cómo funciona el radar + Auditor Híbrido LLM?</span>
+      <span>❓ ¿Cómo funciona el radar + Cola Secuencial LLM?</span>
       <button class="hm-close" id="btnCloseHelp" title="Cerrar">×</button>
     </div>
     <div class="hm-body">
       <p style="margin:0">
-        Esta aplicación utiliza una <b>arquitectura de IA en 2 capas</b>: un <b>Sistema Experto CTC Local</b> (que pre-evalúa las alertas en 0 ms) y un <b>Modelo de Lenguaje Neuronal (LLM) con cola antispam</b> que audita las alertas del panel superior analizando las estaciones y rutas de España.
+        Esta aplicación utiliza una <b>arquitectura de IA en 2 capas</b>: un <b>Sistema Experto CTC Local</b> (que pre-evalúa las alertas en 0 ms) y una <b>Cola Secuencial LLM 1 a 1</b> que consulta al modelo neuronal sin pisar peticiones y cancelando automáticamente las que dejan de ser rojas.
       </p>
 
       <div class="hm-box" style="border-left:5px solid #d97706">
         <div class="hm-box-title">🟠 Rojas Geométricas rebajadas a Naranja por la IA (En el mismo panel superior)</div>
         <div>
-          Cuando la geometría pura detecta una Alerta Roja pero la IA comprueba que <b>no hay riesgo real de colisión</b> (por rebase programado en estación, bifurcación próxima o sentidos comerciales opuestos):
+          Cuando la geometría pura detecta una Alerta Roja pero la IA comprueba que <b>no hay riesgo real de colisión</b>:
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li>La alerta <b>permanece visible en el panel superior de Alertas Rojas</b> para que sepas que existió geométricamente, pero <b>cambia a color Naranja</b>.</li>
-            <li>Si estaba parpadeando por persistencia, <b>deja de parpadear inmediatamente</b>.</li>
+            <li>La alerta <b>permanece visible en el panel superior de Alertas Rojas</b> pintada en <b>color Naranja</b> y <b>deja de parpadear inmediatamente</b>.</li>
           </ul>
         </div>
       </div>
 
       <div class="hm-box" style="border-left:5px solid #7c3aed">
-        <div class="hm-box-title">⚡ Verdes o Naranjas ascendidas a ROJA por la IA</div>
+        <div class="hm-box-title">⏳ Gestión de Cola LLM (1 a 1 con auto-cancelación)</div>
         <div>
-          Si una situación parecía <b>Naranja</b> (por ir a menos de 100 km/h) o <b>Verde</b> (por tener una sola lectura GPS tras salir de un túnel), pero la IA detecta que van por la misma vía hacia la misma parada con impacto inminente (&lt;120 s), <b>la sube automáticamente al panel de Alertas Rojas</b> indicando claramente si era <b>🟢 Verde</b> o <b>🟠 Naranja</b> antes de la intervención de la IA.
+          <ul style="margin:4px 0 0;padding-left:18px">
+            <li>El sistema consulta al LLM <b>de una en una</b>: nunca lanza la segunda consulta hasta recibir la respuesta de la primera.</li>
+            <li>Las alertas que esperan su turno muestran <b>⏳ En cola LLM (#1, #2…)</b>.</li>
+            <li>Si mientras espera o se está consultando el tren pasa a <b>verde o naranja</b>, esa consulta <b>se cancela en el acto</b> y pasa inmediatamente a la siguiente.</li>
+          </ul>
         </div>
       </div>
     </div>
@@ -737,7 +750,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.39";
+  const VERSION = "1.40";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1211,10 +1224,11 @@
   };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Arquitectura IA de 2 Capas: (1) Reglas CTC Instantáneas + (2) LLM Neuronal Real con Cola Antispam ---------- */
+  /* ---------- Gestión Estricta de Cola LLM 1 a 1 con Cancelación Automática (AbortController) ---------- */
+  // aiAuditCache: pairKey -> { status: 'queued'|'in_flight'|'done', verdict, confidence, reason, source, llmDone, llmTs }
   const aiAuditCache = new Map();
-  const llmQueue = [];
-  let llmBusy = false;
+  const llmQueue = []; // Lista FIFO ordenada de { pairKey, pairObj, localEval }
+  let currentLlmTask = null; // { pairKey, controller }
 
   try {
     const savedProv = localStorage.getItem("aiProviderRenfe");
@@ -1246,7 +1260,6 @@
     return 1;
   }
 
-  // CAPA 1: Pre-evaluación instantánea por Reglas del CTC (0 ms)
   function evaluateAlertWithCtcBrain(trailing, leading, distKm, geomSeverity, minSpeedKmh) {
     const infoT = trailing._info || trainInfo(trailing);
     const infoL = leading._info || trainInfo(leading);
@@ -1371,7 +1384,6 @@
     };
   }
 
-  // CAPA 2: Construcción del Prompt Ferroviario y llamada con Cola Antispam al LLM Neuronal Real
   function buildLlmPromptForPair(p, localEval) {
     const tr = p.trailing, ld = p.leading;
     const infoT = tr._info || trainInfo(tr);
@@ -1402,7 +1414,7 @@ Responde SOLO este JSON válido:
 {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"PROMOTED_RED","confidence":85,"reason":"Explicación técnica en español (máx 16 palabras) citando estaciones"}`;
   }
 
-  async function callRealLlmEndpoint(promptText) {
+  async function callRealLlmEndpoint(promptText, signal) {
     const prov = el.aiProvider.value;
     const apiKey = el.aiApiKey.value.trim();
     const sysMsg = "Eres un Ingeniero Jefe del CTC de Adif en España. Analizas telemetría ferroviaria y respondes exclusivamente en JSON válido.";
@@ -1412,6 +1424,7 @@ Responde SOLO este JSON válido:
       const r = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal,
         body: JSON.stringify({
           contents: [{ parts: [{ text: sysMsg + "\n\n" + promptText }] }],
           generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
@@ -1426,6 +1439,7 @@ Responde SOLO este JSON válido:
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        signal,
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           temperature: 0.1,
@@ -1441,10 +1455,10 @@ Responde SOLO este JSON válido:
       return { text: j.choices?.[0]?.message?.content || "", modelName: "Llama 3.3 70B" };
     }
 
-    // Pollinations AI (Gratuito sin clave, usando semilla única y cola espaciada para evitar HTTP 402)
     const r = await fetch("https://text.pollinations.ai/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal,
       body: JSON.stringify({
         model: "openai",
         jsonMode: true,
@@ -1457,31 +1471,94 @@ Responde SOLO este JSON válido:
     });
     if (!r.ok) throw new Error("Pollinations HTTP " + r.status);
     const rawTxt = await r.text();
-    return { text: rawTxt, modelName: "GPT-4o-mini (Pollinations)" };
+    return { text: rawTxt, modelName: "GPT-4o-mini (LLM)" };
+  }
+
+  // Sincroniza las posiciones de espera (#1, #2...) en las etiquetas de los trenes encolados
+  function updateQueuePositionLabels() {
+    llmQueue.forEach((qItem, index) => {
+      const entry = aiAuditCache.get(qItem.pairKey);
+      if (entry && !entry.llmDone) {
+        entry.status = "queued";
+        entry.source = `⏳ En cola LLM (#${index + 1})`;
+      }
+    });
+  }
+
+  // Limpia de la cola cualquier par que haya pasado a verde o naranja normal, y aborta la petición en curso si ya no aplica
+  function syncLlmQueueWithActivePairs(activeLlmKeys) {
+    // 1. Filtrar la cola de espera: quitar cualquier par que ya no esté en el panel rojo
+    for (let i = llmQueue.length - 1; i >= 0; i--) {
+      const k = llmQueue[i].pairKey;
+      if (!activeLlmKeys.has(k)) {
+        llmQueue.splice(i, 1);
+        aiAuditCache.delete(k);
+      }
+    }
+
+    // 2. Si la consulta que está ahora mismo en vuelo (currentLlmTask) ya no está activa (pasó a verde o naranja), se aborta inmediatamente
+    if (currentLlmTask && !activeLlmKeys.has(currentLlmTask.pairKey)) {
+      el.llmDebugLog.textContent = `[CANCELADA CONSULTA LLM Para ${currentLlmTask.pairKey} por pasar a verde/naranja]\nPasando inmediatamente al siguiente tren en cola…`;
+      currentLlmTask.controller.abort();
+      aiAuditCache.delete(currentLlmTask.pairKey);
+      currentLlmTask = null;
+    }
+
+    updateQueuePositionLabels();
   }
 
   function enqueueLlmAudit(pairObj, localEval) {
     if (el.aiProvider.value === "local") return;
     const key = pairObj.pairKey;
     const cached = aiAuditCache.get(key);
-    if (cached && cached.llmDone && Date.now() - cached.llmTs < 120000) return;
-    if (llmQueue.some(item => item.pairKey === key)) return;
-    if (llmQueue.length >= 4) return; // Limitar cola a las 4 alertas más prioritarias para no saturar jamás la API gratuita
+
+    // Si ya terminó su consulta LLM hace menos de 3 minutos o ya está en vuelo, no la volvemos a meter
+    if (cached && cached.llmDone && Date.now() - cached.llmTs < 180000) return;
+    if (currentLlmTask && currentLlmTask.pairKey === key) return;
+
+    const existingIdx = llmQueue.findIndex(item => item.pairKey === key);
+    if (existingIdx !== -1) {
+      // Actualizar datos frescos de posición/velocidad en la tarea ya encolada sin perder su sitio en la cola
+      llmQueue[existingIdx].pairObj = pairObj;
+      llmQueue[existingIdx].localEval = localEval;
+      updateQueuePositionLabels();
+      return;
+    }
+
     llmQueue.push({ pairKey: key, pairObj, localEval });
-    processLlmQueue();
+    updateQueuePositionLabels();
+    processNextLlmInQueue();
   }
 
-  async function processLlmQueue() {
-    if (llmBusy || !llmQueue.length) return;
-    llmBusy = true;
+  async function processNextLlmInQueue() {
+    // Garantía absoluta: NO se consulta la segunda hasta que haya terminado (o se haya cancelado) la primera
+    if (currentLlmTask !== null || !llmQueue.length || el.aiProvider.value === "local") return;
+
     const item = llmQueue.shift();
+    updateQueuePositionLabels();
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 18000);
+    currentLlmTask = { pairKey: item.pairKey, controller };
+
+    const entry = aiAuditCache.get(item.pairKey);
+    if (entry) {
+      entry.status = "in_flight";
+      entry.source = "🧠 Consultando LLM…";
+    }
+    renderRedOverlayList();
+
     try {
       const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
-      el.llmDebugLog.textContent = `[ENVIANDO PROMPT AL LLM Para ${item.pairKey}]\n${prompt}`;
-      const { text, modelName } = await callRealLlmEndpoint(prompt);
+      el.llmDebugLog.textContent = `[CONSULTANDO LLM (1 a 1) · ${item.pairKey} · En cola: ${llmQueue.length}]\n${prompt}`;
+
+      const { text, modelName } = await callRealLlmEndpoint(prompt, controller.signal);
+      clearTimeout(timeoutId);
+
       const cleaned = String(text || "").replace(/```json|```/gi, "").trim();
       const match = cleaned.match(/\{[\s\S]*\}/);
-      const obj = JSON.parse(match ? match[0] : cleaned);
+      if (!match) throw new Error("Respuesta no JSON");
+      const obj = JSON.parse(match[0]);
 
       const vRaw = String(obj.verdict || item.localEval.verdict).toUpperCase();
       let verdict = item.localEval.verdict;
@@ -1501,37 +1578,55 @@ Responde SOLO este JSON válido:
         verdict,
         confidence: conf,
         reason,
-        source: `🧠 ${modelName}`,
+        source: `🤖 ${modelName}`,
         llmDone: true,
         llmTs: Date.now()
       });
 
-      el.llmDebugLog.textContent = `[RESPUESTA ${modelName} · ${new Date().toLocaleTimeString("es-ES")}]\n${JSON.stringify({ verdict, confidence: conf, reason }, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
+      el.llmDebugLog.textContent = `[RESPUESTA ${modelName} · ${new Date().toLocaleTimeString("es-ES")} · Restantes en cola: ${llmQueue.length}]\n${JSON.stringify({ verdict, confidence: conf, reason }, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
+
+      currentLlmTask = null;
       computeProximity();
       render();
-    } catch (e) {
-      // Si el servidor gratuito falla o tiene límite, conservamos limpiamente el diagnóstico del Cerebro CTC Local sin ensuciar la UI
-      const existing = aiAuditCache.get(item.pairKey);
-      if (existing) {
-        existing.llmDone = true;
-        existing.llmTs = Date.now();
-        existing.source = "⚡ CTC Local";
+
+      // Pausa breve de 1.2s antes de disparar el siguiente de la cola
+      setTimeout(processNextLlmInQueue, 1200);
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const wasAborted = controller.signal.aborted;
+      currentLlmTask = null;
+
+      if (!wasAborted) {
+        const existing = aiAuditCache.get(item.pairKey);
+        if (existing) {
+          existing.status = "done";
+          existing.llmDone = true;
+          existing.llmTs = Date.now();
+          existing.source = "⚡ Confirmado CTC Local";
+        }
+        renderRedOverlayList();
       }
-    } finally {
-      setTimeout(() => {
-        llmBusy = false;
-        processLlmQueue();
-      }, 3500); // Pausa de 3.5s entre peticiones LLM para respetar cualquier rate-limit gratuito
+      // Si se abortó porque pasó a verde/naranja, arrancamos inmediatamente el siguiente sin esperar
+      setTimeout(processNextLlmInQueue, wasAborted ? 50 : 1200);
     }
   }
 
   el.btnReauditAll.addEventListener("click", () => {
-    aiAuditCache.clear();
+    if (currentLlmTask) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+    }
     llmQueue.length = 0;
+    aiAuditCache.clear();
     computeProximity();
     render();
   });
   el.enableAiAudit.addEventListener("change", () => {
+    if (!el.enableAiAudit.checked && currentLlmTask) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+      llmQueue.length = 0;
+    }
     computeProximity();
     render();
   });
@@ -2465,6 +2560,8 @@ Responde SOLO este JSON válido:
     const minSpeed = Math.max(10, toNum(el.thSpeed.value) || 100);
     const now = Date.now();
     const activeRedKeys = new Set();
+    const activeLlmCandidateKeys = new Set();
+    const toEnqueueList = [];
 
     trains.forEach(t => {
       t.d = Infinity;
@@ -2528,22 +2625,31 @@ Responde SOLO este JSON válido:
         const pairKey = makePairKey(a.id, b.id);
         let downgradedByAi = false;
         let promotedFrom = null;
+        let localEval = null;
 
         if (el.enableAiAudit.checked) {
-          const localEval = evaluateAlertWithCtcBrain(trailing, leading, d, geomSeverity, minSpeed);
-          const existingAudit = aiAuditCache.get(pairKey);
+          localEval = evaluateAlertWithCtcBrain(trailing, leading, d, geomSeverity, minSpeed);
+          let activeEval = aiAuditCache.get(pairKey);
 
-          // Si ya tenemos respuesta del LLM Neuronal reciente, respetamos su dictamen; si no, usamos el pre-diagnóstico CTC local mientras responde el LLM
-          const activeEval = (existingAudit && existingAudit.llmDone) ? existingAudit : {
-            status: "done",
-            verdict: localEval.verdict,
-            confidence: localEval.confidence,
-            reason: localEval.reason,
-            source: el.aiProvider.value === "local" ? "⚡ CTC Local" : "🧠 Consultando LLM…",
-            llmDone: false,
-            llmTs: 0
-          };
-          aiAuditCache.set(pairKey, activeEval);
+          // ¡IMPORTANTE!: Si el par ya está en cola ('queued'), consultándose ('in_flight') o ya tiene respuesta del LLM ('llmDone'),
+          // NO lo sobreescribimos, para no resetear jamás la consulta en curso
+          if (!activeEval) {
+            activeEval = {
+              status: el.aiProvider.value === "local" ? "done" : "queued",
+              verdict: localEval.verdict,
+              confidence: localEval.confidence,
+              reason: localEval.reason,
+              source: el.aiProvider.value === "local" ? "⚡ CTC Local" : "⏳ En cola LLM",
+              llmDone: el.aiProvider.value === "local",
+              llmTs: 0
+            };
+            aiAuditCache.set(pairKey, activeEval);
+          } else if (!activeEval.llmDone) {
+            // Actualizar solo los datos pre-diagnóstico sin tocar su status ni su posición en la cola
+            activeEval.verdict = localEval.verdict;
+            activeEval.confidence = localEval.confidence;
+            activeEval.reason = localEval.reason;
+          }
 
           if (activeEval.verdict === "COUPLED") {
             continue;
@@ -2616,16 +2722,26 @@ Responde SOLO este JSON válido:
         };
         pairs.push(pairObj);
 
-        // Si la alerta está en el panel superior (inRedPanel) y tenemos habilitado un proveedor LLM neuronal, la encolamos para auditoría profunda
-        if (inRedPanel && el.enableAiAudit.checked && el.aiProvider.value !== "local") {
-          const localEval = evaluateAlertWithCtcBrain(trailing, leading, d, geomSeverity, minSpeed);
-          enqueueLlmAudit(pairObj, localEval);
+        // Solo mantenemos en la cola LLM los pares que realmente están en estado ROJO (o en el panel rojo pendientes de confirmar)
+        // Si un par pasa a naranja normal o verde, NO entra en activeLlmCandidateKeys y su consulta se cancela automáticamente
+        if (inRedPanel && !downgradedByAi && el.enableAiAudit.checked && el.aiProvider.value !== "local") {
+          activeLlmCandidateKeys.add(pairKey);
+          toEnqueueList.push({ pairObj, localEval });
         }
       }
     }
 
     for (const k of redAlertStart.keys()) {
       if (!activeRedKeys.has(k)) redAlertStart.delete(k);
+    }
+
+    // Cancelar de inmediato cualquier consulta en cola o en vuelo cuyo tren haya pasado a verde o naranja
+    syncLlmQueueWithActivePairs(activeLlmCandidateKeys);
+
+    // Encolar ordenados por menor tiempo de impacto (más urgentes primero)
+    toEnqueueList.sort((x, y) => (x.pairObj.impactSec ?? Infinity) - (y.pairObj.impactSec ?? Infinity));
+    for (const item of toEnqueueList) {
+      enqueueLlmAudit(item.pairObj, item.localEval);
     }
 
     trains.forEach(t => {
@@ -2760,7 +2876,9 @@ Responde SOLO este JSON válido:
     if (!el.enableAiAudit.checked) return "";
     const audit = aiAuditCache.get(p.pairKey);
     if (!audit) return "";
-    const srcTag = audit.source ? `<span class="ai-source-tag">${esc(audit.source)}</span>` : "";
+
+    const stCls = audit.status === "in_flight" ? " consulting" : (audit.status === "queued" ? " queued" : "");
+    const srcTag = audit.source ? `<span class="ai-source-tag${stCls}">${esc(audit.source)}</span>` : "";
 
     if (p.downgradedByAi) {
       return `<div class="ai-row"><span class="ai-badge downgraded">🟠 Rebajada de 🔴 Roja a Naranja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
@@ -3060,8 +3178,12 @@ Responde SOLO este JSON válido:
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     trainHistory.clear();
     redAlertStart.clear();
-    aiAuditCache.clear();
+    if (currentLlmTask) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+    }
     llmQueue.length = 0;
+    aiAuditCache.clear();
     selectedPairKey = null;
     selectedTrainIds.clear();
     refresh();
