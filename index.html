@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.37</title>
+<title>Alertas Ferrocarril · v1.38</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -75,7 +75,7 @@
   .stat-pills{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px;width:100%}
   .stat-pill{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:5px 6px;border-radius:7px;background:var(--bg);border:1px solid var(--line);font-size:11.5px;font-weight:600;min-width:0;white-space:nowrap}
 
-  /* Panel flotante superior izquierdo en el mapa para Alertas Rojas */
+  /* Panel flotante superior izquierdo en el mapa para Alertas Rojas (y las auditadas por IA) */
   #redOverlay{
     position:absolute;
     top:12px;
@@ -85,9 +85,9 @@
     border:2px solid var(--red);
     border-radius:10px;
     box-shadow:0 4px 16px rgba(0,0,0,.28);
-    min-width:360px;
-    max-width:610px;
-    max-height:310px;
+    min-width:370px;
+    max-width:640px;
+    max-height:330px;
     display:flex;
     flex-direction:column;
     overflow:hidden;
@@ -130,7 +130,7 @@
     gap:4px;
     padding:6px 8px;
     border-radius:6px;
-    border:1px solid var(--line);
+    border:1.5px solid var(--line);
     cursor:pointer;
     font-weight:600;
     transition:background .15s;
@@ -159,6 +159,32 @@
     font-variant-numeric:tabular-nums;
   }
 
+  /* Estilo para alertas que la geometría marcó como ROJAS pero la IA ha rebajado a NARANJA dentro del mismo panel (sin parpadear) */
+  .ro-item.ai-downgraded{
+    background:rgba(245,158,11,.13);
+    border-color:var(--orange);
+    border-left:5px solid var(--orange);
+    animation:none !important;
+  }
+  .ro-item.ai-downgraded .ro-d{
+    color:#d97706;
+  }
+  .ro-item.ai-downgraded .ro-tti{
+    background:var(--orange);
+    color:#fff;
+  }
+  .ro-item.ai-downgraded .ai-row{
+    background:rgba(245,158,11,.16);
+    border-left-color:#d97706;
+  }
+
+  /* Estilo para alertas que eran VERDES o NARANJAS y han sido ASCENDIDAS a ROJA por la IA */
+  .ro-item.ai-promoted{
+    border-color:var(--red);
+    border-left:5px solid var(--ai);
+    background:rgba(229,57,53,.06);
+  }
+
   /* Etiquetas y dictamen del Auditor IA en las alertas */
   .ai-row{
     display:flex;
@@ -179,7 +205,7 @@
     gap:3px;
     font-size:10px;
     font-weight:800;
-    padding:1.5px 5px;
+    padding:2px 6px;
     border-radius:4px;
     text-transform:uppercase;
     white-space:nowrap;
@@ -188,11 +214,10 @@
   .ai-badge.pending{background:#6d28d9;color:#fff}
   .ai-badge.real{background:#b91c1c;color:#fff}
   .ai-badge.promoted{background:#7c3aed;color:#fff}
-  .ai-badge.doubt{background:#d97706;color:#fff}
-  .ai-badge.dismissed{background:#15803d;color:#fff}
+  .ai-badge.downgraded{background:#d97706;color:#fff}
   .ai-reason{flex:1;overflow:hidden;text-overflow:ellipsis}
 
-  /* Parpadeo intenso en el mapa para alertas rojas que superan el tiempo de persistencia */
+  /* Parpadeo intenso en el mapa SOLO para alertas rojas reales que superan el tiempo de persistencia */
   @keyframes blinkPersistentAlert{
     0%, 100%{
       background:#dc2626;
@@ -451,7 +476,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.37 · IA</span>
+          <span class="ver">v1.38 · IA</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -475,11 +500,11 @@
       </div>
       <label class="chk" style="margin-top:8px">
         <input type="checkbox" id="enableAiAudit" checked>
-        <span>🤖 <b>Auditoría CTC IA activa:</b> filtra falsos positivos (doble composición, apartados, vías opuestas) y detecta falsos negativos (tren parado en vía con impacto &lt;120s)</span>
+        <span>🤖 <b>Auditoría CTC IA activa:</b> mantiene en el panel superior las rojas rebajadas a naranja (sin parpadear) y sube las verdes/naranjas críticas a rojas indicando su origen</span>
       </label>
       <div class="help">
-        • <b>Catálogo Oficial GTFS/Adif:</b> carga los +2.400 códigos de 5 dígitos de estaciones de España.<br>
-        • <b>Anti-Falsos Negativos:</b> eleva a ROJO si un tren a velocidad media se acerca a otro parado en la misma vía con impacto inminente.
+        • <b>Rebajadas a Naranja en panel rojo:</b> si la geometría era roja pero la IA descarta peligro, se pinta en naranja en el panel superior y deja de parpadear.<br>
+        • <b>Ascendidas a Roja:</b> informa si era 🟢 Verde o 🟠 Naranja y la IA la subió a 🔴 Roja.
       </div>
     </fieldset>
 
@@ -520,10 +545,10 @@
   </aside>
 
   <main id="mapWrap">
-    <!-- Panel flotante superior izquierdo: Alertas Rojas -->
+    <!-- Panel flotante superior izquierdo: Alertas Rojas y auditadas por IA -->
     <div id="redOverlay" class="empty">
       <div class="ro-head">
-        <span>🚨 ALERTAS ROJAS POR ALCANCE</span>
+        <span>🚨 ALERTAS ROJAS Y AUDITORÍA IA</span>
         <span id="roCount">0</span>
       </div>
       <div id="redList">
@@ -633,12 +658,9 @@
             <input type="password" id="aiApiKey" placeholder="Pega tu clave gratuita aquí…">
           </div>
           <div class="help" style="margin-top:8px">
-            <b>6 Reglas del Controlador CTC IA:</b><br>
-            1. <b>Doble composición:</b> anula alertas de ramas acopladas (&lt;250m y Δv≤5 km/h).<br>
-            2. <b>Rebase en apartado:</b> detecta tren lento parado en estación siendo adelantado.<br>
-            3. <b>Grafo de estaciones:</b> anula sentidos comerciales opuestos.<br>
-            4. <b>Bifurcación en Y:</b> detecta destinos divergentes.<br>
-            5. <b>Anti-Falso Negativo:</b> sube de Naranja a ROJO si hay un tren parado en vía libre con impacto &lt;120s.
+            <b>Comportamiento visual en el Panel Superior:</b><br>
+            • <b>🟠 Rebajada de Roja a Naranja por IA:</b> se queda en el panel de alertas rojas pintada en naranja y deja de parpadear.<br>
+            • <b>⚡ Subida de Verde/Naranja a Roja por IA:</b> sube al panel de alertas rojas indicando si antes era verde o naranja.
           </div>
           <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
             <span class="sub" id="aiStats">Cargando catálogo Adif…</span>
@@ -661,26 +683,24 @@
     </div>
     <div class="hm-body">
       <p style="margin:0">
-        Esta aplicación combina un <b>motor geométrico sobre las vías reales de Adif</b> con un <b>Auditor Experto de Control de Tráfico Centralizado (CTC)</b> que evita tanto falsos positivos como falsos negativos.
+        Esta aplicación combina un <b>motor geométrico sobre las vías reales de Adif</b> con un <b>Auditor Experto de Control de Tráfico Centralizado (CTC)</b> que muestra en el panel superior todas las decisiones tomadas por la IA.
       </p>
 
-      <div class="hm-box" style="border-left:5px solid #15803d">
-        <div class="hm-box-title">🛡️ Cómo evita los FALSOS POSITIVOS (Anulación inteligente)</div>
+      <div class="hm-box" style="border-left:5px solid #d97706">
+        <div class="hm-box-title">🟠 Rojas Geométricas rebajadas a Naranja por la IA (En el mismo panel superior)</div>
         <div>
+          Cuando la geometría pura detecta una Alerta Roja pero la IA comprueba que <b>no hay riesgo real de colisión</b> (por rebase programado en estación, bifurcación próxima o sentidos comerciales opuestos):
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li><b>Trenes en Doble Composición (Mando Múltiple):</b> Si dos números de tren viajan acoplados a menos de 250 m a la misma velocidad hacia el mismo destino, la IA sabe que son el mismo convoy físico.</li>
-            <li><b>Adelantamiento / Rebase en Estación:</b> Si un Regional/MD está detenido (0 km/h) en una estación intermedia para dejar pasar a un AVE/ALVIA, la IA lo clasifica como rebase programado en vía de apartado.</li>
-            <li><b>Sentidos Comerciales Opuestos y Bifurcaciones:</b> Cruza el orden de las estaciones (Origen → Anterior → Próxima → Destino) para descartar trenes que se cruzan o que toman ramales distintos.</li>
+            <li>La alerta <b>permanece visible en el panel superior de Alertas Rojas</b> para que sepas que existió geométricamente, pero <b>cambia a color Naranja</b>.</li>
+            <li>Si estaba parpadeando por persistencia, <b>deja de parpadear inmediatamente</b>.</li>
           </ul>
         </div>
       </div>
 
       <div class="hm-box" style="border-left:5px solid #7c3aed">
-        <div class="hm-box-title">⚡ Cómo evita los FALSOS NEGATIVOS (Ascenso a Alerta Roja)</div>
+        <div class="hm-box-title">⚡ Verdes o Naranjas ascendidas a ROJA por la IA</div>
         <div>
-          <ul style="margin:4px 0 0;padding-left:18px">
-            <li><b>Tren detenido en plena vía con alcance inminente:</b> Aunque el tren trasero vaya a menos de 100 km/h (por ejemplo, a 80 km/h), si delante hay un tren detenido en la misma vía libre hacia la misma estación y el tiempo hasta el impacto es <b>menor de 120 segundos</b>, la IA <b>asciende automáticamente la alerta de Naranja a ROJA</b>.</li>
-          </ul>
+          Si una situación parecía <b>Naranja</b> (por ir a menos de 100 km/h) o <b>Verde</b> (por tener una sola lectura GPS tras salir de un túnel), pero la IA detecta que van por la misma vía hacia la misma parada con impacto inminente (&lt;120 s), <b>la sube automáticamente al panel de Alertas Rojas</b> indicando claramente si era <b>🟢 Verde</b> o <b>🟠 Naranja</b> antes de la intervención de la IA.
         </div>
       </div>
     </div>
@@ -693,7 +713,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.37";
+  const VERSION = "1.38";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -888,9 +908,8 @@
     return false;
   }
 
-  /* ---------- Diccionario Maestro Oficial de Códigos Adif (Corregido con serie 35xxx de Extremadura/Talavera/Cáceres) ---------- */
+  /* ---------- Diccionario Maestro Oficial de Códigos Adif ---------- */
   const DEFAULT_STATIONS = {
-    // Corredor Madrid - Extremadura (Línea 500 Adif: códigos reales 350xx, 352xx, 354xx, 375xx, 376xx)
     "35001": "Illescas", "35002": "Torrijos", "35003": "Erustes", "35004": "Montearagón",
     "35005": "Talavera de la Reina", "35006": "Oropesa de Toledo", "35007": "Calzada de Oropesa",
     "35008": "Navalmoral de la Mata", "35009": "Casatejada", "35010": "Monfragüe",
@@ -911,7 +930,6 @@
     "37700": "Villanueva de la Serena", "37701": "Don Benito", "37702": "Valdetorres", "37703": "Guareña",
     "37704": "Campanario", "37705": "Castuera", "37706": "Almorchón", "37707": "Cabeza del Buey",
     "37709": "Los Pedroches-Guadalmez", "37711": "Almadenejos-Almadén", "37715": "Brazatortas-Veredas",
-    // Madrid y Corredor Norte
     "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "10002": "Ramón y Cajal",
     "10003": "Mirasierra-Paco de Lucía", "10005": "Pitis", "10007": "Las Rozas", "10010": "Pinar de las Rozas",
     "10100": "Madrid-Nuevos Ministerios", "10101": "Madrid-Sol", "10102": "Madrid-Recoletos", "10103": "Cantoblanco Universidad",
@@ -949,7 +967,6 @@
     "18103": "Vallecas", "18104": "Santa Eugenia", "18105": "Vicálvaro", "18106": "Coslada", "18107": "San Fernando",
     "18108": "Torrejón de Ardoz", "18110": "Alcalá de Henares", "18111": "Alcalá de Henares Universidad",
     "18112": "Meco", "18113": "Azuqueca", "18114": "Guadalajara",
-    // Galicia y Noroeste
     "20100": "Puebla de Sanabria", "20104": "A Gudiña", "20109": "Vilar de Barrio", "20200": "Ourense-San Francisco",
     "20300": "O Carballiño", "20309": "Lalín", "21004": "Ordes", "21007": "Cerceda-Meirama", "21010": "Uxes",
     "22002": "Curtis", "22006": "Guitiriz", "22010": "Rábade", "22100": "Lugo", "22104": "Sarria",
@@ -963,7 +980,6 @@
     "31200": "Ourense", "31300": "Ferrol", "31400": "Santiago de Compostela", "31412": "A Coruña",
     "32004": "Cantalapiedra", "32008": "Salamanca", "32009": "Salamanca-La Alamedilla",
     "33004": "Ciudad Rodrigo", "33008": "Fuentes de Oñoro",
-    // Andalucía y Sur
     "43000": "San Juan del Puerto", "43002": "Niebla", "43003": "Huelva", "43005": "La Palma del Condado",
     "43008": "Carrión de los Céspedes", "43011": "Benacazón", "43013": "Sanlúcar la Mayor", "43019": "Camas",
     "43100": "Calañas", "43105": "Valdelamusa", "43108": "Jabugo-Galaroza", "43112": "Fregenal de la Sierra",
@@ -990,7 +1006,6 @@
     "55025": "Cortes de la Frontera", "55028": "Gaucín", "55032": "Jimena de la Frontera", "55035": "San Roque-La Línea",
     "55037": "Los Barrios", "55104": "Algeciras", "56106": "Guadix", "56112": "Fiñana", "56118": "Gádor",
     "56312": "Almería", "05000": "Granada", "05475": "Loja", "05482": "Puente Genil-Herrera", "05485": "Villanueva de Córdoba-Los Pedroches",
-    // Corredor Centro-Sur-Levante
     "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "60001": "Madrid-Puerta de Atocha",
     "60100": "Aranjuez", "60103": "Castillejo-Añover", "60106": "Villasequilla", "60109": "Tembleque",
     "60111": "El Romeral", "60113": "Villacañas", "60115": "Quero", "60200": "Ciudad Real",
@@ -1025,7 +1040,6 @@
     "67100": "Segorbe-Ciudad", "67105": "Barracas", "67110": "Mora de Rubielos", "67115": "Sarrión",
     "67200": "Teruel", "67205": "Cella", "67210": "Monreal del Campo", "67212": "Caminreal-Fuentes Claras",
     "67215": "Calamocha", "67220": "Cariñena",
-    // Corredor Noreste, Aragón, Navarra, Rioja y Cataluña
     "70100": "Yunquera de Henares", "70103": "Humanes de Mohernando", "70106": "Jadraque", "70110": "Sigüenza",
     "70115": "Medinaceli", "70118": "Arcos de Jalón", "70122": "Ariza", "70125": "Alhama de Aragón",
     "70127": "Ateca", "70200": "Guadalajara-Yebes", "70400": "Soria", "70600": "Calatayud",
@@ -1203,75 +1217,72 @@
     if (t === "AVE" || t === "AVLO" || t === "EUROMED") return 4;
     if (t === "ALVIA" || t === "AVANT" || t === "INTERCITY" || t === "ALTARIA" || t === "TALGO") return 3;
     if (t === "MD" || t === "REG.EXP" || t === "REGIONAL") return 2;
-    return 1; // Cercanías
+    return 1;
   }
 
-  // Analiza cualquier par (rojo o naranja) aplicando las 6 reglas de un controlador del CTC
-  function evaluateAlertWithCtcBrain(trailing, leading, distKm) {
+  // Analiza cualquier par aplicando las reglas del controlador del CTC y distinguiendo el estado geométrico previo
+  function evaluateAlertWithCtcBrain(trailing, leading, distKm, geomSeverity, minSpeedKmh) {
     const infoT = trailing._info || trainInfo(trailing);
     const infoL = leading._info || trainInfo(leading);
     const vT = isNum(trailing.calcSpeed) ? trailing.calcSpeed : 0;
     const vL = isNum(leading.calcSpeed) ? leading.calcSpeed : 0;
     const dv = vT - vL;
 
-    // REGLA 1 (Anti-Falso Positivo): Trenes acoplados en Doble Composición (Mando Múltiple)
-    // Si van pegados (< 250 m), a la misma velocidad (|dv| <= 5 km/h) y comparten próxima parada o destino
+    // 1. Doble composición acoplada en mando múltiple
     if (distKm <= 0.25 && Math.abs(dv) <= 5 && ((infoT.dest && infoT.dest === infoL.dest) || (infoT.sig && infoT.sig === infoL.sig))) {
       return {
-        verdict: "DESCARTADA",
+        verdict: "COUPLED",
         confidence: 99,
         reason: `Doble composición acoplada en mando múltiple (${Math.round(distKm * 1000)}m · Δv=${Math.abs(dv)} km/h)`
       };
     }
 
-    // REGLA 2 (Anti-Falso Positivo): Sentidos comerciales opuestos verificando permutación de estaciones
+    // 2. Sentidos comerciales opuestos verificando permutación de estaciones
     if (infoT.orig && infoT.dest && infoL.orig && infoL.dest) {
       if (infoT.orig === infoL.dest || infoT.dest === infoL.orig) {
-        return { verdict: "DESCARTADA", confidence: 99, reason: `Sentido comercial opuesto (${infoT.orig}→${infoT.dest} vs ${infoL.orig}→${infoL.dest})` };
+        return { verdict: "DOWNGRADED_ORANGE", confidence: 99, reason: `Sentido comercial opuesto (${infoT.orig}→${infoT.dest} vs ${infoL.orig}→${infoL.dest})` };
       }
       if (infoT.sig && infoL.ant && infoT.sig === infoL.ant) {
-        return { verdict: "DESCARTADA", confidence: 98, reason: `Se cruzan entre ${infoL.ant} y ${infoT.sig} en vías contrarias` };
+        return { verdict: "DOWNGRADED_ORANGE", confidence: 98, reason: `Se cruzan entre ${infoL.ant} y ${infoT.sig} en vías contrarias` };
       }
     }
 
-    // REGLA 3 (Anti-Falso Positivo): Comprobación de progresión geométrica hacia el destino de cada tren
+    // 3. Progresión geométrica opuesta hacia destinos lejanos
     const destCoordT = findStationCoords(infoT.dest) || findStationCoords(infoT.sig);
     const destCoordL = findStationCoords(infoL.dest) || findStationCoords(infoL.sig);
     if (destCoordT && destCoordL && haversine(destCoordT[0], destCoordT[1], destCoordL[0], destCoordL[1]) > 40) {
-      // Si sus destinos están a más de 40 km y los vectores hacia sus respectivos destinos son opuestos (< -0.25)
       const kLon = Math.cos(((trailing.lat + leading.lat) / 2) * Math.PI / 180);
       const vTx = (destCoordT[1] - trailing.lon) * kLon, vTy = destCoordT[0] - trailing.lat;
       const vLx = (destCoordL[1] - leading.lon) * kLon, vLy = destCoordL[0] - leading.lat;
       const mT = Math.hypot(vTx, vTy), mL = Math.hypot(vLx, vLy);
       if (mT > 0.1 && mL > 0.1 && ((vTx * vLx + vTy * vLy) / (mT * mL)) < -0.25) {
-        return { verdict: "DESCARTADA", confidence: 95, reason: ` Progresión opuesta hacia destinos contrarios (${infoT.dest} vs ${infoL.dest})` };
+        return { verdict: "DOWNGRADED_ORANGE", confidence: 95, reason: `Progresión opuesta hacia destinos contrarios (${infoT.dest} vs ${infoL.dest})` };
       }
     }
 
-    // REGLA 4 (Anti-Falso Positivo): Núcleos de Cercanías incompatibles
+    // 4. Núcleos de Cercanías incompatibles
     const rawT = trailing.raw || {}, rawL = leading.raw || {};
     const nucT = String(rawT.nucleo ?? rawT.idNucleo ?? "").trim();
     const nucL = String(rawL.nucleo ?? rawL.idNucleo ?? "").trim();
     if (nucT && nucL && nucT !== nucL) {
-      return { verdict: "DESCARTADA", confidence: 99, reason: `Núcleos de Cercanías distintos (${nucT} vs ${nucL})` };
+      return { verdict: "DOWNGRADED_ORANGE", confidence: 99, reason: `Núcleos de Cercanías distintos (${nucT} vs ${nucL})` };
     }
 
-    // REGLA 5 (Anti-Falso Positivo): Rebase Técnico / Adelantamiento en vía de apartado de una estación
-    // Si el delantero está detenido (<= 3 km/h) en una estación conocida y el trasero es de rango superior (ej. AVE/ALVIA adelantando a un Regional/MD)
+    // 5. Rebase Técnico / Adelantamiento en estación o parada comercial controlada
     const rankT = getCommercialRank(trailing.tipo);
     const rankL = getCommercialRank(leading.tipo);
     if (vL <= 3 && isNearAnyKnownStation(leading.lat, leading.lon, 0.7)) {
       const stName = infoL.sig || infoL.ant || "estación intermedia";
       if (rankT > rankL) {
         return {
-          verdict: "DESCARTADA",
+          verdict: "DOWNGRADED_ORANGE",
           confidence: 92,
           reason: `Rebase programado: ${leading.tipo} apartado en ${stName} para paso de ${trailing.tipo}`
         };
       }
       if (distKm > 2.2) {
         return {
-          verdict: "DUDOSA",
+          verdict: "DOWNGRADED_ORANGE",
           confidence: 85,
           reason: `Delantero realizando parada comercial (0 km/h) en ${stName} a ${fmtKm(distKm)}`
         };
@@ -1281,15 +1292,36 @@
     const linT = String(rawT.linea ?? rawT.lineaComercial ?? rawT.Línea ?? "").trim().toUpperCase();
     const linL = String(rawL.linea ?? rawL.lineaComercial ?? rawL.Línea ?? "").trim().toUpperCase();
 
-    // REGLA 6 (Anti-Falso Negativo): Detección de alcance inminente en plena vía aunque vTrail < umbral 100 km/h
+    // 6. Bifurcación en Y (destinos y próximas paradas divergentes) -> Si era roja geométrica, la IA la rebaja a naranja en el panel superior
+    if (infoT.dest && infoL.dest && infoT.dest !== infoL.dest && infoT.sig && infoL.sig && infoT.sig !== infoL.sig) {
+      return {
+        verdict: "DOWNGRADED_ORANGE",
+        confidence: 82,
+        reason: `Próximas paradas distintas (${infoT.sig} vs ${infoL.sig}); probable bifurcación de vía`
+      };
+    }
+
+    // 7. Anti-Falsos Negativos: Ascenso a ROJA desde Verde o Naranja
     const ttiSec = dv > 0 ? (distKm / dv) * 3600 : Infinity;
     const sameCorridor = (infoT.sig && infoT.sig === infoL.sig) || (infoT.dest && infoT.dest === infoL.dest) || (linT && linT === linL);
-    if (!trailing.isFast && vT >= 45 && dv >= 25 && ttiSec <= 120 && distKm <= 2.8 && sameCorridor && !isNearAnyKnownStation(leading.lat, leading.lon, 0.6)) {
-      return {
-        verdict: "PROMOTED_RED",
-        confidence: 94,
-        reason: `¡Falso negativo evitado! Alcance en ${fmtImpactTime(ttiSec)} sobre tren a ${vL} km/h hacia ${infoT.sig || infoT.dest}`
-      };
+
+    if (geomSeverity !== "red" && sameCorridor) {
+      // Caso A: Era considerado VERDE para alta velocidad porque solo llevaba 1 lectura GPS (> minSpeedKmh) tras salir de túnel/estación
+      if (trailing.speedMeasures === 1 && vT > minSpeedKmh && dv >= 15 && distKm <= 3.5) {
+        return {
+          verdict: "PROMOTED_FROM_GREEN",
+          confidence: 91,
+          reason: `Era 🟢 Verde (1 sola lectura GPS tras túnel/salida) pero alcanza a +${dv} km/h hacia ${infoT.sig || infoT.dest}`
+        };
+      }
+      // Caso B: Era NARANJA (porque vT < 100 km/h) pero hay alcance inminente (< 120s) sobre tren lento/parado en plena vía
+      if (vT >= 45 && dv >= 25 && ttiSec <= 120 && distKm <= 2.8 && !isNearAnyKnownStation(leading.lat, leading.lon, 0.6)) {
+        return {
+          verdict: "PROMOTED_FROM_ORANGE",
+          confidence: 94,
+          reason: `Era 🟠 Naranja (${vT} km/h) pero impacta en ${fmtImpactTime(ttiSec)} con tren a ${vL} km/h hacia ${infoT.sig || infoT.dest}`
+        };
+      }
     }
 
     // Confirmaciones de riesgo real
@@ -1312,14 +1344,6 @@
         verdict: "REAL",
         confidence: 92,
         reason: `Comparten línea ${linT} en el mismo sentido; diferencia de +${dv} km/h`
-      };
-    }
-
-    if (infoT.dest && infoL.dest && infoT.dest !== infoL.dest && infoT.sig && infoL.sig && infoT.sig !== infoL.sig) {
-      return {
-        verdict: "DUDOSA",
-        confidence: 80,
-        reason: `Próximas paradas distintas (${infoT.sig} vs ${infoL.sig}); probable bifurcación`
       };
     }
 
@@ -1703,7 +1727,7 @@
     updateTrackStatus();
   });
 
-  /* ---------- Estado de Trenes y Descarga Automática del Dataset Oficial GTFS/Adif (+2.400 estaciones) ---------- */
+  /* ---------- Estado de Trenes y Descarga Automática del Dataset Oficial GTFS/Adif ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
   const redAlertStart = new Map();
@@ -1731,7 +1755,6 @@
   }
   Object.entries(DEFAULT_STATIONS).forEach(([k, v]) => registerStation(k, v));
 
-  // Descarga el listado oficial completo de estaciones de Adif/Renfe (con todos los códigos de 5 dígitos como 35400, 35206, etc.)
   async function loadOfficialAdifStations() {
     const CACHE_KEY = "adifFullCatalog_v2";
     try {
@@ -1743,7 +1766,6 @@
         return;
       }
 
-      // 1. Intentar desde datasets abiertos de estaciones de Renfe/Adif en GitHub CDN (formato CSV/JSON GTFS stops)
       const GTFS_STOP_URLS = [
         "https://raw.githubusercontent.com/ialonso/renfe-gtfs/master/stops.txt",
         "https://raw.githubusercontent.com/enchufado/gtfs-renfe/master/stops.txt",
@@ -1781,7 +1803,6 @@
         } catch (e) {}
       }
 
-      // 2. Complementar con consulta Overpass de nodos ferroviarios en España
       if (list.length < 300) {
         const query = '[out:json][timeout:30][bbox:35.8,-9.5,43.8,3.4];node["railway"~"^(station|halt)$"]["name"];out body qt;';
         for (const ep of OVERPASS) {
@@ -2328,20 +2349,18 @@
         const vLead  = isNum(leading.calcSpeed)  ? leading.calcSpeed  : 0;
         const closingSpeed = vTrail - vLead;
 
-        let pairSeverity = "orange";
+        // Estado determinado puramente por las reglas geométricas
+        const geomSeverity = (trailing.isFast && closingSpeed >= 0) ? "red" : "orange";
+        let pairSeverity = geomSeverity;
+        let inRedPanel = (geomSeverity === "red");
         let impactSec = closingSpeed > 0 ? (d / closingSpeed) * 3600 : Infinity;
 
-        if (trailing.isFast && closingSpeed >= 0) {
-          pairSeverity = "red";
-        }
-
         const pairKey = makePairKey(a.id, b.id);
-        let dismissedByAi = false;
-        let promotedByAi = false;
+        let downgradedByAi = false;
+        let promotedFrom = null; // 'green' | 'orange' | null
 
-        // AUDITORÍA DEL CEREBRO CTC IA (Tanto para Rojas como para Naranjas candidatos a Falso Negativo)
         if (el.enableAiAudit.checked) {
-          const ctcEval = evaluateAlertWithCtcBrain(trailing, leading, d);
+          const ctcEval = evaluateAlertWithCtcBrain(trailing, leading, d, geomSeverity, minSpeed);
           aiAuditCache.set(pairKey, {
             status: "done",
             verdict: ctcEval.verdict,
@@ -2350,21 +2369,32 @@
             ts: now
           });
 
-          if (ctcEval.verdict === "DESCARTADA" && ctcEval.confidence >= 75) {
-            // Si es doble composición acoplada, ni siquiera es alerta naranja: son el mismo tren
-            if (ctcEval.reason.startsWith("Doble composición")) continue;
+          if (ctcEval.verdict === "COUPLED") {
+            continue;
+          }
+
+          if (geomSeverity === "red" && ctcEval.verdict === "DOWNGRADED_ORANGE") {
+            // Se catalogó como ROJA por geometría, pero la IA ve poco probable la colisión:
+            // Permanece en el panel de rojas (inRedPanel = true), pero pasa a color NARANJA y deja de parpadear
             pairSeverity = "orange";
-            dismissedByAi = true;
-          } else if (pairSeverity === "orange" && ctcEval.verdict === "PROMOTED_RED") {
+            inRedPanel = true;
+            downgradedByAi = true;
+          } else if (geomSeverity === "orange" && ctcEval.verdict === "PROMOTED_FROM_GREEN") {
             pairSeverity = "red";
-            promotedByAi = true;
+            inRedPanel = true;
+            promotedFrom = "green";
+          } else if (geomSeverity === "orange" && ctcEval.verdict === "PROMOTED_FROM_ORANGE") {
+            pairSeverity = "red";
+            inRedPanel = true;
+            promotedFrom = "orange";
           }
         }
 
         const aiAudit = el.enableAiAudit.checked ? aiAuditCache.get(pairKey) : null;
         let redStartMs = null;
 
-        if (pairSeverity === "red") {
+        // Solo acumula tiempo de persistencia (parpadeo) si es realmente ROJA y NO ha sido rebajada a naranja por la IA
+        if (pairSeverity === "red" && !downgradedByAi) {
           activeRedKeys.add(pairKey);
           if (!redAlertStart.has(pairKey)) {
             redAlertStart.set(pairKey, now);
@@ -2406,7 +2436,11 @@
           }
         }
 
-        const pairObj = { a, b, trailing, leading, hasOrder: true, d, pathCoords, severity: pairSeverity, impactSec, pairKey, redStartMs, dismissedByAi, promotedByAi };
+        const pairObj = {
+          a, b, trailing, leading, hasOrder: true, d, pathCoords,
+          geomSeverity, severity: pairSeverity, inRedPanel,
+          impactSec, pairKey, redStartMs, downgradedByAi, promotedFrom
+        };
         pairs.push(pairObj);
       }
     }
@@ -2548,25 +2582,29 @@
     const audit = aiAuditCache.get(p.pairKey);
     if (!audit) return "";
 
-    if (audit.verdict === "DESCARTADA") {
-      return `<div class="ai-row"><span class="ai-badge dismissed">🛡️ IA: Falso Positivo (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+    if (p.downgradedByAi) {
+      return `<div class="ai-row"><span class="ai-badge downgraded">🟠 Rebajada de 🔴 Roja a Naranja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
     }
-    if (audit.verdict === "PROMOTED_RED") {
-      return `<div class="ai-row"><span class="ai-badge promoted">⚡ IA: Ascendida a Roja (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+    if (p.promotedFrom === "green") {
+      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟢 Verde a 🔴 Roja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
     }
-    if (audit.verdict === "DUDOSA") {
-      return `<div class="ai-row"><span class="ai-badge doubt">⚠️ IA: Precaución (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+    if (p.promotedFrom === "orange") {
+      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟠 Naranja a 🔴 Roja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
     }
     return `<div class="ai-row"><span class="ai-badge real">✅ IA: Riesgo Confirmado (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
   }
 
   function renderRedOverlayList() {
-    const redPairs = [];
+    const redPanelPairs = [];
     pairs.forEach((p, idx) => {
-      if (p.severity === "red") redPairs.push({ p, idx });
+      if (p.inRedPanel) redPanelPairs.push({ p, idx });
     });
 
-    redPairs.sort((a, b) => {
+    // Ordenar: primero las ROJAS activas (de menor a mayor tiempo de impacto) y debajo las rebajadas a NARANJA por la IA
+    redPanelPairs.sort((a, b) => {
+      const aDown = a.p.downgradedByAi ? 1 : 0;
+      const bDown = b.p.downgradedByAi ? 1 : 0;
+      if (aDown !== bDown) return aDown - bDown;
       const tA = isNum(a.p.impactSec) ? a.p.impactSec : Infinity;
       const tB = isNum(b.p.impactSec) ? b.p.impactSec : Infinity;
       if (tA !== tB) return tA - tB;
@@ -2577,28 +2615,34 @@
     const now = Date.now();
     let anyPersistent = false;
 
-    el.roCount.textContent = redPairs.length;
-    if (!redPairs.length) {
+    el.roCount.textContent = redPanelPairs.length;
+    if (!redPanelPairs.length) {
       el.redOverlay.classList.add("empty");
       el.redOverlay.classList.remove("has-persistent");
       el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
     } else {
       el.redOverlay.classList.remove("empty");
-      el.redList.innerHTML = redPairs.map(({ p, idx }) => {
-        const elapsedSec = p.redStartMs ? (now - p.redStartMs) / 1000 : 0;
-        const isPersistent = elapsedSec >= persistThresholdSec;
+      el.redList.innerHTML = redPanelPairs.map(({ p, idx }) => {
+        const isDowngraded = !!p.downgradedByAi;
+        const isPromoted = !!p.promotedFrom;
+        const elapsedSec = (!isDowngraded && p.redStartMs) ? (now - p.redStartMs) / 1000 : 0;
+        // Si fue rebajada a naranja por la IA, NUNCA parpadea
+        const isPersistent = !isDowngraded && elapsedSec >= persistThresholdSec;
         if (isPersistent) anyPersistent = true;
         const isSel = selectedPairKey && p.pairKey === selectedPairKey;
 
         const ttiBadge = p.impactSec !== null
-          ? `<span class="ro-tti" title="Tiempo estimado hasta el impacto manteniendo velocidades actuales">⏱ Impacto: ${esc(fmtImpactTime(p.impactSec))}</span>`
+          ? `<span class="ro-tti" title="Tiempo estimado manteniendo velocidades actuales">⏱ ${isDowngraded ? "Alcance nominal" : "Impacto"}: ${esc(fmtImpactTime(p.impactSec))}</span>`
           : "";
         const persBadge = isPersistent
           ? `<span class="ro-pers" title="Esta alerta roja lleva más de ${persistThresholdSec} s activa de forma continua">🔥 ${esc(fmtDuration(elapsedSec))}</span>`
           : "";
 
-        return `<div class="ro-item${isPersistent ? " persistent-blink" : ""}${isSel ? " active-pair" : ""}" data-i="${idx}">` +
-          `<div class="ro-top"><span>🔴 ${formatPairText(p)}</span><span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span></div>` +
+        const dotIcon = isDowngraded ? "🟠" : "🔴";
+        const extraCls = (isDowngraded ? " ai-downgraded" : "") + (isPromoted ? " ai-promoted" : "") + (isPersistent ? " persistent-blink" : "") + (isSel ? " active-pair" : "");
+
+        return `<div class="ro-item${extraCls}" data-i="${idx}">` +
+          `<div class="ro-top"><span>${dotIcon} ${formatPairText(p)}</span><span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span></div>` +
           formatAiRowHtml(p) +
           `</div>`;
       }).join("");
@@ -2695,21 +2739,22 @@
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
     el.nTotal.textContent = visible + " / " + trains.length;
 
+    // 1. Panel superior del mapa: todas las alertas con inRedPanel === true (rojas reales, ascendidas por IA y rojas geométricas rebajadas a naranja por IA)
     renderRedOverlayList();
 
-    const orangePairs = [];
+    // 2. Panel lateral izquierdo: solo las naranjas puras que no pertenecen al panel superior de rojas
+    const orangeOnlyPairs = [];
     pairs.forEach((p, idx) => {
-      if (p.severity !== "red") orangePairs.push({ p, idx });
+      if (!p.inRedPanel) orangeOnlyPairs.push({ p, idx });
     });
 
-    if (!orangePairs.length) {
+    if (!orangeOnlyPairs.length) {
       el.pairs.innerHTML = '<div class="sub">Ningún par en precaución (amarillo/naranja).</div>';
     } else {
-      el.pairs.innerHTML = orangePairs.slice(0, 100).map(({ p, idx }) => {
+      el.pairs.innerHTML = orangeOnlyPairs.slice(0, 100).map(({ p, idx }) => {
         const isSel = selectedPairKey && p.pairKey === selectedPairKey;
         return `<div class="pair${isSel ? " active-pair" : ""}" data-i="${idx}">` +
           `<div class="pair-main"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>` +
-          (p.dismissedByAi ? formatAiRowHtml(p) : "") +
           `</div>`;
       }).join("");
     }
