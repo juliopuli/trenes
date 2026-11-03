@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.38</title>
+<title>Alertas Ferrocarril · v1.39</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -86,8 +86,8 @@
     border-radius:10px;
     box-shadow:0 4px 16px rgba(0,0,0,.28);
     min-width:370px;
-    max-width:640px;
-    max-height:330px;
+    max-width:650px;
+    max-height:340px;
     display:flex;
     flex-direction:column;
     overflow:hidden;
@@ -215,7 +215,33 @@
   .ai-badge.real{background:#b91c1c;color:#fff}
   .ai-badge.promoted{background:#7c3aed;color:#fff}
   .ai-badge.downgraded{background:#d97706;color:#fff}
+  .ai-source-tag{
+    font-size:9.5px;
+    font-weight:700;
+    padding:1px 4px;
+    border-radius:3px;
+    background:rgba(0,0,0,.12);
+    color:inherit;
+    margin-left:auto;
+    flex-shrink:0;
+  }
   .ai-reason{flex:1;overflow:hidden;text-overflow:ellipsis}
+
+  /* Inspector de Prompt y Respuesta LLM en vivo */
+  .llm-log-box{
+    margin-top:8px;
+    padding:6px 8px;
+    border-radius:6px;
+    background:var(--bg);
+    border:1px solid var(--line);
+    font-family:monospace;
+    font-size:10.5px;
+    max-height:130px;
+    overflow-y:auto;
+    white-space:pre-wrap;
+    color:var(--muted);
+    line-height:1.35;
+  }
 
   /* Parpadeo intenso en el mapa SOLO para alertas rojas reales que superan el tiempo de persistencia */
   @keyframes blinkPersistentAlert{
@@ -311,7 +337,7 @@
     border-radius:12px;
     box-shadow:0 6px 24px rgba(0,0,0,.28);
     padding:12px;
-    min-width:265px;
+    min-width:320px;
     display:none;
     z-index:1002;
   }
@@ -476,14 +502,14 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.38 · IA</span>
+          <span class="ver">v1.39 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
 
     <fieldset>
-      <legend>Reglas de alerta + Auditor CTC IA</legend>
+      <legend>Reglas de alerta + Auditor Híbrido IA</legend>
       <div class="row">
         <div>
           <label for="thOrange" title="Distancia de seguridad medida siguiendo las curvas reales de la vía">Distancia &lt; (km)</label>
@@ -500,7 +526,7 @@
       </div>
       <label class="chk" style="margin-top:8px">
         <input type="checkbox" id="enableAiAudit" checked>
-        <span>🤖 <b>Auditoría CTC IA activa:</b> mantiene en el panel superior las rojas rebajadas a naranja (sin parpadear) y sube las verdes/naranjas críticas a rojas indicando su origen</span>
+        <span>🤖 <b>Auditoría Híbrida (Reglas CTC + LLM Neuronal):</b> analiza cada alerta crítica con pre-filtro instantáneo y consulta LLM con cola antispam</span>
       </label>
       <div class="help">
         • <b>Rebajadas a Naranja en panel rojo:</b> si la geometría era roja pero la IA descarta peligro, se pinta en naranja en el panel superior y deja de parpadear.<br>
@@ -639,33 +665,31 @@
         </div>
       </div>
 
-      <!-- 5. Configuración del Motor de IA -->
+      <!-- 5. Configuración del Motor de IA e Inspector de Prompts -->
       <div class="fl-wrap">
-        <button class="fl-btn ai-btn" data-pop="popAi" title="Configurar Auditor CTC IA">
+        <button class="fl-btn ai-btn" data-pop="popAi" title="Configurar Motor LLM y ver Prompts enviados">
           <span>🤖</span>
-          <span class="lbl" id="lblAiProvider">IA: Experto CTC</span>
+          <span class="lbl" id="lblAiProvider">IA: Híbrido + LLM</span>
         </button>
-        <div class="fl-pop" id="popAi" style="min-width:305px">
-          <div class="fl-title">🤖 Cerebro CTC de Inteligencia Artificial</div>
-          <label for="aiProvider" style="margin-top:0">Motor de análisis</label>
+        <div class="fl-pop" id="popAi" style="min-width:340px">
+          <div class="fl-title">🤖 Arquitectura IA (Reglas CTC + LLM Real)</div>
+          <label for="aiProvider" style="margin-top:0">Proveedor LLM Neuronal</label>
           <select id="aiProvider">
-            <option value="local" selected>⚡ Motor Experto CTC Adif (Instantáneo · 0 errores)</option>
-            <option value="gemini">Google Gemini 2.5 Flash (+ Experto CTC)</option>
-            <option value="groq">Groq · Llama 3.3 70B (+ Experto CTC)</option>
+            <option value="pollinations" selected>🌐 Pollinations OpenAI (GPT-4o-mini Gratis con Cola Antispam)</option>
+            <option value="gemini">✨ Google Gemini 2.5 Flash (Con tu API Key gratis)</option>
+            <option value="groq">⚡ Groq · Llama 3.3 70B (Con tu API Key gratis)</option>
+            <option value="local">🛡️ Solo Reglas CTC Locales (Sin llamadas externas)</option>
           </select>
           <div id="aiKeyWrap" style="display:none;margin-top:6px">
-            <label for="aiApiKey">API Key gratuita (guardada en tu navegador)</label>
-            <input type="password" id="aiApiKey" placeholder="Pega tu clave gratuita aquí…">
-          </div>
-          <div class="help" style="margin-top:8px">
-            <b>Comportamiento visual en el Panel Superior:</b><br>
-            • <b>🟠 Rebajada de Roja a Naranja por IA:</b> se queda en el panel de alertas rojas pintada en naranja y deja de parpadear.<br>
-            • <b>⚡ Subida de Verde/Naranja a Roja por IA:</b> sube al panel de alertas rojas indicando si antes era verde o naranja.
+            <label for="aiApiKey">API Key gratuita (guardada solo en tu navegador)</label>
+            <input type="password" id="aiApiKey" placeholder="Pega tu API Key de Gemini o Groq…">
           </div>
           <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
             <span class="sub" id="aiStats">Cargando catálogo Adif…</span>
-            <button type="button" class="sm" id="btnReauditAll">Re-evaluar</button>
+            <button type="button" class="sm" id="btnReauditAll">Forzar análisis LLM</button>
           </div>
+          <label style="margin-top:8px">Último Prompt enviado y respuesta del LLM:</label>
+          <div class="llm-log-box" id="llmDebugLog">Esperando la primera alerta en el panel superior para enviar el prompt al LLM…</div>
         </div>
       </div>
     </div>
@@ -678,12 +702,12 @@
 <div id="helpModal">
   <div class="hm-card">
     <div class="hm-head">
-      <span>❓ ¿Cómo funciona el radar + Cerebro CTC IA?</span>
+      <span>❓ ¿Cómo funciona el radar + Auditor Híbrido LLM?</span>
       <button class="hm-close" id="btnCloseHelp" title="Cerrar">×</button>
     </div>
     <div class="hm-body">
       <p style="margin:0">
-        Esta aplicación combina un <b>motor geométrico sobre las vías reales de Adif</b> con un <b>Auditor Experto de Control de Tráfico Centralizado (CTC)</b> que muestra en el panel superior todas las decisiones tomadas por la IA.
+        Esta aplicación utiliza una <b>arquitectura de IA en 2 capas</b>: un <b>Sistema Experto CTC Local</b> (que pre-evalúa las alertas en 0 ms) y un <b>Modelo de Lenguaje Neuronal (LLM) con cola antispam</b> que audita las alertas del panel superior analizando las estaciones y rutas de España.
       </p>
 
       <div class="hm-box" style="border-left:5px solid #d97706">
@@ -713,7 +737,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.38";
+  const VERSION = "1.39";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1095,7 +1119,7 @@
     interval: $("interval"), btnResetView: $("btnResetView"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
     thOrange: $("thOrange"), thSpeed: $("thSpeed"), thPersist: $("thPersist"),
     enableAiAudit: $("enableAiAudit"), aiProvider: $("aiProvider"), aiKeyWrap: $("aiKeyWrap"), aiApiKey: $("aiApiKey"),
-    lblAiProvider: $("lblAiProvider"), aiStats: $("aiStats"), btnReauditAll: $("btnReauditAll"),
+    lblAiProvider: $("lblAiProvider"), aiStats: $("aiStats"), btnReauditAll: $("btnReauditAll"), llmDebugLog: $("llmDebugLog"),
     showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"), showOrmTiles: $("showOrmTiles"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
@@ -1187,22 +1211,24 @@
   };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Cerebro Experto del CTC de Adif (Anti Falsos Positivos y Anti Falsos Negativos) ---------- */
+  /* ---------- Arquitectura IA de 2 Capas: (1) Reglas CTC Instantáneas + (2) LLM Neuronal Real con Cola Antispam ---------- */
   const aiAuditCache = new Map();
+  const llmQueue = [];
+  let llmBusy = false;
 
   try {
     const savedProv = localStorage.getItem("aiProviderRenfe");
     const savedKey  = localStorage.getItem("aiApiKeyRenfe");
-    if (savedProv && ["local", "gemini", "groq"].includes(savedProv)) el.aiProvider.value = savedProv;
+    if (savedProv && ["pollinations", "gemini", "groq", "local"].includes(savedProv)) el.aiProvider.value = savedProv;
     if (savedKey) el.aiApiKey.value = savedKey;
   } catch (e) {}
 
   function syncAiProviderUi() {
     const prov = el.aiProvider.value;
-    el.aiKeyWrap.style.display = prov === "local" ? "none" : "block";
-    el.lblAiProvider.textContent = prov === "local"
-      ? "IA: Experto CTC"
-      : (prov === "gemini" ? "IA: Gemini Flash" : "IA: Groq Llama 3.3");
+    el.aiKeyWrap.style.display = (prov === "gemini" || prov === "groq") ? "block" : "none";
+    el.lblAiProvider.textContent = prov === "pollinations"
+      ? "IA: GPT-4o-mini (LLM)"
+      : (prov === "gemini" ? "IA: Gemini Flash" : (prov === "groq" ? "IA: Groq Llama 3.3" : "IA: Reglas CTC"));
     try {
       localStorage.setItem("aiProviderRenfe", prov);
       localStorage.setItem("aiApiKeyRenfe", el.aiApiKey.value.trim());
@@ -1220,7 +1246,7 @@
     return 1;
   }
 
-  // Analiza cualquier par aplicando las reglas del controlador del CTC y distinguiendo el estado geométrico previo
+  // CAPA 1: Pre-evaluación instantánea por Reglas del CTC (0 ms)
   function evaluateAlertWithCtcBrain(trailing, leading, distKm, geomSeverity, minSpeedKmh) {
     const infoT = trailing._info || trainInfo(trailing);
     const infoL = leading._info || trainInfo(leading);
@@ -1228,7 +1254,6 @@
     const vL = isNum(leading.calcSpeed) ? leading.calcSpeed : 0;
     const dv = vT - vL;
 
-    // 1. Doble composición acoplada en mando múltiple
     if (distKm <= 0.25 && Math.abs(dv) <= 5 && ((infoT.dest && infoT.dest === infoL.dest) || (infoT.sig && infoT.sig === infoL.sig))) {
       return {
         verdict: "COUPLED",
@@ -1237,7 +1262,6 @@
       };
     }
 
-    // 2. Sentidos comerciales opuestos verificando permutación de estaciones
     if (infoT.orig && infoT.dest && infoL.orig && infoL.dest) {
       if (infoT.orig === infoL.dest || infoT.dest === infoL.orig) {
         return { verdict: "DOWNGRADED_ORANGE", confidence: 99, reason: `Sentido comercial opuesto (${infoT.orig}→${infoT.dest} vs ${infoL.orig}→${infoL.dest})` };
@@ -1247,7 +1271,6 @@
       }
     }
 
-    // 3. Progresión geométrica opuesta hacia destinos lejanos
     const destCoordT = findStationCoords(infoT.dest) || findStationCoords(infoT.sig);
     const destCoordL = findStationCoords(infoL.dest) || findStationCoords(infoL.sig);
     if (destCoordT && destCoordL && haversine(destCoordT[0], destCoordT[1], destCoordL[0], destCoordL[1]) > 40) {
@@ -1260,7 +1283,6 @@
       }
     }
 
-    // 4. Núcleos de Cercanías incompatibles
     const rawT = trailing.raw || {}, rawL = leading.raw || {};
     const nucT = String(rawT.nucleo ?? rawT.idNucleo ?? "").trim();
     const nucL = String(rawL.nucleo ?? rawL.idNucleo ?? "").trim();
@@ -1268,7 +1290,6 @@
       return { verdict: "DOWNGRADED_ORANGE", confidence: 99, reason: `Núcleos de Cercanías distintos (${nucT} vs ${nucL})` };
     }
 
-    // 5. Rebase Técnico / Adelantamiento en estación o parada comercial controlada
     const rankT = getCommercialRank(trailing.tipo);
     const rankL = getCommercialRank(leading.tipo);
     if (vL <= 3 && isNearAnyKnownStation(leading.lat, leading.lon, 0.7)) {
@@ -1292,7 +1313,6 @@
     const linT = String(rawT.linea ?? rawT.lineaComercial ?? rawT.Línea ?? "").trim().toUpperCase();
     const linL = String(rawL.linea ?? rawL.lineaComercial ?? rawL.Línea ?? "").trim().toUpperCase();
 
-    // 6. Bifurcación en Y (destinos y próximas paradas divergentes) -> Si era roja geométrica, la IA la rebaja a naranja en el panel superior
     if (infoT.dest && infoL.dest && infoT.dest !== infoL.dest && infoT.sig && infoL.sig && infoT.sig !== infoL.sig) {
       return {
         verdict: "DOWNGRADED_ORANGE",
@@ -1301,12 +1321,10 @@
       };
     }
 
-    // 7. Anti-Falsos Negativos: Ascenso a ROJA desde Verde o Naranja
     const ttiSec = dv > 0 ? (distKm / dv) * 3600 : Infinity;
     const sameCorridor = (infoT.sig && infoT.sig === infoL.sig) || (infoT.dest && infoT.dest === infoL.dest) || (linT && linT === linL);
 
     if (geomSeverity !== "red" && sameCorridor) {
-      // Caso A: Era considerado VERDE para alta velocidad porque solo llevaba 1 lectura GPS (> minSpeedKmh) tras salir de túnel/estación
       if (trailing.speedMeasures === 1 && vT > minSpeedKmh && dv >= 15 && distKm <= 3.5) {
         return {
           verdict: "PROMOTED_FROM_GREEN",
@@ -1314,7 +1332,6 @@
           reason: `Era 🟢 Verde (1 sola lectura GPS tras túnel/salida) pero alcanza a +${dv} km/h hacia ${infoT.sig || infoT.dest}`
         };
       }
-      // Caso B: Era NARANJA (porque vT < 100 km/h) pero hay alcance inminente (< 120s) sobre tren lento/parado en plena vía
       if (vT >= 45 && dv >= 25 && ttiSec <= 120 && distKm <= 2.8 && !isNearAnyKnownStation(leading.lat, leading.lon, 0.6)) {
         return {
           verdict: "PROMOTED_FROM_ORANGE",
@@ -1324,7 +1341,6 @@
       }
     }
 
-    // Confirmaciones de riesgo real
     if (infoT.sig && infoL.sig && infoT.sig === infoL.sig) {
       return {
         verdict: "REAL",
@@ -1355,8 +1371,163 @@
     };
   }
 
+  // CAPA 2: Construcción del Prompt Ferroviario y llamada con Cola Antispam al LLM Neuronal Real
+  function buildLlmPromptForPair(p, localEval) {
+    const tr = p.trailing, ld = p.leading;
+    const infoT = tr._info || trainInfo(tr);
+    const infoL = ld._info || trainInfo(ld);
+    const vT = isNum(tr.calcSpeed) ? tr.calcSpeed : 0;
+    const vL = isNum(ld.calcSpeed) ? ld.calcSpeed : 0;
+
+    return `Audita esta alerta de proximidad ferroviaria en España y determina si existe riesgo real de alcance en la misma vía o si la geometría engaña:
+
+[TREN TRASERO]
+- Tren: ${infoT.tipo} ${infoT.numero} (Vía: ${tr.trackGroup})
+- Ruta: Origen "${infoT.orig || "N/D"}" -> Destino "${infoT.dest || "N/D"}"
+- Tramo: Anterior "${infoT.ant || "N/D"}" -> Próxima "${infoT.sig || "N/D"}"
+- Velocidad: ${vT} km/h | Rumbo: ${Math.round(tr.bearing ?? 0)}° | Pos: [${tr.lat.toFixed(4)}, ${tr.lon.toFixed(4)}]
+
+[TREN DELANTERO]
+- Tren: ${infoL.tipo} ${infoL.numero} (Vía: ${ld.trackGroup})
+- Ruta: Origen "${infoL.orig || "N/D"}" -> Destino "${infoL.dest || "N/D"}"
+- Tramo: Anterior "${infoL.ant || "N/D"}" -> Próxima "${infoL.sig || "N/D"}"
+- Velocidad: ${vL} km/h | Rumbo: ${Math.round(ld.bearing ?? 0)}° | Pos: [${ld.lat.toFixed(4)}, ${ld.lon.toFixed(4)}]
+
+[ENCUENTRO]
+- Distancia por vía: ${fmtKm(p.d)} | Cierre: +${vT - vL} km/h | Impacto: ${fmtImpactTime(p.impactSec)}
+- Estado geométrico: ${p.geomSeverity.toUpperCase()}
+- Pre-diagnóstico CTC local: ${localEval.verdict} (${localEval.reason})
+
+Responde SOLO este JSON válido:
+{"verdict":"REAL"|"DOWNGRADED_ORANGE"|"PROMOTED_RED","confidence":85,"reason":"Explicación técnica en español (máx 16 palabras) citando estaciones"}`;
+  }
+
+  async function callRealLlmEndpoint(promptText) {
+    const prov = el.aiProvider.value;
+    const apiKey = el.aiApiKey.value.trim();
+    const sysMsg = "Eres un Ingeniero Jefe del CTC de Adif en España. Analizas telemetría ferroviaria y respondes exclusivamente en JSON válido.";
+
+    if (prov === "gemini" && apiKey) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: sysMsg + "\n\n" + promptText }] }],
+          generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+        })
+      });
+      if (!r.ok) throw new Error("Gemini HTTP " + r.status);
+      const j = await r.json();
+      return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "Gemini 2.5 Flash" };
+    }
+
+    if (prov === "groq" && apiKey) {
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          temperature: 0.1,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: sysMsg },
+            { role: "user", content: promptText }
+          ]
+        })
+      });
+      if (!r.ok) throw new Error("Groq HTTP " + r.status);
+      const j = await r.json();
+      return { text: j.choices?.[0]?.message?.content || "", modelName: "Llama 3.3 70B" };
+    }
+
+    // Pollinations AI (Gratuito sin clave, usando semilla única y cola espaciada para evitar HTTP 402)
+    const r = await fetch("https://text.pollinations.ai/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "openai",
+        jsonMode: true,
+        seed: Math.floor(Math.random() * 100000),
+        messages: [
+          { role: "system", content: sysMsg },
+          { role: "user", content: promptText }
+        ]
+      })
+    });
+    if (!r.ok) throw new Error("Pollinations HTTP " + r.status);
+    const rawTxt = await r.text();
+    return { text: rawTxt, modelName: "GPT-4o-mini (Pollinations)" };
+  }
+
+  function enqueueLlmAudit(pairObj, localEval) {
+    if (el.aiProvider.value === "local") return;
+    const key = pairObj.pairKey;
+    const cached = aiAuditCache.get(key);
+    if (cached && cached.llmDone && Date.now() - cached.llmTs < 120000) return;
+    if (llmQueue.some(item => item.pairKey === key)) return;
+    if (llmQueue.length >= 4) return; // Limitar cola a las 4 alertas más prioritarias para no saturar jamás la API gratuita
+    llmQueue.push({ pairKey: key, pairObj, localEval });
+    processLlmQueue();
+  }
+
+  async function processLlmQueue() {
+    if (llmBusy || !llmQueue.length) return;
+    llmBusy = true;
+    const item = llmQueue.shift();
+    try {
+      const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
+      el.llmDebugLog.textContent = `[ENVIANDO PROMPT AL LLM Para ${item.pairKey}]\n${prompt}`;
+      const { text, modelName } = await callRealLlmEndpoint(prompt);
+      const cleaned = String(text || "").replace(/```json|```/gi, "").trim();
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      const obj = JSON.parse(match ? match[0] : cleaned);
+
+      const vRaw = String(obj.verdict || item.localEval.verdict).toUpperCase();
+      let verdict = item.localEval.verdict;
+      if (vRaw.includes("DOWN") || vRaw.includes("DESCART") || vRaw.includes("ORANGE") || vRaw.includes("DUD")) {
+        verdict = "DOWNGRADED_ORANGE";
+      } else if (vRaw.includes("PROMO")) {
+        verdict = item.localEval.verdict.startsWith("PROMOTED") ? item.localEval.verdict : "PROMOTED_FROM_ORANGE";
+      } else if (vRaw.includes("REAL")) {
+        verdict = "REAL";
+      }
+
+      const conf = Math.min(99, Math.max(55, parseInt(obj.confidence, 10) || item.localEval.confidence));
+      const reason = String(obj.reason || item.localEval.reason).trim();
+
+      aiAuditCache.set(item.pairKey, {
+        status: "done",
+        verdict,
+        confidence: conf,
+        reason,
+        source: `🧠 ${modelName}`,
+        llmDone: true,
+        llmTs: Date.now()
+      });
+
+      el.llmDebugLog.textContent = `[RESPUESTA ${modelName} · ${new Date().toLocaleTimeString("es-ES")}]\n${JSON.stringify({ verdict, confidence: conf, reason }, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
+      computeProximity();
+      render();
+    } catch (e) {
+      // Si el servidor gratuito falla o tiene límite, conservamos limpiamente el diagnóstico del Cerebro CTC Local sin ensuciar la UI
+      const existing = aiAuditCache.get(item.pairKey);
+      if (existing) {
+        existing.llmDone = true;
+        existing.llmTs = Date.now();
+        existing.source = "⚡ CTC Local";
+      }
+    } finally {
+      setTimeout(() => {
+        llmBusy = false;
+        processLlmQueue();
+      }, 3500); // Pausa de 3.5s entre peticiones LLM para respetar cualquier rate-limit gratuito
+    }
+  }
+
   el.btnReauditAll.addEventListener("click", () => {
     aiAuditCache.clear();
+    llmQueue.length = 0;
     computeProximity();
     render();
   });
@@ -2349,7 +2520,6 @@
         const vLead  = isNum(leading.calcSpeed)  ? leading.calcSpeed  : 0;
         const closingSpeed = vTrail - vLead;
 
-        // Estado determinado puramente por las reglas geométricas
         const geomSeverity = (trailing.isFast && closingSpeed >= 0) ? "red" : "orange";
         let pairSeverity = geomSeverity;
         let inRedPanel = (geomSeverity === "red");
@@ -2357,33 +2527,37 @@
 
         const pairKey = makePairKey(a.id, b.id);
         let downgradedByAi = false;
-        let promotedFrom = null; // 'green' | 'orange' | null
+        let promotedFrom = null;
 
         if (el.enableAiAudit.checked) {
-          const ctcEval = evaluateAlertWithCtcBrain(trailing, leading, d, geomSeverity, minSpeed);
-          aiAuditCache.set(pairKey, {
-            status: "done",
-            verdict: ctcEval.verdict,
-            confidence: ctcEval.confidence,
-            reason: ctcEval.reason,
-            ts: now
-          });
+          const localEval = evaluateAlertWithCtcBrain(trailing, leading, d, geomSeverity, minSpeed);
+          const existingAudit = aiAuditCache.get(pairKey);
 
-          if (ctcEval.verdict === "COUPLED") {
+          // Si ya tenemos respuesta del LLM Neuronal reciente, respetamos su dictamen; si no, usamos el pre-diagnóstico CTC local mientras responde el LLM
+          const activeEval = (existingAudit && existingAudit.llmDone) ? existingAudit : {
+            status: "done",
+            verdict: localEval.verdict,
+            confidence: localEval.confidence,
+            reason: localEval.reason,
+            source: el.aiProvider.value === "local" ? "⚡ CTC Local" : "🧠 Consultando LLM…",
+            llmDone: false,
+            llmTs: 0
+          };
+          aiAuditCache.set(pairKey, activeEval);
+
+          if (activeEval.verdict === "COUPLED") {
             continue;
           }
 
-          if (geomSeverity === "red" && ctcEval.verdict === "DOWNGRADED_ORANGE") {
-            // Se catalogó como ROJA por geometría, pero la IA ve poco probable la colisión:
-            // Permanece en el panel de rojas (inRedPanel = true), pero pasa a color NARANJA y deja de parpadear
+          if (geomSeverity === "red" && activeEval.verdict === "DOWNGRADED_ORANGE") {
             pairSeverity = "orange";
             inRedPanel = true;
             downgradedByAi = true;
-          } else if (geomSeverity === "orange" && ctcEval.verdict === "PROMOTED_FROM_GREEN") {
+          } else if (geomSeverity === "orange" && activeEval.verdict === "PROMOTED_FROM_GREEN") {
             pairSeverity = "red";
             inRedPanel = true;
             promotedFrom = "green";
-          } else if (geomSeverity === "orange" && ctcEval.verdict === "PROMOTED_FROM_ORANGE") {
+          } else if (geomSeverity === "orange" && (activeEval.verdict === "PROMOTED_FROM_ORANGE" || activeEval.verdict === "PROMOTED_RED")) {
             pairSeverity = "red";
             inRedPanel = true;
             promotedFrom = "orange";
@@ -2393,7 +2567,6 @@
         const aiAudit = el.enableAiAudit.checked ? aiAuditCache.get(pairKey) : null;
         let redStartMs = null;
 
-        // Solo acumula tiempo de persistencia (parpadeo) si es realmente ROJA y NO ha sido rebajada a naranja por la IA
         if (pairSeverity === "red" && !downgradedByAi) {
           activeRedKeys.add(pairKey);
           if (!redAlertStart.has(pairKey)) {
@@ -2442,6 +2615,12 @@
           impactSec, pairKey, redStartMs, downgradedByAi, promotedFrom
         };
         pairs.push(pairObj);
+
+        // Si la alerta está en el panel superior (inRedPanel) y tenemos habilitado un proveedor LLM neuronal, la encolamos para auditoría profunda
+        if (inRedPanel && el.enableAiAudit.checked && el.aiProvider.value !== "local") {
+          const localEval = evaluateAlertWithCtcBrain(trailing, leading, d, geomSeverity, minSpeed);
+          enqueueLlmAudit(pairObj, localEval);
+        }
       }
     }
 
@@ -2499,7 +2678,7 @@
         near = `<div style="color:#d97706;font-weight:700;margin-top:3px">⚠ Precaución: A ${fmtKm(t.d)} por vía de ${esc(nearName)}${esc(roleTxt)}</div>`;
       }
       if (t.aiNote) {
-        near += `<div style="color:#7c3aed;font-weight:600;font-size:11px;margin-top:2px">🤖 CTC IA: ${esc(t.aiNote)}</div>`;
+        near += `<div style="color:#7c3aed;font-weight:600;font-size:11px;margin-top:2px">🤖 IA: ${esc(t.aiNote)}</div>`;
       }
     }
     return head + ruta + meta + ret + statNote + near;
@@ -2532,7 +2711,7 @@
       mainRows.push(["Tiempo hasta impacto", `<b style="color:#e53935">⏱ ${esc(fmtImpactTime(t.impactSec))}</b>`, true]);
     }
     if (t.aiNote) {
-      mainRows.push(["Dictamen CTC IA", `<b style="color:#7c3aed">🤖 ${esc(t.aiNote)}</b>`, true]);
+      mainRows.push(["Dictamen Auditor IA", `<b style="color:#7c3aed">🤖 ${esc(t.aiNote)}</b>`, true]);
     }
 
     const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
@@ -2581,17 +2760,18 @@
     if (!el.enableAiAudit.checked) return "";
     const audit = aiAuditCache.get(p.pairKey);
     if (!audit) return "";
+    const srcTag = audit.source ? `<span class="ai-source-tag">${esc(audit.source)}</span>` : "";
 
     if (p.downgradedByAi) {
-      return `<div class="ai-row"><span class="ai-badge downgraded">🟠 Rebajada de 🔴 Roja a Naranja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+      return `<div class="ai-row"><span class="ai-badge downgraded">🟠 Rebajada de 🔴 Roja a Naranja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
     }
     if (p.promotedFrom === "green") {
-      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟢 Verde a 🔴 Roja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟢 Verde a 🔴 Roja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
     }
     if (p.promotedFrom === "orange") {
-      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟠 Naranja a 🔴 Roja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟠 Naranja a 🔴 Roja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
     }
-    return `<div class="ai-row"><span class="ai-badge real">✅ IA: Riesgo Confirmado (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span></div>`;
+    return `<div class="ai-row"><span class="ai-badge real">✅ IA: Riesgo Confirmado (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
   }
 
   function renderRedOverlayList() {
@@ -2600,7 +2780,6 @@
       if (p.inRedPanel) redPanelPairs.push({ p, idx });
     });
 
-    // Ordenar: primero las ROJAS activas (de menor a mayor tiempo de impacto) y debajo las rebajadas a NARANJA por la IA
     redPanelPairs.sort((a, b) => {
       const aDown = a.p.downgradedByAi ? 1 : 0;
       const bDown = b.p.downgradedByAi ? 1 : 0;
@@ -2626,7 +2805,6 @@
         const isDowngraded = !!p.downgradedByAi;
         const isPromoted = !!p.promotedFrom;
         const elapsedSec = (!isDowngraded && p.redStartMs) ? (now - p.redStartMs) / 1000 : 0;
-        // Si fue rebajada a naranja por la IA, NUNCA parpadea
         const isPersistent = !isDowngraded && elapsedSec >= persistThresholdSec;
         if (isPersistent) anyPersistent = true;
         const isSel = selectedPairKey && p.pairKey === selectedPairKey;
@@ -2739,10 +2917,8 @@
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
     el.nTotal.textContent = visible + " / " + trains.length;
 
-    // 1. Panel superior del mapa: todas las alertas con inRedPanel === true (rojas reales, ascendidas por IA y rojas geométricas rebajadas a naranja por IA)
     renderRedOverlayList();
 
-    // 2. Panel lateral izquierdo: solo las naranjas puras que no pertenecen al panel superior de rojas
     const orangeOnlyPairs = [];
     pairs.forEach((p, idx) => {
       if (!p.inRedPanel) orangeOnlyPairs.push({ p, idx });
@@ -2885,6 +3061,7 @@
     trainHistory.clear();
     redAlertStart.clear();
     aiAuditCache.clear();
+    llmQueue.length = 0;
     selectedPairKey = null;
     selectedTrainIds.clear();
     refresh();
