@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v2.2</title>
+<title>Alertas Ferrocarril · v2.3</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -516,7 +516,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v2.2 · LLM</span>
+          <span class="ver">v2.3 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1603,7 +1603,7 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
     // Si ya fue verificado por el LLM en nube, mantenemos su veredicto 10 minutos (600.000 ms) para no gastar cuota;
     // si se resolvió en local por enfriamiento 429, reintentamos nube a los 35 segundos.
     if (cached && cached.llmDone) {
-      const ttl = cached.llmVerified ? 600000 : 35000;
+      const ttl = cached.llmVerified ? 600000 : 90000;
       if (Date.now() - cached.llmTs < ttl) return;
       cached.llmDone = false;
       cached.status = "queued";
