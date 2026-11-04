@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.40</title>
+<title>Alertas Ferrocarril · v1.41</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -233,6 +233,10 @@
   }
   .ai-source-tag.queued{
     background:#64748b;
+    color:#fff;
+  }
+  .ai-source-tag.llm-ok{
+    background:#059669;
     color:#fff;
   }
   .ai-reason{flex:1;overflow:hidden;text-overflow:ellipsis}
@@ -512,7 +516,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.40 · LLM</span>
+          <span class="ver">v1.41 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -536,11 +540,11 @@
       </div>
       <label class="chk" style="margin-top:8px">
         <input type="checkbox" id="enableAiAudit" checked>
-        <span>🤖 <b>Auditoría Híbrida (Reglas CTC + Cola LLM Secuencial):</b> consulta de una en una sin pisarse y cancela si el tren pasa a verde/naranja</span>
+        <span>🤖 <b>Auditoría Híbrida (Reglas CTC + Cola LLM Secuencial):</b> audita con LLM todas las alertas del panel rojo superior (incluidas las rebajadas a naranja)</span>
       </label>
       <div class="help">
-        • <b>Cola estricta 1 a 1:</b> muestra <b>🧠 Consultando LLM…</b> en la activa y <b>⏳ En cola LLM (#1, #2…)</b> en las que esperan.<br>
-        • <b>Auto-cancelación:</b> si una alerta en cola o en vuelo pasa a verde o naranja, se aborta al instante y pasa a la siguiente.
+        • <b>Cola estricta 1 a 1:</b> audita todas las alertas del panel superior (rojas y rebajadas a naranja en ese panel) sin tocar las naranjas del panel izquierdo.<br>
+        • <b>Auto-cancelación:</b> si una alerta sale del panel superior (pasa a verde o a naranja normal del panel izquierdo), se aborta al instante.
       </div>
     </fieldset>
 
@@ -699,7 +703,7 @@
             <button type="button" class="sm" id="btnReauditAll">Re-analizar cola LLM</button>
           </div>
           <label style="margin-top:8px">Último Prompt enviado y respuesta del LLM:</label>
-          <div class="llm-log-box" id="llmDebugLog">Esperando la primera alerta roja para enviar el prompt al LLM…</div>
+          <div class="llm-log-box" id="llmDebugLog">Esperando la primera alerta del panel rojo para enviar el prompt al LLM…</div>
         </div>
       </div>
     </div>
@@ -717,15 +721,16 @@
     </div>
     <div class="hm-body">
       <p style="margin:0">
-        Esta aplicación utiliza una <b>arquitectura de IA en 2 capas</b>: un <b>Sistema Experto CTC Local</b> (que pre-evalúa las alertas en 0 ms) y una <b>Cola Secuencial LLM 1 a 1</b> que consulta al modelo neuronal sin pisar peticiones y cancelando automáticamente las que dejan de ser rojas.
+        Esta aplicación utiliza una <b>arquitectura de IA en 2 capas</b>: un <b>Sistema Experto CTC Local</b> (que pre-evalúa las alertas en 0 ms) y una <b>Cola Secuencial LLM 1 a 1</b> que consulta al modelo neuronal para todas las alertas situadas en el panel superior de Alertas Rojas (tanto las rojas como las rebajadas a naranja dentro de ese panel).
       </p>
 
       <div class="hm-box" style="border-left:5px solid #d97706">
-        <div class="hm-box-title">🟠 Rojas Geométricas rebajadas a Naranja por la IA (En el mismo panel superior)</div>
+        <div class="hm-box-title">🟠 Rojas Geométricas rebajadas a Naranja en el panel superior</div>
         <div>
-          Cuando la geometría pura detecta una Alerta Roja pero la IA comprueba que <b>no hay riesgo real de colisión</b>:
+          Cuando la geometría pura detecta una Alerta Roja pero las reglas pre-evalúan que <b>no hay riesgo real de colisión</b>:
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li>La alerta <b>permanece visible en el panel superior de Alertas Rojas</b> pintada en <b>color Naranja</b> y <b>deja de parpadear inmediatamente</b>.</li>
+            <li>La alerta <b>permanece visible en el panel superior de Alertas Rojas</b> pintada en <b>color Naranja</b> y <b>también pasa por la cola del LLM</b> para que el modelo neuronal confirme o rectifique ese dictamen.</li>
+            <li>Las alertas naranjas normales del panel izquierdo (precaución por distancia sin velocidad de alcance) <b>no</b> se envían al LLM.</li>
           </ul>
         </div>
       </div>
@@ -734,9 +739,9 @@
         <div class="hm-box-title">⏳ Gestión de Cola LLM (1 a 1 con auto-cancelación)</div>
         <div>
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li>El sistema consulta al LLM <b>de una en una</b>: nunca lanza la segunda consulta hasta recibir la respuesta de la primera.</li>
-            <li>Las alertas que esperan su turno muestran <b>⏳ En cola LLM (#1, #2…)</b>.</li>
-            <li>Si mientras espera o se está consultando el tren pasa a <b>verde o naranja</b>, esa consulta <b>se cancela en el acto</b> y pasa inmediatamente a la siguiente.</li>
+            <li>El sistema consulta al LLM <b>de una en una</b>: primero las rojas más urgentes y a continuación las rebajadas a naranja del panel superior.</li>
+            <li>Las alertas que esperan su turno muestran <b>⏳ En cola LLM (#1, #2…)</b> y al recibir el veredicto muestran el modelo neuronal que ha respondido.</li>
+            <li>Si mientras espera o se está consultando el par sale del panel superior (porque pasa a verde o a naranja normal del panel izquierdo), esa consulta <b>se cancela en el acto</b> y pasa inmediatamente a la siguiente.</li>
           </ul>
         </div>
       </div>
@@ -750,7 +755,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.40";
+  const VERSION = "1.41";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -894,7 +899,7 @@
     { keys: ["talavera"], lat: 39.9686, lon: -4.8286, main: false },
     { keys: ["navalmoral"], lat: 39.8950, lon: -5.5419, main: false },
     { keys: ["illescas"], lat: 40.1239, lon: -3.8419, main: false },
-    { keys: ["torrijos"], lat: 39.9839, lon: -4.2814, main: false },
+    { keys: ["torrijos"], lat: 40.9839, lon: -4.2814, main: false },
     { keys: ["requena", "utiel"], lat: 39.5890, lon: -1.1740, main: false },
     { keys: ["villena"], lat: 38.6064, lon: -0.9234, main: false },
     { keys: ["elx", "elche"], lat: 38.2480, lon: -0.7420, main: false },
@@ -1225,7 +1230,7 @@
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
   /* ---------- Gestión Estricta de Cola LLM 1 a 1 con Cancelación Automática (AbortController) ---------- */
-  // aiAuditCache: pairKey -> { status: 'queued'|'in_flight'|'done', verdict, confidence, reason, source, llmDone, llmTs }
+  // aiAuditCache: pairKey -> { status: 'queued'|'in_flight'|'done', verdict, confidence, reason, source, llmDone, llmVerified, llmTs }
   const aiAuditCache = new Map();
   const llmQueue = []; // Lista FIFO ordenada de { pairKey, pairObj, localEval }
   let currentLlmTask = null; // { pairKey, controller }
@@ -1248,7 +1253,19 @@
       localStorage.setItem("aiApiKeyRenfe", el.aiApiKey.value.trim());
     } catch (e) {}
   }
-  el.aiProvider.addEventListener("change", syncAiProviderUi);
+  el.aiProvider.addEventListener("change", () => {
+    syncAiProviderUi();
+    if (currentLlmTask) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+    }
+    llmQueue.length = 0;
+    aiAuditCache.clear();
+    if (trains.length) {
+      computeProximity();
+      render();
+    }
+  });
   el.aiApiKey.addEventListener("change", syncAiProviderUi);
   syncAiProviderUi();
 
@@ -1391,7 +1408,7 @@
     const vT = isNum(tr.calcSpeed) ? tr.calcSpeed : 0;
     const vL = isNum(ld.calcSpeed) ? ld.calcSpeed : 0;
 
-    return `Audita esta alerta de proximidad ferroviaria en España y determina si existe riesgo real de alcance en la misma vía o si la geometría engaña:
+    return `Audita esta alerta del panel de Alertas Rojas ferroviarias en España y determina si existe riesgo real de alcance en la misma vía o si debe rebajarse a precaución naranja:
 
 [TREN TRASERO]
 - Tren: ${infoT.tipo} ${infoT.numero} (Vía: ${tr.trackGroup})
@@ -1407,19 +1424,20 @@
 
 [ENCUENTRO]
 - Distancia por vía: ${fmtKm(p.d)} | Cierre: +${vT - vL} km/h | Impacto: ${fmtImpactTime(p.impactSec)}
-- Estado geométrico: ${p.geomSeverity.toUpperCase()}
+- Estado geométrico inicial: ${p.geomSeverity.toUpperCase()}
 - Pre-diagnóstico CTC local: ${localEval.verdict} (${localEval.reason})
 
-Responde SOLO este JSON válido:
-{"verdict":"REAL"|"DOWNGRADED_ORANGE"|"PROMOTED_RED","confidence":85,"reason":"Explicación técnica en español (máx 16 palabras) citando estaciones"}`;
+Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
+{"verdict":"REAL"|"DOWNGRADED_ORANGE"|"PROMOTED_RED","confidence":90,"reason":"Explicación técnica del LLM en español (máx 16 palabras) citando estaciones o vía"}`;
   }
 
   async function callRealLlmEndpoint(promptText, signal) {
     const prov = el.aiProvider.value;
     const apiKey = el.aiApiKey.value.trim();
-    const sysMsg = "Eres un Ingeniero Jefe del CTC de Adif en España. Analizas telemetría ferroviaria y respondes exclusivamente en JSON válido.";
+    const sysMsg = "Eres un Ingeniero Jefe del CTC de Adif en España. Analizas telemetría ferroviaria y respondes exclusivamente en JSON válido con las claves verdict, confidence y reason.";
 
-    if (prov === "gemini" && apiKey) {
+    if (prov === "gemini") {
+      if (!apiKey) throw new Error("Falta API Key de Gemini");
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
       const r = await fetch(url, {
         method: "POST",
@@ -1435,7 +1453,8 @@ Responde SOLO este JSON válido:
       return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "Gemini 2.5 Flash" };
     }
 
-    if (prov === "groq" && apiKey) {
+    if (prov === "groq") {
+      if (!apiKey) throw new Error("Falta API Key de Groq");
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
@@ -1455,23 +1474,121 @@ Responde SOLO este JSON válido:
       return { text: j.choices?.[0]?.message?.content || "", modelName: "Llama 3.3 70B" };
     }
 
-    const r = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal,
-      body: JSON.stringify({
-        model: "openai",
-        jsonMode: true,
-        seed: Math.floor(Math.random() * 100000),
-        messages: [
-          { role: "system", content: sysMsg },
-          { role: "user", content: promptText }
-        ]
-      })
-    });
-    if (!r.ok) throw new Error("Pollinations HTTP " + r.status);
-    const rawTxt = await r.text();
-    return { text: rawTxt, modelName: "GPT-4o-mini (LLM)" };
+    // Proveedor por defecto: Pollinations con triple fallback (OpenAI endpoint -> POST raíz -> GET directo)
+    const messages = [
+      { role: "system", content: sysMsg },
+      { role: "user", content: promptText }
+    ];
+    const seed = Math.floor(Math.random() * 100000);
+    let lastErr = null;
+
+    // Intento 1: Endpoint compatible con OpenAI de Pollinations
+    try {
+      const r1 = await fetch("https://text.pollinations.ai/openai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal,
+        body: JSON.stringify({
+          model: "openai",
+          temperature: 0.1,
+          seed,
+          response_format: { type: "json_object" },
+          messages
+        })
+      });
+      if (r1.ok) {
+        const raw1 = await r1.text();
+        try {
+          const j1 = JSON.parse(raw1);
+          const content1 = j1.choices?.[0]?.message?.content;
+          if (content1) return { text: content1, modelName: "GPT-4o-mini (LLM)" };
+        } catch (_) {}
+        if (raw1 && raw1.includes("{")) {
+          return { text: raw1, modelName: "GPT-4o-mini (LLM)" };
+        }
+      } else {
+        lastErr = new Error("Pollinations OpenAI HTTP " + r1.status);
+      }
+    } catch (e) {
+      if (signal.aborted) throw e;
+      lastErr = e;
+    }
+
+    // Intento 2: POST directo a Pollinations
+    try {
+      const r2 = await fetch("https://text.pollinations.ai/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal,
+        body: JSON.stringify({
+          model: "openai",
+          jsonMode: true,
+          seed,
+          messages
+        })
+      });
+      if (r2.ok) {
+        const raw2 = await r2.text();
+        if (raw2 && raw2.includes("{")) {
+          try {
+            const j2 = JSON.parse(raw2);
+            if (j2.choices?.[0]?.message?.content) {
+              return { text: j2.choices[0].message.content, modelName: "GPT-4o-mini (LLM)" };
+            }
+          } catch (_) {}
+          return { text: raw2, modelName: "GPT-4o-mini (LLM)" };
+        }
+      } else {
+        lastErr = new Error("Pollinations POST HTTP " + r2.status);
+      }
+    } catch (e) {
+      if (signal.aborted) throw e;
+      lastErr = e;
+    }
+
+    // Intento 3: GET directo a Pollinations (evita bloqueos CORS de preflight POST)
+    const getUrl = `https://text.pollinations.ai/${encodeURIComponent(sysMsg + "\n\n" + promptText)}?model=openai&json=true&seed=${seed}`;
+    const r3 = await fetch(getUrl, { method: "GET", signal });
+    if (!r3.ok) throw lastErr || new Error("Pollinations GET HTTP " + r3.status);
+    const raw3 = await r3.text();
+    return { text: raw3, modelName: "GPT-4o-mini (LLM)" };
+  }
+
+  function parseLlmJsonVerdict(rawText, fallbackEval) {
+    const cleaned = String(rawText || "").replace(/```json|```/gi, "").trim();
+    let obj = null;
+
+    try {
+      obj = JSON.parse(cleaned);
+    } catch (_) {
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { obj = JSON.parse(match[0]); } catch (_2) {}
+      }
+    }
+
+    if (obj && obj.choices?.[0]?.message?.content) {
+      return parseLlmJsonVerdict(obj.choices[0].message.content, fallbackEval);
+    }
+
+    if (!obj || typeof obj !== "object") {
+      throw new Error("Respuesta sin JSON válido: " + cleaned.slice(0, 90));
+    }
+
+    const vRaw = String(obj.verdict || obj.estado || obj.status || fallbackEval.verdict).toUpperCase();
+    let verdict = fallbackEval.verdict;
+    if (vRaw.includes("DOWN") || vRaw.includes("DESCART") || vRaw.includes("ORANGE") || vRaw.includes("NARANJA") || vRaw.includes("DUD")) {
+      verdict = "DOWNGRADED_ORANGE";
+    } else if (vRaw.includes("PROMO")) {
+      verdict = fallbackEval.verdict.startsWith("PROMOTED") ? fallbackEval.verdict : "PROMOTED_FROM_ORANGE";
+    } else if (vRaw.includes("REAL") || vRaw.includes("ROJ") || vRaw.includes("RED") || vRaw.includes("PELIGRO")) {
+      verdict = "REAL";
+    }
+
+    const conf = Math.min(99, Math.max(55, parseInt(obj.confidence ?? obj.confianza, 10) || fallbackEval.confidence));
+    const reason = String(obj.reason || obj.motivo || obj.explicacion || fallbackEval.reason).trim();
+
+    return { verdict, confidence: conf, reason };
   }
 
   // Sincroniza las posiciones de espera (#1, #2...) en las etiquetas de los trenes encolados
@@ -1485,9 +1602,10 @@ Responde SOLO este JSON válido:
     });
   }
 
-  // Limpia de la cola cualquier par que haya pasado a verde o naranja normal, y aborta la petición en curso si ya no aplica
+  // Limpia de la cola cualquier par que haya salido del panel superior (#redOverlay)
+  // (es decir, que haya pasado a verde o a naranja normal del panel izquierdo)
   function syncLlmQueueWithActivePairs(activeLlmKeys) {
-    // 1. Filtrar la cola de espera: quitar cualquier par que ya no esté en el panel rojo
+    // 1. Filtrar la cola de espera: quitar cualquier par que ya no esté en el panel superior
     for (let i = llmQueue.length - 1; i >= 0; i--) {
       const k = llmQueue[i].pairKey;
       if (!activeLlmKeys.has(k)) {
@@ -1496,9 +1614,9 @@ Responde SOLO este JSON válido:
       }
     }
 
-    // 2. Si la consulta que está ahora mismo en vuelo (currentLlmTask) ya no está activa (pasó a verde o naranja), se aborta inmediatamente
+    // 2. Si la consulta ahora mismo en vuelo ya no está en el panel superior, se aborta inmediatamente
     if (currentLlmTask && !activeLlmKeys.has(currentLlmTask.pairKey)) {
-      el.llmDebugLog.textContent = `[CANCELADA CONSULTA LLM Para ${currentLlmTask.pairKey} por pasar a verde/naranja]\nPasando inmediatamente al siguiente tren en cola…`;
+      el.llmDebugLog.textContent = `[CANCELADA CONSULTA LLM para ${currentLlmTask.pairKey} por salir del panel rojo superior]\nPasando inmediatamente al siguiente par en cola…`;
       currentLlmTask.controller.abort();
       aiAuditCache.delete(currentLlmTask.pairKey);
       currentLlmTask = null;
@@ -1512,33 +1630,45 @@ Responde SOLO este JSON válido:
     const key = pairObj.pairKey;
     const cached = aiAuditCache.get(key);
 
-    // Si ya terminó su consulta LLM hace menos de 3 minutos o ya está en vuelo, no la volvemos a meter
-    if (cached && cached.llmDone && Date.now() - cached.llmTs < 180000) return;
+    // Si ya fue verificado por el LLM hace menos de 3 minutos (o falló hace menos de 25 s), o ya está en vuelo, no duplicamos
+    if (cached && cached.llmDone) {
+      const ttl = cached.llmVerified ? 180000 : 25000;
+      if (Date.now() - cached.llmTs < ttl) return;
+      cached.llmDone = false;
+      cached.status = "queued";
+    }
     if (currentLlmTask && currentLlmTask.pairKey === key) return;
 
     const existingIdx = llmQueue.findIndex(item => item.pairKey === key);
     if (existingIdx !== -1) {
-      // Actualizar datos frescos de posición/velocidad en la tarea ya encolada sin perder su sitio en la cola
       llmQueue[existingIdx].pairObj = pairObj;
       llmQueue[existingIdx].localEval = localEval;
       updateQueuePositionLabels();
+      processNextLlmInQueue();
       return;
     }
 
     llmQueue.push({ pairKey: key, pairObj, localEval });
+    // Priorizar siempre en la cola las alertas rojas activas sobre las ya rebajadas a naranja en el panel superior
+    llmQueue.sort((x, y) => {
+      const xDown = x.pairObj.downgradedByAi ? 1 : 0;
+      const yDown = y.pairObj.downgradedByAi ? 1 : 0;
+      if (xDown !== yDown) return xDown - yDown;
+      return (x.pairObj.impactSec ?? Infinity) - (y.pairObj.impactSec ?? Infinity);
+    });
     updateQueuePositionLabels();
     processNextLlmInQueue();
   }
 
   async function processNextLlmInQueue() {
-    // Garantía absoluta: NO se consulta la segunda hasta que haya terminado (o se haya cancelado) la primera
+    // Garantía estricta 1 a 1: NO se lanza la siguiente hasta que termine o se aborte la actual
     if (currentLlmTask !== null || !llmQueue.length || el.aiProvider.value === "local") return;
 
     const item = llmQueue.shift();
     updateQueuePositionLabels();
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 18000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     currentLlmTask = { pairKey: item.pairKey, controller };
 
     const entry = aiAuditCache.get(item.pairKey);
@@ -1548,49 +1678,33 @@ Responde SOLO este JSON válido:
     }
     renderRedOverlayList();
 
-    try {
-      const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
-      el.llmDebugLog.textContent = `[CONSULTANDO LLM (1 a 1) · ${item.pairKey} · En cola: ${llmQueue.length}]\n${prompt}`;
+    const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
+    el.llmDebugLog.textContent = `[CONSULTANDO LLM (1 a 1) · ${item.pairKey} · En cola: ${llmQueue.length}]\n${prompt}`;
 
+    try {
       const { text, modelName } = await callRealLlmEndpoint(prompt, controller.signal);
       clearTimeout(timeoutId);
 
-      const cleaned = String(text || "").replace(/```json|```/gi, "").trim();
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("Respuesta no JSON");
-      const obj = JSON.parse(match[0]);
-
-      const vRaw = String(obj.verdict || item.localEval.verdict).toUpperCase();
-      let verdict = item.localEval.verdict;
-      if (vRaw.includes("DOWN") || vRaw.includes("DESCART") || vRaw.includes("ORANGE") || vRaw.includes("DUD")) {
-        verdict = "DOWNGRADED_ORANGE";
-      } else if (vRaw.includes("PROMO")) {
-        verdict = item.localEval.verdict.startsWith("PROMOTED") ? item.localEval.verdict : "PROMOTED_FROM_ORANGE";
-      } else if (vRaw.includes("REAL")) {
-        verdict = "REAL";
-      }
-
-      const conf = Math.min(99, Math.max(55, parseInt(obj.confidence, 10) || item.localEval.confidence));
-      const reason = String(obj.reason || item.localEval.reason).trim();
+      const parsed = parseLlmJsonVerdict(text, item.localEval);
 
       aiAuditCache.set(item.pairKey, {
         status: "done",
-        verdict,
-        confidence: conf,
-        reason,
+        verdict: parsed.verdict,
+        confidence: parsed.confidence,
+        reason: parsed.reason,
         source: `🤖 ${modelName}`,
         llmDone: true,
+        llmVerified: true,
         llmTs: Date.now()
       });
 
-      el.llmDebugLog.textContent = `[RESPUESTA ${modelName} · ${new Date().toLocaleTimeString("es-ES")} · Restantes en cola: ${llmQueue.length}]\n${JSON.stringify({ verdict, confidence: conf, reason }, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
+      el.llmDebugLog.textContent = `[RESPUESTA LLM (${modelName}) · ${new Date().toLocaleTimeString("es-ES")} · Restantes en cola: ${llmQueue.length}]\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
 
       currentLlmTask = null;
       computeProximity();
       render();
 
-      // Pausa breve de 1.2s antes de disparar el siguiente de la cola
-      setTimeout(processNextLlmInQueue, 1200);
+      setTimeout(processNextLlmInQueue, 900);
     } catch (err) {
       clearTimeout(timeoutId);
       const wasAborted = controller.signal.aborted;
@@ -1601,13 +1715,14 @@ Responde SOLO este JSON válido:
         if (existing) {
           existing.status = "done";
           existing.llmDone = true;
+          existing.llmVerified = false;
           existing.llmTs = Date.now();
-          existing.source = "⚡ Confirmado CTC Local";
+          existing.source = "⚠️ LLM sin resp. (reintento en 25s)";
         }
+        el.llmDebugLog.textContent = `[ERROR LLM en ${item.pairKey}: ${err.message || err}]\nSe mantiene pre-diagnóstico CTC Local temporalmente y se reintentará en 25s.`;
         renderRedOverlayList();
       }
-      // Si se abortó porque pasó a verde/naranja, arrancamos inmediatamente el siguiente sin esperar
-      setTimeout(processNextLlmInQueue, wasAborted ? 50 : 1200);
+      setTimeout(processNextLlmInQueue, wasAborted ? 50 : 900);
     }
   }
 
@@ -2629,48 +2744,65 @@ Responde SOLO este JSON válido:
 
         if (el.enableAiAudit.checked) {
           localEval = evaluateAlertWithCtcBrain(trailing, leading, d, geomSeverity, minSpeed);
-          let activeEval = aiAuditCache.get(pairKey);
-
-          // ¡IMPORTANTE!: Si el par ya está en cola ('queued'), consultándose ('in_flight') o ya tiene respuesta del LLM ('llmDone'),
-          // NO lo sobreescribimos, para no resetear jamás la consulta en curso
-          if (!activeEval) {
-            activeEval = {
-              status: el.aiProvider.value === "local" ? "done" : "queued",
-              verdict: localEval.verdict,
-              confidence: localEval.confidence,
-              reason: localEval.reason,
-              source: el.aiProvider.value === "local" ? "⚡ CTC Local" : "⏳ En cola LLM",
-              llmDone: el.aiProvider.value === "local",
-              llmTs: 0
-            };
-            aiAuditCache.set(pairKey, activeEval);
-          } else if (!activeEval.llmDone) {
-            // Actualizar solo los datos pre-diagnóstico sin tocar su status ni su posición en la cola
-            activeEval.verdict = localEval.verdict;
-            activeEval.confidence = localEval.confidence;
-            activeEval.reason = localEval.reason;
-          }
-
-          if (activeEval.verdict === "COUPLED") {
+          if (localEval.verdict === "COUPLED") {
             continue;
           }
 
-          if (geomSeverity === "red" && activeEval.verdict === "DOWNGRADED_ORANGE") {
-            pairSeverity = "orange";
-            inRedPanel = true;
-            downgradedByAi = true;
-          } else if (geomSeverity === "orange" && activeEval.verdict === "PROMOTED_FROM_GREEN") {
-            pairSeverity = "red";
-            inRedPanel = true;
-            promotedFrom = "green";
-          } else if (geomSeverity === "orange" && (activeEval.verdict === "PROMOTED_FROM_ORANGE" || activeEval.verdict === "PROMOTED_RED")) {
-            pairSeverity = "red";
-            inRedPanel = true;
-            promotedFrom = "orange";
+          // Determinar si pertenece al panel superior (#redOverlay) o si es una naranja normal del panel izquierdo
+          const belongsToRedPanel = (geomSeverity === "red")
+            || (geomSeverity === "orange" && (
+              localEval.verdict === "PROMOTED_FROM_GREEN" ||
+              localEval.verdict === "PROMOTED_FROM_ORANGE" ||
+              localEval.verdict === "PROMOTED_RED"
+            ));
+
+          if (belongsToRedPanel) {
+            let activeEval = aiAuditCache.get(pairKey);
+
+            // Si no existe en caché, la creamos para que entre en la cola del LLM
+            if (!activeEval) {
+              activeEval = {
+                status: el.aiProvider.value === "local" ? "done" : "queued",
+                verdict: localEval.verdict,
+                confidence: localEval.confidence,
+                reason: localEval.reason,
+                source: el.aiProvider.value === "local" ? "⚡ CTC Local" : "⏳ En cola LLM",
+                llmDone: el.aiProvider.value === "local",
+                llmVerified: false,
+                llmTs: 0
+              };
+              aiAuditCache.set(pairKey, activeEval);
+            } else if (!activeEval.llmDone) {
+              // Mientras espera turno en la cola, actualizamos el pre-diagnóstico sin perder su sitio en la cola
+              activeEval.verdict = localEval.verdict;
+              activeEval.confidence = localEval.confidence;
+              activeEval.reason = localEval.reason;
+            }
+
+            if (activeEval.verdict === "COUPLED") {
+              continue;
+            }
+
+            if (geomSeverity === "red" && activeEval.verdict === "DOWNGRADED_ORANGE") {
+              pairSeverity = "orange";
+              inRedPanel = true;
+              downgradedByAi = true;
+            } else if (geomSeverity === "orange" && activeEval.verdict === "PROMOTED_FROM_GREEN") {
+              pairSeverity = "red";
+              inRedPanel = true;
+              promotedFrom = "green";
+            } else if (geomSeverity === "orange" && (activeEval.verdict === "PROMOTED_FROM_ORANGE" || activeEval.verdict === "PROMOTED_RED")) {
+              pairSeverity = "red";
+              inRedPanel = true;
+              promotedFrom = "orange";
+            } else if (geomSeverity === "red") {
+              pairSeverity = "red";
+              inRedPanel = true;
+            }
           }
         }
 
-        const aiAudit = el.enableAiAudit.checked ? aiAuditCache.get(pairKey) : null;
+        const aiAudit = (el.enableAiAudit.checked && inRedPanel) ? aiAuditCache.get(pairKey) : null;
         let redStartMs = null;
 
         if (pairSeverity === "red" && !downgradedByAi) {
@@ -2722,9 +2854,9 @@ Responde SOLO este JSON válido:
         };
         pairs.push(pairObj);
 
-        // Solo mantenemos en la cola LLM los pares que realmente están en estado ROJO (o en el panel rojo pendientes de confirmar)
-        // Si un par pasa a naranja normal o verde, NO entra en activeLlmCandidateKeys y su consulta se cancela automáticamente
-        if (inRedPanel && !downgradedByAi && el.enableAiAudit.checked && el.aiProvider.value !== "local") {
+        // TODAS las alertas del panel rojo superior (inRedPanel === true), incluidas las rebajadas a naranja en ese panel,
+        // se analizan con la cola del LLM. Las naranjas normales del panel izquierdo (!inRedPanel) NO entran jamás.
+        if (inRedPanel && el.enableAiAudit.checked && el.aiProvider.value !== "local") {
           activeLlmCandidateKeys.add(pairKey);
           toEnqueueList.push({ pairObj, localEval });
         }
@@ -2735,11 +2867,16 @@ Responde SOLO este JSON válido:
       if (!activeRedKeys.has(k)) redAlertStart.delete(k);
     }
 
-    // Cancelar de inmediato cualquier consulta en cola o en vuelo cuyo tren haya pasado a verde o naranja
+    // Cancelar de inmediato cualquier consulta en cola o en vuelo cuyo par haya salido del panel superior
     syncLlmQueueWithActivePairs(activeLlmCandidateKeys);
 
-    // Encolar ordenados por menor tiempo de impacto (más urgentes primero)
-    toEnqueueList.sort((x, y) => (x.pairObj.impactSec ?? Infinity) - (y.pairObj.impactSec ?? Infinity));
+    // Encolar dando prioridad a las rojas activas más urgentes y después a las rebajadas a naranja del panel superior
+    toEnqueueList.sort((x, y) => {
+      const xDown = x.pairObj.downgradedByAi ? 1 : 0;
+      const yDown = y.pairObj.downgradedByAi ? 1 : 0;
+      if (xDown !== yDown) return xDown - yDown;
+      return (x.pairObj.impactSec ?? Infinity) - (y.pairObj.impactSec ?? Infinity);
+    });
     for (const item of toEnqueueList) {
       enqueueLlmAudit(item.pairObj, item.localEval);
     }
@@ -2877,19 +3014,23 @@ Responde SOLO este JSON válido:
     const audit = aiAuditCache.get(p.pairKey);
     if (!audit) return "";
 
-    const stCls = audit.status === "in_flight" ? " consulting" : (audit.status === "queued" ? " queued" : "");
+    const stCls = audit.status === "in_flight"
+      ? " consulting"
+      : (audit.status === "queued" ? " queued" : (audit.llmVerified ? " llm-ok" : ""));
     const srcTag = audit.source ? `<span class="ai-source-tag${stCls}">${esc(audit.source)}</span>` : "";
 
+    const actor = audit.llmVerified ? "LLM" : "Pre-IA";
+
     if (p.downgradedByAi) {
-      return `<div class="ai-row"><span class="ai-badge downgraded">🟠 Rebajada de 🔴 Roja a Naranja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+      return `<div class="ai-row"><span class="ai-badge downgraded">🟠 Rebajada de 🔴 Roja a Naranja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
     }
     if (p.promotedFrom === "green") {
-      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟢 Verde a 🔴 Roja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟢 Verde a 🔴 Roja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
     }
     if (p.promotedFrom === "orange") {
-      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟠 Naranja a 🔴 Roja por IA (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟠 Naranja a 🔴 Roja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
     }
-    return `<div class="ai-row"><span class="ai-badge real">✅ IA: Riesgo Confirmado (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+    return `<div class="ai-row"><span class="ai-badge real">✅ ${actor}: Riesgo Confirmado (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
   }
 
   function renderRedOverlayList() {
