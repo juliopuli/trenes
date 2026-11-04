@@ -1528,7 +1528,7 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
       modelName: "⚡ CTC Local (Enfriando cuota nube)",
       isCloud: false
     };
-
+  }
   function parseLlmJsonVerdict(rawText, fallbackEval) {
     const cleaned = String(rawText || "").replace(/```json|```/gi, "").trim();
     let obj = null;
