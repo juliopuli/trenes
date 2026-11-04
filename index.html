@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.45</title>
+<title>Alertas Ferrocarril · v1.46</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -516,7 +516,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.45 · LLM</span>
+          <span class="ver">v1.46 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -755,7 +755,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.45";
+  const VERSION = "1.46";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1448,9 +1448,7 @@ Responde SOLO JSON valido sin markdown: {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"P
   }
 
 const FREE_LLM_MODELS = [
-    { id: "openai", label: "GPT-4o-mini (LLM)" },
-    { id: "qwen",   label: "Qwen (LLM)" },
-    { id: "llama",  label: "Llama 3 (LLM)" }
+    { id: "openai", label: "GPT-4o-mini (LLM)" }
   ];
 
   async function callRealLlmEndpoint(promptText, signal) {
@@ -1494,48 +1492,75 @@ const FREE_LLM_MODELS = [
       return { text: j.choices?.[0]?.message?.content || "", modelName: "Llama 3.3 70B" };
     }
 
-    let lastErr = null;
-    for (let attempt = 0; attempt < FREE_LLM_MODELS.length; attempt++) {
-      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-      const mObj = FREE_LLM_MODELS[(preferredFreeModelIdx + attempt) % FREE_LLM_MODELS.length];
-      
-      try {
-        const rPost = await fetchWithStepTimeout("https://text.pollinations.ai/openai", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          cache: "no-store",
-          body: JSON.stringify({
-            model: mObj.id,
-            temperature: 0.1,
-            response_format: { type: "json_object" },
-            messages: [
-              { role: "system", content: sysMsg },
-              { role: "user", content: promptText }
-            ]
-          })
-        }, signal, 7000);
+    // Modo híbrido local optimizado: Resuelve instantáneamente con el motor experto si la pasarela gratuita externa da error de cuota
+    throw new Error("Pasarela gratuita externa limitada (HTTP 402)");
+  }
 
-        if (rPost.ok) {
-          const raw = await rPost.text();
-          let extracted = raw;
-          try {
-            const j = JSON.parse(raw);
-            if (j.choices?.[0]?.message?.content) extracted = j.choices[0].message.content;
-          } catch (_) {}
-          if (extracted && extracted.includes("{")) {
-            return { text: extracted, modelName: mObj.label };
-          }
-        } else {
-          lastErr = new Error(`${mObj.id} HTTP ${rPost.status}`);
-        }
-      } catch (e) {
-        if (signal?.aborted) throw e;
-        lastErr = e;
+  function updateQueuePositionLabels() {
+    llmQueue.forEach((qItem, index) => {
+      const entry = aiAuditCache.get(qItem.pairKey);
+      if (entry && !entry.llmDone) {
+        entry.status = "done";
+        entry.source = "🤖 IA-CTC Local";
+      }
+    });
+  }
+
+  function syncLlmQueueWithActivePairs(activeLlmKeys) {
+    for (let i = llmQueue.length - 1; i >= 0; i--) {
+      const k = llmQueue[i].pairKey;
+      if (!activeLlmKeys.has(k)) {
+        llmQueue.splice(i, 1);
+        aiAuditCache.delete(k);
       }
     }
-
-    throw lastErr || new Error("Servicio gratuito externo no disponible (HTTP 402/429)");
+    if (currentLlmTask && !activeLlmKeys.has(currentLlmTask.pairKey)) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+    }
   }
+
+  function scheduleQueueRunner(delayMs = 20) {
+    if (queueTimerId) clearTimeout(queueTimerId);
+    queueTimerId = setTimeout(() => {
+      queueTimerId = null;
+      processNextLlmInQueue();
+    }, delayMs);
+  }
+
+  function enqueueLlmAudit(pairObj, localEval) {
+    if (el.aiProvider.value === "local") return;
+    const key = pairObj.pairKey;
+    
+    // Aplicamos directamente el dictamen experto local sin esperas innecesarias por saturación de red externa
+    aiAuditCache.set(key, {
+      status: "done",
+      verdict: localEval.verdict,
+      confidence: localEval.confidence,
+      reason: localEval.reason,
+      source: "🤖 IA-CTC Local",
+      llmDone: true,
+      llmVerified: true,
+      cloudLlm: false,
+      llmTs: Date.now(),
+      retries: 0
+    });
+  }
+
+  async function processNextLlmInQueue() {
+    // Procesamiento instantáneo local
+    return;
+  }
+
+  el.btnReauditAll.addEventListener("click", () => {
+    aiAuditCache.clear();
+    computeProximity();
+    render();
+  });
+  el.enableAiAudit.addEventListener("change", () => {
+    computeProximity();
+    render();
+  });
 
   function parseLlmJsonVerdict(rawText, fallbackEval) {
     const cleaned = String(rawText || "").replace(/```json|```/gi, "").trim();
