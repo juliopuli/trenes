@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.50</title>
+<title>Alertas Ferrocarril · v1.51</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -516,7 +516,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.50 · LLM</span>
+          <span class="ver">v1.51 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -755,7 +755,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.50";
+  const VERSION = "1.51";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1493,7 +1493,6 @@ const FREE_LLM_MODELS = [
       return { text: j.choices?.[0]?.message?.content || "", modelName: "Llama 3.3 70B (Groq)" };
     }
 
-    // Llamada real obligatoria al LLM en nube gratuito (sin API Key)
     let lastErr = null;
     for (let attempt = 0; attempt < FREE_LLM_MODELS.length; attempt++) {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -1501,7 +1500,11 @@ const FREE_LLM_MODELS = [
       const seed = Math.floor(Math.random() * 90000) + 1000;
 
       if (attempt > 0) {
-        await sleepAbortable(800, signal);
+        try {
+          await sleepAbortable(800, signal);
+        } catch (e) {
+          if (signal?.aborted) throw e;
+        }
       }
 
       try {
@@ -1521,7 +1524,7 @@ const FREE_LLM_MODELS = [
           })
         }, signal, 9000);
 
-        if (rPost.ok) {
+        if (rPost && rPost.ok) {
           const raw = await rPost.text();
           let extracted = raw;
           try {
@@ -1534,7 +1537,7 @@ const FREE_LLM_MODELS = [
             return { text: extracted, modelName: mObj.label };
           }
         } else {
-          lastErr = new Error(`${mObj.id} HTTP ${rPost.status}`);
+          lastErr = new Error(`${mObj.id} HTTP ${rPost ? rPost.status : 'network'}`);
         }
       } catch (e) {
         if (signal?.aborted) throw e;
@@ -1564,7 +1567,7 @@ const FREE_LLM_MODELS = [
       }
     }
     if (currentLlmTask && !activeLlmKeys.has(currentLlmTask.pairKey)) {
-      currentLlmTask.controller.abort();
+      if (currentLlmTask.controller) currentLlmTask.controller.abort();
       currentLlmTask = null;
     }
   }
@@ -1661,7 +1664,6 @@ const FREE_LLM_MODELS = [
       clearTimeout(timeoutId);
       currentLlmTask = null;
 
-      // Si la nube falla temporalmente, usamos el motor local como respaldo automático
       aiAuditCache.set(item.pairKey, {
         status: "done",
         verdict: item.localEval.verdict,
@@ -1702,270 +1704,6 @@ const FREE_LLM_MODELS = [
     computeProximity();
     render();
   });
-
-      scheduleQueueRunner(2100);
-    } catch (err) {
-      clearTimeout(timeoutId);
-      currentLlmTask = null;
-
-      // Si falla la red de nube, aplicamos automáticamente el dictamen del Motor Experto Local sin errores en consola
-      aiAuditCache.set(item.pairKey, {
-        status: "done",
-        verdict: item.localEval.verdict,
-        confidence: item.localEval.confidence,
-        reason: item.localEval.reason,
-        source: "🤖 IA-CTC Local",
-        llmDone: true,
-        llmVerified: true,
-        cloudLlm: false,
-        llmTs: Date.now(),
-        retries: 0
-      });
-
-      nextAllowedLlmTime = Date.now() + 1000;
-      computeProximity();
-      render();
-      scheduleQueueRunner(1100);
-    }
-  }
-
-  el.btnReauditAll.addEventListener("click", () => {
-    if (currentLlmTask) {
-      currentLlmTask.controller.abort();
-      currentLlmTask = null;
-    }
-    llmQueue.length = 0;
-    aiAuditCache.clear();
-    nextAllowedLlmTime = 0;
-    computeProximity();
-    render();
-  });
-  el.enableAiAudit.addEventListener("change", () => {
-    if (!el.enableAiAudit.checked && currentLlmTask) {
-      currentLlmTask.controller.abort();
-      currentLlmTask = null;
-      llmQueue.length = 0;
-    }
-    computeProximity();
-    render();
-  });
-
-  function parseLlmJsonVerdict(rawText, fallbackEval) {
-    const cleaned = String(rawText || "").replace(/```json|```/gi, "").trim();
-    let obj = null;
-
-    try {
-      obj = JSON.parse(cleaned);
-    } catch (_) {
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { obj = JSON.parse(match[0]); } catch (_2) {}
-      }
-    }
-
-    if (obj && obj.choices?.[0]?.message?.content) {
-      return parseLlmJsonVerdict(obj.choices[0].message.content, fallbackEval);
-    }
-
-    if (!obj || typeof obj !== "object") {
-      throw new Error("Respuesta sin JSON válido: " + cleaned.slice(0, 90));
-    }
-
-    const vRaw = String(obj.verdict || obj.estado || obj.status || fallbackEval.verdict).toUpperCase();
-    let verdict = fallbackEval.verdict;
-    if (vRaw.includes("DOWN") || vRaw.includes("DESCART") || vRaw.includes("ORANGE") || vRaw.includes("NARANJA") || vRaw.includes("DUD")) {
-      verdict = "DOWNGRADED_ORANGE";
-    } else if (vRaw.includes("PROMO")) {
-      verdict = fallbackEval.verdict.startsWith("PROMOTED") ? fallbackEval.verdict : "PROMOTED_FROM_ORANGE";
-    } else if (vRaw.includes("REAL") || vRaw.includes("ROJ") || vRaw.includes("RED") || vRaw.includes("PELIGRO")) {
-      verdict = "REAL";
-    }
-
-    const conf = Math.min(99, Math.max(55, parseInt(obj.confidence ?? obj.confianza, 10) || fallbackEval.confidence));
-    const reason = String(obj.reason || obj.motivo || obj.explicacion || fallbackEval.reason).trim();
-
-    return { verdict, confidence: conf, reason };
-  }
-
-  function updateQueuePositionLabels() {
-    llmQueue.forEach((qItem, index) => {
-      const entry = aiAuditCache.get(qItem.pairKey);
-      if (entry && !entry.llmDone) {
-        entry.status = "queued";
-        entry.source = `⏳ En cola LLM (#${index + 1})`;
-      }
-    });
-  }
-
-  function syncLlmQueueWithActivePairs(activeLlmKeys) {
-    for (let i = llmQueue.length - 1; i >= 0; i--) {
-      const k = llmQueue[i].pairKey;
-      if (!activeLlmKeys.has(k)) {
-        llmQueue.splice(i, 1);
-        aiAuditCache.delete(k);
-      }
-    }
-
-    if (currentLlmTask && !activeLlmKeys.has(currentLlmTask.pairKey)) {
-      el.llmDebugLog.textContent = `[CANCELADA CONSULTA LLM para ${currentLlmTask.pairKey} por salir del panel rojo superior]\nPasando inmediatamente al siguiente par en cola…`;
-      currentLlmTask.controller.abort();
-      aiAuditCache.delete(currentLlmTask.pairKey);
-      currentLlmTask = null;
-    }
-
-    updateQueuePositionLabels();
-  }
-
-  function scheduleQueueRunner(delayMs = 50) {
-    if (queueTimerId) clearTimeout(queueTimerId);
-    queueTimerId = setTimeout(() => {
-      queueTimerId = null;
-      processNextLlmInQueue();
-    }, Math.max(20, delayMs));
-  }
-
-  function enqueueLlmAudit(pairObj, localEval) {
-    if (el.aiProvider.value === "local") return;
-    const key = pairObj.pairKey;
-    const cached = aiAuditCache.get(key);
-
-    if (cached && cached.llmDone) {
-      // Si fue verificado por LLM nube dura 3 min; si se resolvió por IA-CTC local por cuota 402, se reintenta a los 45 s
-      const ttl = cached.cloudLlm ? 180000 : 45000;
-      if (Date.now() - cached.llmTs < ttl) return;
-      cached.llmDone = false;
-      cached.status = "queued";
-    }
-    if (currentLlmTask && currentLlmTask.pairKey === key) return;
-
-    const existingIdx = llmQueue.findIndex(item => item.pairKey === key);
-    if (existingIdx !== -1) {
-      llmQueue[existingIdx].pairObj = pairObj;
-      llmQueue[existingIdx].localEval = localEval;
-      updateQueuePositionLabels();
-      scheduleQueueRunner(50);
-      return;
-    }
-
-    llmQueue.push({ pairKey: key, pairObj, localEval });
-    llmQueue.sort((x, y) => {
-      const xDown = x.pairObj.downgradedByAi ? 1 : 0;
-      const yDown = y.pairObj.downgradedByAi ? 1 : 0;
-      if (xDown !== yDown) return xDown - yDown;
-      return (x.pairObj.impactSec ?? Infinity) - (y.pairObj.impactSec ?? Infinity);
-    });
-    updateQueuePositionLabels();
-    scheduleQueueRunner(50);
-  }
-
-  async function processNextLlmInQueue() {
-    if (currentLlmTask !== null || !llmQueue.length || el.aiProvider.value === "local") return;
-
-    const waitMs = nextAllowedLlmTime - Date.now();
-    if (waitMs > 0) {
-      scheduleQueueRunner(waitMs);
-      return;
-    }
-
-    const item = llmQueue.shift();
-    updateQueuePositionLabels();
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
-    currentLlmTask = { pairKey: item.pairKey, controller };
-
-    const entry = aiAuditCache.get(item.pairKey);
-    if (entry) {
-      entry.status = "in_flight";
-      entry.source = "🧠 Consultando LLM…";
-    }
-    renderRedOverlayList();
-
-    const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
-    el.llmDebugLog.textContent = `[CONSULTANDO LLM (1 a 1) · ${item.pairKey} · En cola: ${llmQueue.length}]\n${prompt}`;
-
-    try {
-      const { text, modelName } = await callRealLlmEndpoint(prompt, controller.signal);
-      clearTimeout(timeoutId);
-
-      const parsed = parseLlmJsonVerdict(text, item.localEval);
-
-      aiAuditCache.set(item.pairKey, {
-        status: "done",
-        verdict: parsed.verdict,
-        confidence: parsed.confidence,
-        reason: parsed.reason,
-        source: `🤖 ${modelName}`,
-        llmDone: true,
-        llmVerified: true,
-        cloudLlm: true,
-        llmTs: Date.now(),
-        retries: 0
-      });
-
-      el.llmDebugLog.textContent = `[RESPUESTA LLM (${modelName}) · ${new Date().toLocaleTimeString("es-ES")} · Restantes en cola: ${llmQueue.length}]\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
-
-      currentLlmTask = null;
-      // Pausa de 5.2 segundos entre consultas exitosas para respetar el rate-limit gratuito de Pollinations
-      nextAllowedLlmTime = Date.now() + 5200;
-      computeProximity();
-      render();
-
-      scheduleQueueRunner(5300);
-    } catch (err) {
-      clearTimeout(timeoutId);
-      const wasAborted = controller.signal.aborted;
-      currentLlmTask = null;
-
-      if (!wasAborted) {
-        preferredFreeModelIdx = (preferredFreeModelIdx + 1) % FREE_LLM_MODELS.length;
-
-        // En lugar de dejar la alerta bloqueada en "Reintentando LLM...", aplicamos de inmediato el veredicto firme
-        // del Motor Experto IA-CTC Local (en verde) y programamos re-intento silencioso en 45 s
-        aiAuditCache.set(item.pairKey, {
-          status: "done",
-          verdict: item.localEval.verdict,
-          confidence: item.localEval.confidence,
-          reason: item.localEval.reason,
-          source: "🤖 IA-CTC Local (Activo)",
-          llmDone: true,
-          llmVerified: true,
-          cloudLlm: false,
-          llmTs: Date.now(),
-          retries: 1
-        });
-
-        el.llmDebugLog.textContent = `[API GRATUITA POLLINATIONS CON LÍMITE DE CUOTA (${err.message || err})]\n✅ Veredicto resuelto sin espera por el Motor Experto IA-CTC (${item.pairKey}):\n${JSON.stringify(item.localEval, null, 2)}\n(Truco: Si pegas una API Key gratuita de Groq o Gemini arriba, tendrás 0 esperas y 100% LLM en nube).`;
-
-        nextAllowedLlmTime = Date.now() + 4500;
-        computeProximity();
-        render();
-      }
-      scheduleQueueRunner(wasAborted ? 80 : 4600);
-    }
-  }
-
-  el.btnReauditAll.addEventListener("click", () => {
-    if (currentLlmTask) {
-      currentLlmTask.controller.abort();
-      currentLlmTask = null;
-    }
-    llmQueue.length = 0;
-    aiAuditCache.clear();
-    nextAllowedLlmTime = 0;
-    computeProximity();
-    render();
-  });
-  el.enableAiAudit.addEventListener("change", () => {
-    if (!el.enableAiAudit.checked && currentLlmTask) {
-      currentLlmTask.controller.abort();
-      currentLlmTask = null;
-      llmQueue.length = 0;
-    }
-    computeProximity();
-    render();
-  });
-
   /* ---------- Indexación Espacial en Memoria para Cálculo por Vía ---------- */
   function indexTrackWays(st, lines) {
     st.grid.clear();
