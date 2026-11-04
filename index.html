@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.42</title>
+<title>Alertas Ferrocarril · v1.41</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -516,7 +516,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.42 · LLM</span>
+          <span class="ver">v1.41 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -543,7 +543,7 @@
         <span>🤖 <b>Auditoría Híbrida (Reglas CTC + Cola LLM Secuencial):</b> audita con LLM todas las alertas del panel rojo superior (incluidas las rebajadas a naranja)</span>
       </label>
       <div class="help">
-        • <b>Cola estricta 1 a 1 con rotación anti-402:</b> rota automáticamente entre varios motores LLM gratuitos con control de cadencia para evitar bloqueos por cuota.<br>
+        • <b>Cola estricta 1 a 1:</b> audita todas las alertas del panel superior (rojas y rebajadas a naranja en ese panel) sin tocar las naranjas del panel izquierdo.<br>
         • <b>Auto-cancelación:</b> si una alerta sale del panel superior (pasa a verde o a naranja normal del panel izquierdo), se aborta al instante.
       </div>
     </fieldset>
@@ -689,7 +689,7 @@
           <div class="fl-title">🤖 Arquitectura IA (Reglas CTC + Cola LLM)</div>
           <label for="aiProvider" style="margin-top:0">Proveedor LLM Neuronal</label>
           <select id="aiProvider">
-            <option value="pollinations" selected>🌐 Multi-LLM Gratis (GPT-4o / Mistral / Llama · Cola 1 a 1)</option>
+            <option value="pollinations" selected>🌐 Pollinations OpenAI (GPT-4o-mini Gratis · Cola 1 a 1)</option>
             <option value="gemini">✨ Google Gemini 2.5 Flash (Con tu API Key gratis)</option>
             <option value="groq">⚡ Groq · Llama 3.3 70B (Con tu API Key gratis)</option>
             <option value="local">🛡️ Solo Reglas CTC Locales (Sin llamadas externas)</option>
@@ -736,10 +736,10 @@
       </div>
 
       <div class="hm-box" style="border-left:5px solid #7c3aed">
-        <div class="hm-box-title">⏳ Gestión de Cola LLM (1 a 1 con rotación anti-bloqueo)</div>
+        <div class="hm-box-title">⏳ Gestión de Cola LLM (1 a 1 con auto-cancelación)</div>
         <div>
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li>El sistema consulta al LLM <b>de una en una</b> con pausa de enfriamiento entre consultas y rotación automática de modelos gratuitos (GPT-4o-mini, Mistral, Llama, Qwen) si alguno devuelve límite de cuota (HTTP 402/429).</li>
+            <li>El sistema consulta al LLM <b>de una en una</b>: primero las rojas más urgentes y a continuación las rebajadas a naranja del panel superior.</li>
             <li>Las alertas que esperan su turno muestran <b>⏳ En cola LLM (#1, #2…)</b> y al recibir el veredicto muestran el modelo neuronal que ha respondido.</li>
             <li>Si mientras espera o se está consultando el par sale del panel superior (porque pasa a verde o a naranja normal del panel izquierdo), esa consulta <b>se cancela en el acto</b> y pasa inmediatamente a la siguiente.</li>
           </ul>
@@ -755,7 +755,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.42";
+  const VERSION = "1.41";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1229,14 +1229,11 @@
   };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Gestión Estricta de Cola LLM 1 a 1 con Rotación Anti-402 y Control de Cadencia ---------- */
-  // aiAuditCache: pairKey -> { status: 'queued'|'in_flight'|'done', verdict, confidence, reason, source, llmDone, llmVerified, llmTs, retries }
+  /* ---------- Gestión Estricta de Cola LLM 1 a 1 con Cancelación Automática (AbortController) ---------- */
+  // aiAuditCache: pairKey -> { status: 'queued'|'in_flight'|'done', verdict, confidence, reason, source, llmDone, llmVerified, llmTs }
   const aiAuditCache = new Map();
   const llmQueue = []; // Lista FIFO ordenada de { pairKey, pairObj, localEval }
   let currentLlmTask = null; // { pairKey, controller }
-  let nextAllowedLlmTime = 0; // Enfriamiento entre peticiones para evitar HTTP 402/429
-  let queueTimerId = null;
-  let preferredFreeModelIdx = 0; // Rotador de modelos gratuitos si uno da 402
 
   try {
     const savedProv = localStorage.getItem("aiProviderRenfe");
@@ -1249,7 +1246,7 @@
     const prov = el.aiProvider.value;
     el.aiKeyWrap.style.display = (prov === "gemini" || prov === "groq") ? "block" : "none";
     el.lblAiProvider.textContent = prov === "pollinations"
-      ? "IA: Multi-LLM (Cola)"
+      ? "IA: GPT-4o-mini (LLM)"
       : (prov === "gemini" ? "IA: Gemini Flash" : (prov === "groq" ? "IA: Groq Llama 3.3" : "IA: Reglas CTC"));
     try {
       localStorage.setItem("aiProviderRenfe", prov);
@@ -1264,7 +1261,6 @@
     }
     llmQueue.length = 0;
     aiAuditCache.clear();
-    nextAllowedLlmTime = 0;
     if (trains.length) {
       computeProximity();
       render();
@@ -1435,26 +1431,6 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
 {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"PROMOTED_RED","confidence":90,"reason":"Explicación técnica del LLM en español (máx 16 palabras) citando estaciones o vía"}`;
   }
 
-  function sleepAbortable(ms, signal) {
-    return new Promise((resolve, reject) => {
-      if (signal?.aborted) return reject(new DOMException("Aborted", "AbortError"));
-      const id = setTimeout(resolve, ms);
-      signal?.addEventListener("abort", () => {
-        clearTimeout(id);
-        reject(new DOMException("Aborted", "AbortError"));
-      }, { once: true });
-    });
-  }
-
-  // Catálogo de modelos gratuitos independientes en Pollinations para rotar si uno da HTTP 402/429
-  const FREE_LLM_MODELS = [
-    { id: "openai",      label: "GPT-4o-mini (LLM)" },
-    { id: "mistral",     label: "Mistral Small (LLM)" },
-    { id: "llama",       label: "Llama 3.3 (LLM)" },
-    { id: "qwen-coder",  label: "Qwen 2.5 (LLM)" },
-    { id: "searchgpt",   label: "SearchGPT (LLM)" }
-  ];
-
   async function callRealLlmEndpoint(promptText, signal) {
     const prov = el.aiProvider.value;
     const apiKey = el.aiApiKey.value.trim();
@@ -1498,104 +1474,84 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
       return { text: j.choices?.[0]?.message?.content || "", modelName: "Llama 3.3 70B" };
     }
 
-    // Proveedor gratuito por defecto: Rotación inteligente entre modelos gratuitos + GET ligero sin cabecera Referer
+    // Proveedor por defecto: Pollinations con triple fallback (OpenAI endpoint -> POST raíz -> GET directo)
     const messages = [
       { role: "system", content: sysMsg },
       { role: "user", content: promptText }
     ];
+    const seed = Math.floor(Math.random() * 100000);
     let lastErr = null;
 
-    for (let attempt = 0; attempt < FREE_LLM_MODELS.length; attempt++) {
-      const mIdx = (preferredFreeModelIdx + attempt) % FREE_LLM_MODELS.length;
-      const mObj = FREE_LLM_MODELS[mIdx];
-      const seed = Math.floor(Math.random() * 900000) + 10000;
-
-      if (attempt > 0) {
-        // Pequeña pausa antes de probar el siguiente modelo gratuito para no disparar anti-flood
-        await sleepAbortable(1400, signal);
-      }
-
-      // 1) Intentar POST /openai con referrerPolicy: no-referrer para evitar cuota 402 por dominio
-      try {
-        const r = await fetch("https://text.pollinations.ai/openai", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          referrerPolicy: "no-referrer",
-           cache: "no-store",
-          signal,
-          body: JSON.stringify({
-            model: mObj.id,
-            temperature: 0.1,
-            seed,
-            messages
-          })
-        });
-
-        if (r.ok) {
-          const raw = await r.text();
-          let extracted = raw;
-          try {
-            const j = JSON.parse(raw);
-            if (j.choices?.[0]?.message?.content) extracted = j.choices[0].message.content;
-          } catch (_) {}
-          if (extracted && extracted.includes("{")) {
-            preferredFreeModelIdx = mIdx; // Recordar el modelo que está funcionando sin 402
-            return { text: extracted, modelName: mObj.label };
-          }
-        } else {
-          lastErr = new Error(`${mObj.id} HTTP ${r.status}`);
-        }
-      } catch (e) {
-        if (signal?.aborted) throw e;
-        lastErr = e;
-      }
-
-      // 2) Fallback GET ligero para este modelo (sin preflight CORS y vía directa o vía proxy Worker si hace falta)
-      const compactPrompt = `${sysMsg}\n${promptText}`;
-      const directGetUrl = `https://text.pollinations.ai/${encodeURIComponent(compactPrompt)}?model=${encodeURIComponent(mObj.id)}&json=true&seed=${seed}`;
-      try {
-        const rGet = await fetch(directGetUrl, {
-          method: "GET",
-          referrerPolicy: "no-referrer",
-          cache: "no-store",
-          signal
-        });
-        if (rGet.ok) {
-          const rawGet = await rGet.text();
-          if (rawGet && rawGet.includes("{")) {
-            preferredFreeModelIdx = mIdx;
-            return { text: rawGet, modelName: mObj.label };
-          }
-        } else {
-          lastErr = new Error(`${mObj.id} GET HTTP ${rGet.status}`);
-        }
-      } catch (e) {
-        if (signal?.aborted) throw e;
-        lastErr = e;
-      }
-
-      // 3) Si el navegador recibe bloqueo por IP (402/429), intentamos salir a través del Worker proxy configurado
-      const proxyTpl = el.proxy.value.trim();
-      if (proxyTpl) {
+    // Intento 1: Endpoint compatible con OpenAI de Pollinations
+    try {
+      const r1 = await fetch("https://text.pollinations.ai/openai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal,
+        body: JSON.stringify({
+          model: "openai",
+          temperature: 0.1,
+          seed,
+          response_format: { type: "json_object" },
+          messages
+        })
+      });
+      if (r1.ok) {
+        const raw1 = await r1.text();
         try {
-          const proxiedUrl = proxyTpl.includes("{url}")
-            ? proxyTpl.replace("{url}", encodeURIComponent(directGetUrl))
-            : proxyTpl + encodeURIComponent(directGetUrl);
-          const rProxy = await fetch(proxiedUrl, { method: "GET", cache: "no-store", signal });
-          if (rProxy.ok) {
-            const rawProxy = await rProxy.text();
-            if (rawProxy && rawProxy.includes("{")) {
-              preferredFreeModelIdx = mIdx;
-              return { text: rawProxy, modelName: mObj.label };
-            }
-          }
-        } catch (e) {
-          if (signal?.aborted) throw e;
+          const j1 = JSON.parse(raw1);
+          const content1 = j1.choices?.[0]?.message?.content;
+          if (content1) return { text: content1, modelName: "GPT-4o-mini (LLM)" };
+        } catch (_) {}
+        if (raw1 && raw1.includes("{")) {
+          return { text: raw1, modelName: "GPT-4o-mini (LLM)" };
         }
+      } else {
+        lastErr = new Error("Pollinations OpenAI HTTP " + r1.status);
       }
+    } catch (e) {
+      if (signal.aborted) throw e;
+      lastErr = e;
     }
 
-    throw lastErr || new Error("Todos los modelos gratuitos devolvieron límite temporal");
+    // Intento 2: POST directo a Pollinations
+    try {
+      const r2 = await fetch("https://text.pollinations.ai/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal,
+        body: JSON.stringify({
+          model: "openai",
+          jsonMode: true,
+          seed,
+          messages
+        })
+      });
+      if (r2.ok) {
+        const raw2 = await r2.text();
+        if (raw2 && raw2.includes("{")) {
+          try {
+            const j2 = JSON.parse(raw2);
+            if (j2.choices?.[0]?.message?.content) {
+              return { text: j2.choices[0].message.content, modelName: "GPT-4o-mini (LLM)" };
+            }
+          } catch (_) {}
+          return { text: raw2, modelName: "GPT-4o-mini (LLM)" };
+        }
+      } else {
+        lastErr = new Error("Pollinations POST HTTP " + r2.status);
+      }
+    } catch (e) {
+      if (signal.aborted) throw e;
+      lastErr = e;
+    }
+
+    // Intento 3: GET directo a Pollinations (evita bloqueos CORS de preflight POST)
+    const getUrl = `https://text.pollinations.ai/${encodeURIComponent(sysMsg + "\n\n" + promptText)}?model=openai&json=true&seed=${seed}`;
+    const r3 = await fetch(getUrl, { method: "GET", signal });
+    if (!r3.ok) throw lastErr || new Error("Pollinations GET HTTP " + r3.status);
+    const raw3 = await r3.text();
+    return { text: raw3, modelName: "GPT-4o-mini (LLM)" };
   }
 
   function parseLlmJsonVerdict(rawText, fallbackEval) {
@@ -1641,9 +1597,7 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
       const entry = aiAuditCache.get(qItem.pairKey);
       if (entry && !entry.llmDone) {
         entry.status = "queued";
-        entry.source = entry.retries > 0
-          ? `⏳ Reintento LLM (#${index + 1})`
-          : `⏳ En cola LLM (#${index + 1})`;
+        entry.source = `⏳ En cola LLM (#${index + 1})`;
       }
     });
   }
@@ -1671,22 +1625,14 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
     updateQueuePositionLabels();
   }
 
-  function scheduleQueueRunner(delayMs = 50) {
-    if (queueTimerId) clearTimeout(queueTimerId);
-    queueTimerId = setTimeout(() => {
-      queueTimerId = null;
-      processNextLlmInQueue();
-    }, Math.max(20, delayMs));
-  }
-
   function enqueueLlmAudit(pairObj, localEval) {
     if (el.aiProvider.value === "local") return;
     const key = pairObj.pairKey;
     const cached = aiAuditCache.get(key);
 
-    // Si ya fue verificado por el LLM hace menos de 3 minutos (o está esperando ventana de reintento), o ya está en vuelo, no duplicamos
+    // Si ya fue verificado por el LLM hace menos de 3 minutos (o falló hace menos de 25 s), o ya está en vuelo, no duplicamos
     if (cached && cached.llmDone) {
-      const ttl = cached.llmVerified ? 180000 : 12000;
+      const ttl = cached.llmVerified ? 180000 : 25000;
       if (Date.now() - cached.llmTs < ttl) return;
       cached.llmDone = false;
       cached.status = "queued";
@@ -1698,7 +1644,7 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
       llmQueue[existingIdx].pairObj = pairObj;
       llmQueue[existingIdx].localEval = localEval;
       updateQueuePositionLabels();
-      scheduleQueueRunner(50);
+      processNextLlmInQueue();
       return;
     }
 
@@ -1711,25 +1657,18 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
       return (x.pairObj.impactSec ?? Infinity) - (y.pairObj.impactSec ?? Infinity);
     });
     updateQueuePositionLabels();
-    scheduleQueueRunner(50);
+    processNextLlmInQueue();
   }
 
   async function processNextLlmInQueue() {
     // Garantía estricta 1 a 1: NO se lanza la siguiente hasta que termine o se aborte la actual
     if (currentLlmTask !== null || !llmQueue.length || el.aiProvider.value === "local") return;
 
-    // Respetar ventana de enfriamiento entre peticiones para evitar HTTP 402 / 429
-    const waitMs = nextAllowedLlmTime - Date.now();
-    if (waitMs > 0) {
-      scheduleQueueRunner(waitMs);
-      return;
-    }
-
     const item = llmQueue.shift();
     updateQueuePositionLabels();
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 28000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     currentLlmTask = { pairKey: item.pairKey, controller };
 
     const entry = aiAuditCache.get(item.pairKey);
@@ -1756,19 +1695,16 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
         source: `🤖 ${modelName}`,
         llmDone: true,
         llmVerified: true,
-        llmTs: Date.now(),
-        retries: 0
+        llmTs: Date.now()
       });
 
       el.llmDebugLog.textContent = `[RESPUESTA LLM (${modelName}) · ${new Date().toLocaleTimeString("es-ES")} · Restantes en cola: ${llmQueue.length}]\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
 
       currentLlmTask = null;
-      // Enfriamiento de 3.2 s entre una consulta completada y la siguiente de la cola para evitar HTTP 402/429
-      nextAllowedLlmTime = Date.now() + 3200;
       computeProximity();
       render();
 
-      scheduleQueueRunner(3250);
+      setTimeout(processNextLlmInQueue, 900);
     } catch (err) {
       clearTimeout(timeoutId);
       const wasAborted = controller.signal.aborted;
@@ -1776,25 +1712,17 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
 
       if (!wasAborted) {
         const existing = aiAuditCache.get(item.pairKey);
-        const prevRetries = (existing?.retries || 0) + 1;
-
         if (existing) {
-          existing.retries = prevRetries;
-          existing.status = "queued";
+          existing.status = "done";
           existing.llmDone = true;
           existing.llmVerified = false;
           existing.llmTs = Date.now();
-          existing.source = `⏳ Reintentando LLM…`;
+          existing.source = "⚠️ LLM sin resp. (reintento en 25s)";
         }
-
-        // Rotamos el índice del modelo por defecto para que el reintento entre por otro motor
-        preferredFreeModelIdx = (preferredFreeModelIdx + 1) % FREE_LLM_MODELS.length;
-        nextAllowedLlmTime = Date.now() + 4500;
-
-        el.llmDebugLog.textContent = `[AVISO LLM en ${item.pairKey}: ${err.message || err}]\nRotando a modelo alternativo (${FREE_LLM_MODELS[preferredFreeModelIdx].label}) y reencolando automáticamente…`;
+        el.llmDebugLog.textContent = `[ERROR LLM en ${item.pairKey}: ${err.message || err}]\nSe mantiene pre-diagnóstico CTC Local temporalmente y se reintentará en 25s.`;
         renderRedOverlayList();
       }
-      scheduleQueueRunner(wasAborted ? 80 : 4500);
+      setTimeout(processNextLlmInQueue, wasAborted ? 50 : 900);
     }
   }
 
@@ -1805,7 +1733,6 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
     }
     llmQueue.length = 0;
     aiAuditCache.clear();
-    nextAllowedLlmTime = 0;
     computeProximity();
     render();
   });
@@ -2842,12 +2769,11 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
                 source: el.aiProvider.value === "local" ? "⚡ CTC Local" : "⏳ En cola LLM",
                 llmDone: el.aiProvider.value === "local",
                 llmVerified: false,
-                llmTs: 0,
-                retries: 0
+                llmTs: 0
               };
               aiAuditCache.set(pairKey, activeEval);
-            } else if (!activeEval.llmVerified) {
-              // Mientras no haya sido confirmada por el LLM, actualizamos el pre-diagnóstico sin perder su sitio en la cola
+            } else if (!activeEval.llmDone) {
+              // Mientras espera turno en la cola, actualizamos el pre-diagnóstico sin perder su sitio en la cola
               activeEval.verdict = localEval.verdict;
               activeEval.confidence = localEval.confidence;
               activeEval.reason = localEval.reason;
@@ -3399,7 +3325,6 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
     }
     llmQueue.length = 0;
     aiAuditCache.clear();
-    nextAllowedLlmTime = 0;
     selectedPairKey = null;
     selectedTrainIds.clear();
     refresh();
