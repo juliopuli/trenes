@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v2.1</title>
+<title>Alertas Ferrocarril · v2.2</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -516,7 +516,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v2.1 · LLM</span>
+          <span class="ver">v2.2 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -755,7 +755,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "2.0";
+  const VERSION = "2.2";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1429,12 +1429,14 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
 {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"PROMOTED_RED","confidence":90,"reason":"Explicación técnica del LLM en español (máx 16 palabras) citando estaciones o vía"}`;
   }
 
-async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
+let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 429
+
+  async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     const prov = el.aiProvider.value;
     const apiKey = el.aiApiKey.value.trim();
     const sysMsg = "Eres un Ingeniero Jefe del CTC de Adif en España. Analizas telemetría ferroviaria y respondes exclusivamente en JSON válido con las claves verdict, confidence y reason.";
 
-    // 1. GOOGLE GEMINI 2.5 FLASH-LITE (Con API Key gratuita de Google AI Studio)
+    // 1. GOOGLE GEMINI 2.5 FLASH-LITE (Con API Key gratuita: hasta 1.500 peticiones/día gratis)
     if (prov === "gemini") {
       if (!apiKey) throw new Error("Falta tu API Key de Gemini (créala gratis en aistudio.google.com)");
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -1455,7 +1457,7 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
       return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "☁️ LLM: Gemini 2.5 Flash-Lite", isCloud: true };
     }
 
-    // 2. GROQ LLAMA 3.3 70B (Con API Key gratuita de console.groq.com)
+    // 2. GROQ LLAMA 3.3 70B (Con API Key gratuita: hasta 14.400 peticiones/día gratis)
     if (prov === "groq") {
       if (!apiKey) throw new Error("Falta tu API Key de Groq (créala gratis en console.groq.com)");
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -1477,33 +1479,25 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
       return { text: j.choices?.[0]?.message?.content || "", modelName: "☁️ LLM: Llama 3.3 70B", isCloud: true };
     }
 
-    // 3. MODO GRATUITO SIN API KEY: Intentamos primero LLM7.io (OpenAI-compatible sin clave) y luego Pollinations (modelos libres)
-    const messages = [
-      { role: "system", content: sysMsg },
-      { role: "user", content: promptText }
-    ];
-
-    // Intento A: Pasarela abierta LLM7.io (No requiere API Key, soporta CORS)
-    const llm7Models = ["fast", "gpt-4o-mini-2024-07-18", "default"];
-    for (const mId of llm7Models) {
-      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    // 3. MODO GRATUITO SIN API KEY (LLM7.io con control anti-429 y 1 sola petición limpia por turno)
+    if (Date.now() >= freeCloudCooldownUntil) {
       try {
         const stepCtl = new AbortController();
-        const tId = setTimeout(() => stepCtl.abort(), 6500);
+        const tId = setTimeout(() => stepCtl.abort(), 8000);
         const onAbort = () => stepCtl.abort();
         signal?.addEventListener("abort", onAbort, { once: true });
 
         const rLlm7 = await fetch("https://api.llm7.io/v1/chat/completions", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer unused"
-          },
+          headers: { "Content-Type": "application/json" },
           signal: stepCtl.signal,
           body: JSON.stringify({
-            model: mId,
+            model: "default",
             temperature: 0.1,
-            messages
+            messages: [
+              { role: "system", content: sysMsg },
+              { role: "user", content: promptText }
+            ]
           })
         });
         clearTimeout(tId);
@@ -1513,58 +1507,18 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
           const j7 = await rLlm7.json();
           const content7 = j7.choices?.[0]?.message?.content || "";
           if (content7 && content7.includes("{")) {
-            return { text: content7, modelName: `☁️ LLM7 (${mId})`, isCloud: true };
+            return { text: content7, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
           }
+        } else if (rLlm7.status === 429) {
+          // Si el servidor gratuito sin clave pide enfriamiento (429), pausamos 25 s las llamadas anónimas
+          freeCloudCooldownUntil = Date.now() + 25000;
         }
       } catch (e) {
         if (signal?.aborted) throw e;
       }
     }
 
-    // Intento B: Pollinations con los alias gratuitos 2026 (openai-fast, gemini, mistral)
-    const pollModels = ["openai-fast", "gemini", "mistral"];
-    const seed = Math.floor(Math.random() * 90000) + 1000;
-    for (const pm of pollModels) {
-      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-      try {
-        const stepCtl = new AbortController();
-        const tId = setTimeout(() => stepCtl.abort(), 5500);
-        const onAbort = () => stepCtl.abort();
-        signal?.addEventListener("abort", onAbort, { once: true });
-
-        const rPol = await fetch("https://text.pollinations.ai/openai", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: stepCtl.signal,
-          body: JSON.stringify({
-            model: pm,
-            seed,
-            temperature: 0.1,
-            messages
-          })
-        });
-        clearTimeout(tId);
-        signal?.removeEventListener("abort", onAbort);
-
-        if (rPol.ok) {
-          const rawPol = await rPol.text();
-          if (rawPol && rawPol.includes("{")) {
-            try {
-              const jPol = JSON.parse(rawPol);
-              if (jPol.choices?.[0]?.message?.content) {
-                return { text: jPol.choices[0].message.content, modelName: `☁️ LLM (${pm})`, isCloud: true };
-              }
-            } catch (_) {}
-            return { text: rawPol, modelName: `☁️ LLM (${pm})`, isCloud: true };
-          }
-        }
-      } catch (e) {
-        if (signal?.aborted) throw e;
-      }
-    }
-
-    // Si tanto LLM7 como Pollinations bloquean por cuota anónima (402/429), devolvemos el dictamen local
-    // indicando explícitamente que ha sido resuelto por Reglas CTC Locales (sin engañar diciendo que fue un LLM en nube)
+    // Respaldo instantáneo por Reglas CTC Locales mientras la pasarela gratuita sin clave está en enfriamiento
     const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
     return {
       text: JSON.stringify({
@@ -1572,10 +1526,11 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
         confidence: fb.confidence,
         reason: fb.reason
       }),
-      modelName: "⚡ CTC Local (Nube sin cuota)",
+      modelName: "⚡ CTC Local (Enfriando cuota nube)",
       isCloud: false
     };
   }
+
   function parseLlmJsonVerdict(rawText, fallbackEval) {
     const cleaned = String(rawText || "").replace(/```json|```/gi, "").trim();
     let obj = null;
@@ -1613,7 +1568,6 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     return { verdict, confidence: conf, reason };
   }
 
-  // Sincroniza las posiciones de espera (#1, #2...) en las etiquetas de los trenes encolados
   function updateQueuePositionLabels() {
     llmQueue.forEach((qItem, index) => {
       const entry = aiAuditCache.get(qItem.pairKey);
@@ -1624,10 +1578,7 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     });
   }
 
-  // Limpia de la cola cualquier par que haya salido del panel superior (#redOverlay)
-  // (es decir, que haya pasado a verde o a naranja normal del panel izquierdo)
   function syncLlmQueueWithActivePairs(activeLlmKeys) {
-    // 1. Filtrar la cola de espera: quitar cualquier par que ya no esté en el panel superior
     for (let i = llmQueue.length - 1; i >= 0; i--) {
       const k = llmQueue[i].pairKey;
       if (!activeLlmKeys.has(k)) {
@@ -1636,7 +1587,6 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
       }
     }
 
-    // 2. Si la consulta ahora mismo en vuelo ya no está en el panel superior, se aborta inmediatamente
     if (currentLlmTask && !activeLlmKeys.has(currentLlmTask.pairKey)) {
       el.llmDebugLog.textContent = `[CANCELADA CONSULTA LLM para ${currentLlmTask.pairKey} por salir del panel rojo superior]\nPasando inmediatamente al siguiente par en cola…`;
       currentLlmTask.controller.abort();
@@ -1652,9 +1602,10 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     const key = pairObj.pairKey;
     const cached = aiAuditCache.get(key);
 
-    // Si ya fue verificado por el LLM hace menos de 3 minutos (o falló hace menos de 25 s), o ya está en vuelo, no duplicamos
+    // Si ya fue verificado por el LLM en nube, mantenemos su veredicto 10 minutos (600.000 ms) para no gastar cuota;
+    // si se resolvió en local por enfriamiento 429, reintentamos nube a los 35 segundos.
     if (cached && cached.llmDone) {
-      const ttl = cached.llmVerified ? 180000 : 25000;
+      const ttl = cached.llmVerified ? 600000 : 35000;
       if (Date.now() - cached.llmTs < ttl) return;
       cached.llmDone = false;
       cached.status = "queued";
@@ -1671,7 +1622,6 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     }
 
     llmQueue.push({ pairKey: key, pairObj, localEval });
-    // Priorizar siempre en la cola las alertas rojas activas sobre las ya rebajadas a naranja en el panel superior
     llmQueue.sort((x, y) => {
       const xDown = x.pairObj.downgradedByAi ? 1 : 0;
       const yDown = y.pairObj.downgradedByAi ? 1 : 0;
@@ -1682,15 +1632,22 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     processNextLlmInQueue();
   }
 
+  let nextQueueAllowedAt = 0;
+
   async function processNextLlmInQueue() {
-    // Garantía estricta 1 a 1: NO se lanza la siguiente hasta que termine o se aborte la actual
     if (currentLlmTask !== null || !llmQueue.length || el.aiProvider.value === "local") return;
+
+    const waitMs = nextQueueAllowedAt - Date.now();
+    if (waitMs > 0) {
+      setTimeout(processNextLlmInQueue, waitMs);
+      return;
+    }
 
     const item = llmQueue.shift();
     updateQueuePositionLabels();
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     currentLlmTask = { pairKey: item.pairKey, controller };
 
     const entry = aiAuditCache.get(item.pairKey);
@@ -1703,7 +1660,7 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
     el.llmDebugLog.textContent = `[CONSULTANDO LLM (1 a 1) · ${item.pairKey} · En cola: ${llmQueue.length}]\n${prompt}`;
 
-try {
+    try {
       const { text, modelName, isCloud } = await callRealLlmEndpoint(prompt, controller.signal, item.localEval);
       clearTimeout(timeoutId);
 
@@ -1722,16 +1679,20 @@ try {
 
       const headerLog = isCloud
         ? `✅ [RESPUESTA NUBE (${modelName}) · ${new Date().toLocaleTimeString("es-ES")}]`
-        : `⚠️ [APIs GRATUITAS SIN CLAVE SATURADAS -> USANDO REGLAS CTC LOCALES · ${new Date().toLocaleTimeString("es-ES")}]\n(Consejo: Selecciona arriba Google Gemini 2.5 Flash-Lite o Groq y pega tu API Key gratuita para tener 100% LLM en nube)`;
+        : `⏳ [PAUSA ANTI-429 EN SERVIDOR GRATUITO -> USANDO REGLAS CTC LOCALES (Reintento nube en 35s)]`;
 
       el.llmDebugLog.textContent = `${headerLog}\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
       el.llmDebugLog.scrollTop = 0;
-  
+
       currentLlmTask = null;
+      // Si usamos el proveedor sin API Key, dejamos 5.5 segundos entre cada consulta de la cola para no disparar 429
+      const cadenceMs = el.aiProvider.value === "pollinations" ? 5500 : 1200;
+      nextQueueAllowedAt = Date.now() + cadenceMs;
+
       computeProximity();
       render();
 
-      setTimeout(processNextLlmInQueue, 900);
+      setTimeout(processNextLlmInQueue, cadenceMs + 50);
     } catch (err) {
       clearTimeout(timeoutId);
       const wasAborted = controller.signal.aborted;
@@ -1744,12 +1705,12 @@ try {
           existing.llmDone = true;
           existing.llmVerified = false;
           existing.llmTs = Date.now();
-          existing.source = "⚠️ LLM sin resp. (reintento en 25s)";
+          existing.source = "⚠️ Error API (reintento en 35s)";
         }
-        el.llmDebugLog.textContent = `[ERROR LLM en ${item.pairKey}: ${err.message || err}]\nSe mantiene pre-diagnóstico CTC Local temporalmente y se reintentará en 25s.`;
+        el.llmDebugLog.textContent = `[AVISO LLM en ${item.pairKey}: ${err.message || err}]\nSe mantiene pre-diagnóstico CTC Local y se reintentará en 35s.`;
         renderRedOverlayList();
       }
-      setTimeout(processNextLlmInQueue, wasAborted ? 50 : 900);
+      setTimeout(processNextLlmInQueue, wasAborted ? 50 : 2500);
     }
   }
 
@@ -1760,6 +1721,8 @@ try {
     }
     llmQueue.length = 0;
     aiAuditCache.clear();
+    freeCloudCooldownUntil = 0;
+    nextQueueAllowedAt = 0;
     computeProximity();
     render();
   });
