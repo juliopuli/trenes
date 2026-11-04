@@ -1479,20 +1479,24 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
       return { text: j.choices?.[0]?.message?.content || "", modelName: "☁️ LLM: Llama 3.3 70B", isCloud: true };
     }
 
-    // 3. MODO GRATUITO SIN API KEY (LLM7.io con control anti-429 y 1 sola petición limpia por turno)
+    // 3. MODO GRATUITO SIN API KEY: intento con openrouter.ai modelo gratuito, con cooldown anti-429
     if (Date.now() >= freeCloudCooldownUntil) {
       try {
         const stepCtl = new AbortController();
-        const tId = setTimeout(() => stepCtl.abort(), 8000);
+        const tId = setTimeout(() => stepCtl.abort(), 12000);
         const onAbort = () => stepCtl.abort();
         signal?.addEventListener("abort", onAbort, { once: true });
 
-        const rLlm7 = await fetch("https://api.llm7.io/v1/chat/completions", {
+        const rFree = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://juliopuli.github.io/trenes/",
+            "X-Title": "Alertas Ferrocarril"
+          },
           signal: stepCtl.signal,
           body: JSON.stringify({
-            model: "default",
+            model: "meta-llama/llama-3.1-8b-instruct:free",
             temperature: 0.1,
             messages: [
               { role: "system", content: sysMsg },
@@ -1503,33 +1507,27 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
         clearTimeout(tId);
         signal?.removeEventListener("abort", onAbort);
 
-        if (rLlm7.ok) {
-          const j7 = await rLlm7.json();
-          const content7 = j7.choices?.[0]?.message?.content || "";
-          if (content7 && content7.includes("{")) {
-            return { text: content7, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
+        if (rFree.ok) {
+          const jFree = await rFree.json();
+          const contentFree = jFree.choices?.[0]?.message?.content || "";
+          if (contentFree && contentFree.includes("{")) {
+            return { text: contentFree, modelName: "☁️ LLM Nube (Llama 3.1 8B)", isCloud: true };
           }
-        } else if (rLlm7.status === 429) {
-          // Si el servidor gratuito sin clave pide enfriamiento (429), pausamos 25 s las llamadas anónimas
-          freeCloudCooldownUntil = Date.now() + 25000;
+        } else if (rFree.status === 429) {
+          freeCloudCooldownUntil = Date.now() + 60000; // 60 s de cooldown si hay 429
         }
       } catch (e) {
         if (signal?.aborted) throw e;
       }
     }
 
-    // Respaldo instantáneo por Reglas CTC Locales mientras la pasarela gratuita sin clave está en enfriamiento
+    // Respaldo instantáneo por Reglas CTC Locales mientras la pasarela gratuita está en enfriamiento
     const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
     return {
-      text: JSON.stringify({
-        verdict: fb.verdict,
-        confidence: fb.confidence,
-        reason: fb.reason
-      }),
+      text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
       modelName: "⚡ CTC Local (Enfriando cuota nube)",
       isCloud: false
     };
-  }
 
   function parseLlmJsonVerdict(rawText, fallbackEval) {
     const cleaned = String(rawText || "").replace(/```json|```/gi, "").trim();
