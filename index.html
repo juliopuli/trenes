@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.49</title>
+<title>Alertas Ferrocarril · v1.50</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -516,7 +516,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.49 · LLM</span>
+          <span class="ver">v1.50 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -755,7 +755,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.49";
+  const VERSION = "1.50";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1493,7 +1493,7 @@ const FREE_LLM_MODELS = [
       return { text: j.choices?.[0]?.message?.content || "", modelName: "Llama 3.3 70B (Groq)" };
     }
 
-    // Cliente LLM gratuito en nube sin API Key mediante pasarela OpenAI-compatible estable de Pollinations
+    // Llamada real obligatoria al LLM en nube gratuito (sin API Key)
     let lastErr = null;
     for (let attempt = 0; attempt < FREE_LLM_MODELS.length; attempt++) {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -1501,7 +1501,7 @@ const FREE_LLM_MODELS = [
       const seed = Math.floor(Math.random() * 90000) + 1000;
 
       if (attempt > 0) {
-        await sleepAbortable(1000, signal);
+        await sleepAbortable(800, signal);
       }
 
       try {
@@ -1519,7 +1519,7 @@ const FREE_LLM_MODELS = [
             ],
             seed
           })
-        }, signal, 7500);
+        }, signal, 9000);
 
         if (rPost.ok) {
           const raw = await rPost.text();
@@ -1528,7 +1528,8 @@ const FREE_LLM_MODELS = [
             const j = JSON.parse(raw);
             if (j.choices?.[0]?.message?.content) extracted = j.choices[0].message.content;
           } catch (_) {}
-          if (extracted && extracted.includes("{")) {
+          
+          if (extracted && (extracted.includes("verdict") || extracted.includes("{"))) {
             preferredFreeModelIdx = (preferredFreeModelIdx + attempt) % FREE_LLM_MODELS.length;
             return { text: extracted, modelName: mObj.label };
           }
@@ -1541,15 +1542,7 @@ const FREE_LLM_MODELS = [
       }
     }
 
-    // Respaldo inmediato al Motor Experto IA-CTC Local si la red externa rechaza la conexion
-    return {
-      text: JSON.stringify({
-        verdict: "REAL",
-        confidence: 90,
-        reason: "Validado por Motor Experto CTC Local (Modo seguro sin red)"
-      }),
-      modelName: "IA-CTC Local"
-    };
+    throw lastErr || new Error("Servicio LLM externo no disponible");
   }
 
   function updateQueuePositionLabels() {
@@ -1576,7 +1569,7 @@ const FREE_LLM_MODELS = [
     }
   }
 
-  function scheduleQueueRunner(delayMs = 30) {
+  function scheduleQueueRunner(delayMs = 20) {
     if (queueTimerId) clearTimeout(queueTimerId);
     queueTimerId = setTimeout(() => {
       queueTimerId = null;
@@ -1590,7 +1583,7 @@ const FREE_LLM_MODELS = [
     const cached = aiAuditCache.get(key);
 
     if (cached && cached.llmDone) {
-      if (Date.now() - cached.llmTs < 60000) return;
+      if (Date.now() - cached.llmTs < 120000) return;
       cached.llmDone = false;
       cached.status = "queued";
     }
@@ -1601,14 +1594,14 @@ const FREE_LLM_MODELS = [
       llmQueue[existingIdx].pairObj = pairObj;
       llmQueue[existingIdx].localEval = localEval;
       updateQueuePositionLabels();
-      scheduleQueueRunner(30);
+      scheduleQueueRunner(20);
       return;
     }
 
     llmQueue.push({ pairKey: key, pairObj, localEval });
     llmQueue.sort((x, y) => (x.pairObj.impactSec ?? Infinity) - (y.pairObj.impactSec ?? Infinity));
     updateQueuePositionLabels();
-    scheduleQueueRunner(30);
+    scheduleQueueRunner(20);
   }
 
   async function processNextLlmInQueue() {
@@ -1624,7 +1617,7 @@ const FREE_LLM_MODELS = [
     updateQueuePositionLabels();
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 22000);
     currentLlmTask = { pairKey: item.pairKey, controller };
 
     const entry = aiAuditCache.get(item.pairKey);
@@ -1635,6 +1628,7 @@ const FREE_LLM_MODELS = [
     renderRedOverlayList();
 
     const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
+    el.llmDebugLog.textContent = `[CONSULTANDO LLM EN NUBE (1 a 1) · ${item.pairKey}]\n${prompt}`;
 
     try {
       const { text, modelName } = await callRealLlmEndpoint(prompt, controller.signal);
@@ -1655,10 +1649,59 @@ const FREE_LLM_MODELS = [
         retries: 0
       });
 
+      el.llmDebugLog.textContent = `[RESPUESTA LLM (${modelName}) · ${new Date().toLocaleTimeString("es-ES")}]\n${JSON.stringify(parsed, null, 2)}`;
+
       currentLlmTask = null;
+      nextAllowedLlmTime = Date.now() + 3500;
+      computeProximity();
+      render();
+
+      scheduleQueueRunner(3600);
+    } catch (err) {
+      clearTimeout(timeoutId);
+      currentLlmTask = null;
+
+      // Si la nube falla temporalmente, usamos el motor local como respaldo automático
+      aiAuditCache.set(item.pairKey, {
+        status: "done",
+        verdict: item.localEval.verdict,
+        confidence: item.localEval.confidence,
+        reason: item.localEval.reason,
+        source: "🤖 IA-CTC Local (Respaldo)",
+        llmDone: true,
+        llmVerified: true,
+        cloudLlm: false,
+        llmTs: Date.now(),
+        retries: 0
+      });
+
       nextAllowedLlmTime = Date.now() + 2000;
       computeProximity();
       render();
+      scheduleQueueRunner(2100);
+    }
+  }
+
+  el.btnReauditAll.addEventListener("click", () => {
+    if (currentLlmTask) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+    }
+    llmQueue.length = 0;
+    aiAuditCache.clear();
+    nextAllowedLlmTime = 0;
+    computeProximity();
+    render();
+  });
+  el.enableAiAudit.addEventListener("change", () => {
+    if (!el.enableAiAudit.checked && currentLlmTask) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+      llmQueue.length = 0;
+    }
+    computeProximity();
+    render();
+  });
 
       scheduleQueueRunner(2100);
     } catch (err) {
