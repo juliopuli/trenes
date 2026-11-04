@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.44</title>
+<title>Alertas Ferrocarril · v1.45</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -516,7 +516,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.44 · LLM</span>
+          <span class="ver">v1.45 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -755,7 +755,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.44";
+  const VERSION = "1.45";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1447,10 +1447,10 @@ Responde SOLO JSON valido sin markdown: {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"P
     }
   }
 
-  const FREE_LLM_MODELS = [
-    { id: "openai",     label: "GPT-4o-mini (LLM)" },
-    { id: "openai-large", label: "GPT-4o (LLM)" },
-    { id: "mistral",    label: "Mistral Small (LLM)" }
+const FREE_LLM_MODELS = [
+    { id: "openai", label: "GPT-4o-mini (LLM)" },
+    { id: "qwen",   label: "Qwen (LLM)" },
+    { id: "llama",  label: "Llama 3 (LLM)" }
   ];
 
   async function callRealLlmEndpoint(promptText, signal) {
@@ -1460,7 +1460,7 @@ Responde SOLO JSON valido sin markdown: {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"P
 
     if (prov === "gemini") {
       if (!apiKey) throw new Error("Falta API Key de Gemini");
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
       const r = await fetchWithStepTimeout(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1471,7 +1471,7 @@ Responde SOLO JSON valido sin markdown: {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"P
       }, signal, 12000);
       if (!r.ok) throw new Error("Gemini HTTP " + r.status);
       const j = await r.json();
-      return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "Gemini 2.5 Flash" };
+      return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "Gemini 1.5 Flash" };
     }
 
     if (prov === "groq") {
@@ -1494,28 +1494,11 @@ Responde SOLO JSON valido sin markdown: {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"P
       return { text: j.choices?.[0]?.message?.content || "", modelName: "Llama 3.3 70B" };
     }
 
-    // Sanitizamos el texto para GET eliminando saltos de línea, barras y símbolos que provocan 404/402
-    const cleanGetPrompt = `${sysMsg} ${promptText}`
-      .replace(/[\/\\?#%&+]/g, " ")
-      .replace(/\r?\n+/g, " - ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 900);
-
     let lastErr = null;
-
-    // Solo probamos máximo 2 modelos con pausa intermedia para no disparar el bloqueo anti-flood (HTTP 402) de Pollinations
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < FREE_LLM_MODELS.length; attempt++) {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-      const mIdx = (preferredFreeModelIdx + attempt) % FREE_LLM_MODELS.length;
-      const mObj = FREE_LLM_MODELS[mIdx];
-      const seed = Math.floor(Math.random() * 90000) + 1000;
-
-      if (attempt > 0) {
-        await sleepAbortable(2200, signal);
-      }
-
-      // 1) Petición POST estándar OpenAI compatible (con Referer normal del navegador para evitar 402 anti-bot)
+      const mObj = FREE_LLM_MODELS[(preferredFreeModelIdx + attempt) % FREE_LLM_MODELS.length];
+      
       try {
         const rPost = await fetchWithStepTimeout("https://text.pollinations.ai/openai", {
           method: "POST",
@@ -1523,7 +1506,6 @@ Responde SOLO JSON valido sin markdown: {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"P
           cache: "no-store",
           body: JSON.stringify({
             model: mObj.id,
-            seed,
             temperature: 0.1,
             response_format: { type: "json_object" },
             messages: [
@@ -1531,7 +1513,7 @@ Responde SOLO JSON valido sin markdown: {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"P
               { role: "user", content: promptText }
             ]
           })
-        }, signal, 8000);
+        }, signal, 7000);
 
         if (rPost.ok) {
           const raw = await rPost.text();
@@ -1541,34 +1523,10 @@ Responde SOLO JSON valido sin markdown: {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"P
             if (j.choices?.[0]?.message?.content) extracted = j.choices[0].message.content;
           } catch (_) {}
           if (extracted && extracted.includes("{")) {
-            preferredFreeModelIdx = mIdx;
             return { text: extracted, modelName: mObj.label };
           }
         } else {
-          lastErr = new Error(`${mObj.id} POST HTTP ${rPost.status}`);
-        }
-      } catch (e) {
-        if (signal?.aborted) throw e;
-        lastErr = e;
-      }
-
-      // 2) Pausa breve y petición GET limpia sin barras ni saltos de línea (con Referer normal)
-      await sleepAbortable(1500, signal);
-      const getUrl = `https://text.pollinations.ai/${encodeURIComponent(cleanGetPrompt)}?model=${encodeURIComponent(mObj.id)}&seed=${seed}&json=true`;
-      try {
-        const rGet = await fetchWithStepTimeout(getUrl, {
-          method: "GET",
-          cache: "no-store"
-        }, signal, 8000);
-
-        if (rGet.ok) {
-          const rawGet = await rGet.text();
-          if (rawGet && rawGet.includes("{")) {
-            preferredFreeModelIdx = mIdx;
-            return { text: rawGet, modelName: mObj.label };
-          }
-        } else {
-          lastErr = new Error(`${mObj.id} GET HTTP ${rGet.status}`);
+          lastErr = new Error(`${mObj.id} HTTP ${rPost.status}`);
         }
       } catch (e) {
         if (signal?.aborted) throw e;
@@ -1576,7 +1534,7 @@ Responde SOLO JSON valido sin markdown: {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"P
       }
     }
 
-    throw lastErr || new Error("Cuota gratuita Pollinations alcanzada (HTTP 402)");
+    throw lastErr || new Error("Servicio gratuito externo no disponible (HTTP 402/429)");
   }
 
   function parseLlmJsonVerdict(rawText, fallbackEval) {
