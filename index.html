@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v2.0</title>
+<title>Alertas Ferrocarril · v2.1</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -516,7 +516,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v2.0 · LLM</span>
+          <span class="ver">v2.1 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1434,8 +1434,9 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     const apiKey = el.aiApiKey.value.trim();
     const sysMsg = "Eres un Ingeniero Jefe del CTC de Adif en España. Analizas telemetría ferroviaria y respondes exclusivamente en JSON válido con las claves verdict, confidence y reason.";
 
+    // 1. GOOGLE GEMINI 2.5 FLASH-LITE (Con API Key gratuita de Google AI Studio)
     if (prov === "gemini") {
-      if (!apiKey) throw new Error("Falta API Key de Gemini");
+      if (!apiKey) throw new Error("Falta tu API Key de Gemini (créala gratis en aistudio.google.com)");
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`;
       const r = await fetch(url, {
         method: "POST",
@@ -1446,13 +1447,17 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
           generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
         })
       });
-      if (!r.ok) throw new Error("Gemini HTTP " + r.status);
+      if (!r.ok) {
+        const errTxt = await r.text().catch(() => "");
+        throw new Error(`Gemini HTTP ${r.status}: ${errTxt.slice(0, 80)}`);
+      }
       const j = await r.json();
-      return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "Gemini 2.5 Flash-Lite" };
+      return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "☁️ LLM: Gemini 2.5 Flash-Lite", isCloud: true };
     }
 
+    // 2. GROQ LLAMA 3.3 70B (Con API Key gratuita de console.groq.com)
     if (prov === "groq") {
-      if (!apiKey) throw new Error("Falta API Key de Groq");
+      if (!apiKey) throw new Error("Falta tu API Key de Groq (créala gratis en console.groq.com)");
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
@@ -1469,49 +1474,106 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
       });
       if (!r.ok) throw new Error("Groq HTTP " + r.status);
       const j = await r.json();
-      return { text: j.choices?.[0]?.message?.content || "", modelName: "Llama 3.3 70B" };
+      return { text: j.choices?.[0]?.message?.content || "", modelName: "☁️ LLM: Llama 3.3 70B", isCloud: true };
     }
 
-    // Proveedor gratuito sin API Key: Prompt compacto sin saltos de línea ni barras "/"
-    const seed = Math.floor(Math.random() * 90000) + 1000;
-    const cleanPrompt = `${sysMsg} ${promptText}`
-      .replace(/[\/\\?#%&+]/g, " ")
-      .replace(/\r?\n+/g, " | ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 850);
+    // 3. MODO GRATUITO SIN API KEY: Intentamos primero LLM7.io (OpenAI-compatible sin clave) y luego Pollinations (modelos libres)
+    const messages = [
+      { role: "system", content: sysMsg },
+      { role: "user", content: promptText }
+    ];
 
-    // Intento 1: Petición GET ligera a Pollinations con timeout corto de 5.5 s
-    try {
-      const stepCtl = new AbortController();
-      const tId = setTimeout(() => stepCtl.abort(), 5500);
-      const onAbort = () => stepCtl.abort();
-      signal?.addEventListener("abort", onAbort, { once: true });
+    // Intento A: Pasarela abierta LLM7.io (No requiere API Key, soporta CORS)
+    const llm7Models = ["fast", "gpt-4o-mini-2024-07-18", "default"];
+    for (const mId of llm7Models) {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+      try {
+        const stepCtl = new AbortController();
+        const tId = setTimeout(() => stepCtl.abort(), 6500);
+        const onAbort = () => stepCtl.abort();
+        signal?.addEventListener("abort", onAbort, { once: true });
 
-      const getUrl = `https://text.pollinations.ai/${encodeURIComponent(cleanPrompt)}?model=openai&json=true&seed=${seed}`;
-      const r = await fetch(getUrl, { method: "GET", cache: "no-store", signal: stepCtl.signal });
-      clearTimeout(tId);
-      signal?.removeEventListener("abort", onAbort);
+        const rLlm7 = await fetch("https://api.llm7.io/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer unused"
+          },
+          signal: stepCtl.signal,
+          body: JSON.stringify({
+            model: mId,
+            temperature: 0.1,
+            messages
+          })
+        });
+        clearTimeout(tId);
+        signal?.removeEventListener("abort", onAbort);
 
-      if (r.ok) {
-        const raw = await r.text();
-        if (raw && raw.includes("{")) {
-          return { text: raw, modelName: "GPT-4o-mini (LLM)" };
+        if (rLlm7.ok) {
+          const j7 = await rLlm7.json();
+          const content7 = j7.choices?.[0]?.message?.content || "";
+          if (content7 && content7.includes("{")) {
+            return { text: content7, modelName: `☁️ LLM7 (${mId})`, isCloud: true };
+          }
         }
+      } catch (e) {
+        if (signal?.aborted) throw e;
       }
-    } catch (e) {
-      if (signal?.aborted) throw e;
     }
 
-    // Fallback instantáneo sin error cuando el servidor gratuito externo devuelve 402/429 por límite de IP
-    const fb = fallbackEval || { verdict: "REAL", confidence: 92, reason: "Auditado por Motor Experto IA-CTC" };
+    // Intento B: Pollinations con los alias gratuitos 2026 (openai-fast, gemini, mistral)
+    const pollModels = ["openai-fast", "gemini", "mistral"];
+    const seed = Math.floor(Math.random() * 90000) + 1000;
+    for (const pm of pollModels) {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+      try {
+        const stepCtl = new AbortController();
+        const tId = setTimeout(() => stepCtl.abort(), 5500);
+        const onAbort = () => stepCtl.abort();
+        signal?.addEventListener("abort", onAbort, { once: true });
+
+        const rPol = await fetch("https://text.pollinations.ai/openai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: stepCtl.signal,
+          body: JSON.stringify({
+            model: pm,
+            seed,
+            temperature: 0.1,
+            messages
+          })
+        });
+        clearTimeout(tId);
+        signal?.removeEventListener("abort", onAbort);
+
+        if (rPol.ok) {
+          const rawPol = await rPol.text();
+          if (rawPol && rawPol.includes("{")) {
+            try {
+              const jPol = JSON.parse(rawPol);
+              if (jPol.choices?.[0]?.message?.content) {
+                return { text: jPol.choices[0].message.content, modelName: `☁️ LLM (${pm})`, isCloud: true };
+              }
+            } catch (_) {}
+            return { text: rawPol, modelName: `☁️ LLM (${pm})`, isCloud: true };
+          }
+        }
+      } catch (e) {
+        if (signal?.aborted) throw e;
+      }
+    }
+
+    // Si tanto LLM7 como Pollinations bloquean por cuota anónima (402/429), devolvemos el dictamen local
+    // indicando explícitamente que ha sido resuelto por Reglas CTC Locales (sin engañar diciendo que fue un LLM en nube)
+    const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
     return {
       text: JSON.stringify({
         verdict: fb.verdict,
         confidence: fb.confidence,
         reason: fb.reason
       }),
-      modelName: "IA-CTC Neuronal"
+      modelName: "⚡ CTC Local (Nube sin cuota)",
+      isCloud: false
     };
   }
   function parseLlmJsonVerdict(rawText, fallbackEval) {
@@ -1641,8 +1703,8 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
     el.llmDebugLog.textContent = `[CONSULTANDO LLM (1 a 1) · ${item.pairKey} · En cola: ${llmQueue.length}]\n${prompt}`;
 
-    try {
-      const { text, modelName } = await callRealLlmEndpoint(prompt, controller.signal, item.localEval);
+try {
+      const { text, modelName, isCloud } = await callRealLlmEndpoint(prompt, controller.signal, item.localEval);
       clearTimeout(timeoutId);
 
       const parsed = parseLlmJsonVerdict(text, item.localEval);
@@ -1652,14 +1714,19 @@ async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
         verdict: parsed.verdict,
         confidence: parsed.confidence,
         reason: parsed.reason,
-        source: `🤖 ${modelName}`,
+        source: modelName,
         llmDone: true,
-        llmVerified: true,
+        llmVerified: !!isCloud,
         llmTs: Date.now()
       });
 
-      el.llmDebugLog.textContent = `[RESPUESTA LLM (${modelName}) · ${new Date().toLocaleTimeString("es-ES")} · Restantes en cola: ${llmQueue.length}]\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
+      const headerLog = isCloud
+        ? `✅ [RESPUESTA NUBE (${modelName}) · ${new Date().toLocaleTimeString("es-ES")}]`
+        : `⚠️ [APIs GRATUITAS SIN CLAVE SATURADAS -> USANDO REGLAS CTC LOCALES · ${new Date().toLocaleTimeString("es-ES")}]\n(Consejo: Selecciona arriba Google Gemini 2.5 Flash-Lite o Groq y pega tu API Key gratuita para tener 100% LLM en nube)`;
 
+      el.llmDebugLog.textContent = `${headerLog}\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
+      el.llmDebugLog.scrollTop = 0;
+  
       currentLlmTask = null;
       computeProximity();
       render();
