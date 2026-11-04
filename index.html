@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.42</title>
+<title>Alertas Ferrocarril · v1.43</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -516,7 +516,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.42 · LLM</span>
+          <span class="ver">v1.43 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -543,7 +543,7 @@
         <span>🤖 <b>Auditoría Híbrida (Reglas CTC + Cola LLM Secuencial):</b> audita con LLM todas las alertas del panel rojo superior (incluidas las rebajadas a naranja)</span>
       </label>
       <div class="help">
-        • <b>Cola estricta 1 a 1 con rotación anti-402:</b> rota automáticamente entre varios motores LLM gratuitos con control de cadencia para evitar bloqueos por cuota.<br>
+        • <b>Cola estricta 1 a 1 con rotación anti-404/402:</b> rota automáticamente entre varios motores LLM gratuitos sin saltos de línea en URL y con timeout rápido por nodo.<br>
         • <b>Auto-cancelación:</b> si una alerta sale del panel superior (pasa a verde o a naranja normal del panel izquierdo), se aborta al instante.
       </div>
     </fieldset>
@@ -636,7 +636,7 @@
       <!-- 2. Mapa base -->
       <div class="fl-wrap">
         <button class="fl-btn" data-pop="popBase" title="Cambiar mapa de fondo">
-          <svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.1V5l6 2.1V19z"/></svg>
+          <svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07-.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.1V5l6 2.1V19z"/></svg>
           <span class="lbl" id="lblBase">Calles</span>
         </button>
         <div class="fl-pop" id="popBase">
@@ -689,7 +689,7 @@
           <div class="fl-title">🤖 Arquitectura IA (Reglas CTC + Cola LLM)</div>
           <label for="aiProvider" style="margin-top:0">Proveedor LLM Neuronal</label>
           <select id="aiProvider">
-            <option value="pollinations" selected>🌐 Multi-LLM Gratis (GPT-4o / Mistral / Llama · Cola 1 a 1)</option>
+            <option value="pollinations" selected>🌐 Multi-LLM Gratis (GPT-4o / Qwen / DeepSeek · Cola 1 a 1)</option>
             <option value="gemini">✨ Google Gemini 2.5 Flash (Con tu API Key gratis)</option>
             <option value="groq">⚡ Groq · Llama 3.3 70B (Con tu API Key gratis)</option>
             <option value="local">🛡️ Solo Reglas CTC Locales (Sin llamadas externas)</option>
@@ -739,7 +739,7 @@
         <div class="hm-box-title">⏳ Gestión de Cola LLM (1 a 1 con rotación anti-bloqueo)</div>
         <div>
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li>El sistema consulta al LLM <b>de una en una</b> con pausa de enfriamiento entre consultas y rotación automática de modelos gratuitos (GPT-4o-mini, Mistral, Llama, Qwen) si alguno devuelve límite de cuota (HTTP 402/429).</li>
+            <li>El sistema consulta al LLM <b>de una en una</b> con timeout rápido por modelo y rotación automática (GPT-4o-mini, OpenAI Fast, Qwen, Mistral, DeepSeek).</li>
             <li>Las alertas que esperan su turno muestran <b>⏳ En cola LLM (#1, #2…)</b> y al recibir el veredicto muestran el modelo neuronal que ha respondido.</li>
             <li>Si mientras espera o se está consultando el par sale del panel superior (porque pasa a verde o a naranja normal del panel izquierdo), esa consulta <b>se cancela en el acto</b> y pasa inmediatamente a la siguiente.</li>
           </ul>
@@ -755,7 +755,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.42";
+  const VERSION = "1.43";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1229,14 +1229,13 @@
   };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Gestión Estricta de Cola LLM 1 a 1 con Rotación Anti-402 y Control de Cadencia ---------- */
-  // aiAuditCache: pairKey -> { status: 'queued'|'in_flight'|'done', verdict, confidence, reason, source, llmDone, llmVerified, llmTs, retries }
+  /* ---------- Gestión Estricta de Cola LLM 1 a 1 con Rotación Anti-404/402 y Timeout por Nodo ---------- */
   const aiAuditCache = new Map();
-  const llmQueue = []; // Lista FIFO ordenada de { pairKey, pairObj, localEval }
-  let currentLlmTask = null; // { pairKey, controller }
-  let nextAllowedLlmTime = 0; // Enfriamiento entre peticiones para evitar HTTP 402/429
+  const llmQueue = [];
+  let currentLlmTask = null;
+  let nextAllowedLlmTime = 0;
   let queueTimerId = null;
-  let preferredFreeModelIdx = 0; // Rotador de modelos gratuitos si uno da 402
+  let preferredFreeModelIdx = 0;
 
   try {
     const savedProv = localStorage.getItem("aiProviderRenfe");
@@ -1404,7 +1403,6 @@
       reason: `Mismo sentido sobre raíl ${routeDesc}; recorta a +${dv} km/h`
     };
   }
-
   function buildLlmPromptForPair(p, localEval) {
     const tr = p.trailing, ld = p.leading;
     const infoT = tr._info || trainInfo(tr);
@@ -1416,18 +1414,18 @@
 
 [TREN TRASERO]
 - Tren: ${infoT.tipo} ${infoT.numero} (Vía: ${tr.trackGroup})
-- Ruta: Origen "${infoT.orig || "N/D"}" -> Destino "${infoT.dest || "N/D"}"
-- Tramo: Anterior "${infoT.ant || "N/D"}" -> Próxima "${infoT.sig || "N/D"}"
-- Velocidad: ${vT} km/h | Rumbo: ${Math.round(tr.bearing ?? 0)}° | Pos: [${tr.lat.toFixed(4)}, ${tr.lon.toFixed(4)}]
+- Ruta: Origen "${infoT.orig || "N-D"}" -> Destino "${infoT.dest || "N-D"}"
+- Tramo: Anterior "${infoT.ant || "N-D"}" -> Próxima "${infoT.sig || "N-D"}"
+- Velocidad: ${vT} kmh | Rumbo: ${Math.round(tr.bearing ?? 0)}° | Pos: [${tr.lat.toFixed(4)}, ${tr.lon.toFixed(4)}]
 
 [TREN DELANTERO]
 - Tren: ${infoL.tipo} ${infoL.numero} (Vía: ${ld.trackGroup})
-- Ruta: Origen "${infoL.orig || "N/D"}" -> Destino "${infoL.dest || "N/D"}"
-- Tramo: Anterior "${infoL.ant || "N/D"}" -> Próxima "${infoL.sig || "N/D"}"
-- Velocidad: ${vL} km/h | Rumbo: ${Math.round(ld.bearing ?? 0)}° | Pos: [${ld.lat.toFixed(4)}, ${ld.lon.toFixed(4)}]
+- Ruta: Origen "${infoL.orig || "N-D"}" -> Destino "${infoL.dest || "N-D"}"
+- Tramo: Anterior "${infoL.ant || "N-D"}" -> Próxima "${infoL.sig || "N-D"}"
+- Velocidad: ${vL} kmh | Rumbo: ${Math.round(ld.bearing ?? 0)}° | Pos: [${ld.lat.toFixed(4)}, ${ld.lon.toFixed(4)}]
 
 [ENCUENTRO]
-- Distancia por vía: ${fmtKm(p.d)} | Cierre: +${vT - vL} km/h | Impacto: ${fmtImpactTime(p.impactSec)}
+- Distancia por vía: ${fmtKm(p.d)} | Cierre: +${vT - vL} kmh | Impacto: ${fmtImpactTime(p.impactSec)}
 - Estado geométrico inicial: ${p.geomSeverity.toUpperCase()}
 - Pre-diagnóstico CTC local: ${localEval.verdict} (${localEval.reason})
 
@@ -1446,13 +1444,30 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
     });
   }
 
-  // Catálogo de modelos gratuitos independientes en Pollinations para rotar si uno da HTTP 402/429
+  // Fetch con timeout individual para que ningún nodo lento bloquee toda la rotación
+  async function fetchWithStepTimeout(url, options, parentSignal, stepTimeoutMs = 7500) {
+    const stepCtl = new AbortController();
+    const onParentAbort = () => stepCtl.abort();
+    if (parentSignal) {
+      if (parentSignal.aborted) throw new DOMException("Aborted", "AbortError");
+      parentSignal.addEventListener("abort", onParentAbort, { once: true });
+    }
+    const timer = setTimeout(() => stepCtl.abort(), stepTimeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: stepCtl.signal });
+    } finally {
+      clearTimeout(timer);
+      if (parentSignal) parentSignal.removeEventListener("abort", onParentAbort);
+    }
+  }
+
+  // Catálogo actualizado de modelos gratuitos activos en Pollinations (sin alias retirados que daban 404)
   const FREE_LLM_MODELS = [
-    { id: "openai",      label: "GPT-4o-mini (LLM)" },
-    { id: "mistral",     label: "Mistral Small (LLM)" },
-    { id: "llama",       label: "Llama 3.3 (LLM)" },
-    { id: "qwen-coder",  label: "Qwen 2.5 (LLM)" },
-    { id: "searchgpt",   label: "SearchGPT (LLM)" }
+    { id: "openai",       label: "GPT-4o-mini (LLM)" },
+    { id: "openai-fast",  label: "OpenAI Fast (LLM)" },
+    { id: "qwen-coder",   label: "Qwen 2.5 (LLM)" },
+    { id: "mistral",      label: "Mistral Small (LLM)" },
+    { id: "deepseek",     label: "DeepSeek V3 (LLM)" }
   ];
 
   async function callRealLlmEndpoint(promptText, signal) {
@@ -1463,15 +1478,14 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
     if (prov === "gemini") {
       if (!apiKey) throw new Error("Falta API Key de Gemini");
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const r = await fetch(url, {
+      const r = await fetchWithStepTimeout(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal,
         body: JSON.stringify({
           contents: [{ parts: [{ text: sysMsg + "\n\n" + promptText }] }],
           generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
         })
-      });
+      }, signal, 12000);
       if (!r.ok) throw new Error("Gemini HTTP " + r.status);
       const j = await r.json();
       return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "Gemini 2.5 Flash" };
@@ -1479,10 +1493,9 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
 
     if (prov === "groq") {
       if (!apiKey) throw new Error("Falta API Key de Groq");
-      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const r = await fetchWithStepTimeout("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-        signal,
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           temperature: 0.1,
@@ -1492,74 +1505,78 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
             { role: "user", content: promptText }
           ]
         })
-      });
+      }, signal, 12000);
       if (!r.ok) throw new Error("Groq HTTP " + r.status);
       const j = await r.json();
       return { text: j.choices?.[0]?.message?.content || "", modelName: "Llama 3.3 70B" };
     }
 
-    // Proveedor gratuito por defecto: Rotación inteligente entre modelos gratuitos + GET ligero sin cabecera Referer
     const messages = [
       { role: "system", content: sysMsg },
       { role: "user", content: promptText }
     ];
     let lastErr = null;
 
+    // Prompt compactado en una sola línea sin barras '/' para evitar errores 404 en servidores GET
+    const singleLinePrompt = `${sysMsg} ${promptText}`
+      .replace(/\r?\n+/g, " | ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 1250);
+
     for (let attempt = 0; attempt < FREE_LLM_MODELS.length; attempt++) {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       const mIdx = (preferredFreeModelIdx + attempt) % FREE_LLM_MODELS.length;
       const mObj = FREE_LLM_MODELS[mIdx];
       const seed = Math.floor(Math.random() * 900000) + 10000;
 
       if (attempt > 0) {
-        // Pequeña pausa antes de probar el siguiente modelo gratuito para no disparar anti-flood
-        await sleepAbortable(1400, signal);
+        await sleepAbortable(700, signal);
       }
 
-      // 1) Intentar POST /openai con referrerPolicy: no-referrer para evitar cuota 402 por dominio
+      // 1) Intentar POST al endpoint raíz de Pollinations con jsonMode: true
       try {
-        const r = await fetch("https://text.pollinations.ai/openai", {
+        const rRoot = await fetchWithStepTimeout("https://text.pollinations.ai/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           referrerPolicy: "no-referrer",
-           cache: "no-store",
-          signal,
+          cache: "no-store",
           body: JSON.stringify({
+            messages,
             model: mObj.id,
-            temperature: 0.1,
             seed,
-            messages
+            jsonMode: true
           })
-        });
+        }, signal, 7500);
 
-        if (r.ok) {
-          const raw = await r.text();
+        if (rRoot.ok) {
+          const raw = await rRoot.text();
           let extracted = raw;
           try {
             const j = JSON.parse(raw);
             if (j.choices?.[0]?.message?.content) extracted = j.choices[0].message.content;
           } catch (_) {}
           if (extracted && extracted.includes("{")) {
-            preferredFreeModelIdx = mIdx; // Recordar el modelo que está funcionando sin 402
+            preferredFreeModelIdx = mIdx;
             return { text: extracted, modelName: mObj.label };
           }
         } else {
-          lastErr = new Error(`${mObj.id} HTTP ${r.status}`);
+          lastErr = new Error(`${mObj.id} POST HTTP ${rRoot.status}`);
         }
       } catch (e) {
         if (signal?.aborted) throw e;
         lastErr = e;
       }
 
-      // 2) Fallback GET ligero para este modelo (sin preflight CORS y vía directa o vía proxy Worker si hace falta)
-      const compactPrompt = `${sysMsg}\n${promptText}`;
-      const directGetUrl = `https://text.pollinations.ai/${encodeURIComponent(compactPrompt)}?model=${encodeURIComponent(mObj.id)}&json=true&seed=${seed}`;
+      // 2) Fallback GET usando query parameter (?prompt=...) en lugar de path para evitar HTTP 404 por saltos de línea o barras
+      const safeGetUrl = `https://text.pollinations.ai/prompt?prompt=${encodeURIComponent(singleLinePrompt)}&model=${encodeURIComponent(mObj.id)}&json=true&seed=${seed}&noCache=true`;
       try {
-        const rGet = await fetch(directGetUrl, {
+        const rGet = await fetchWithStepTimeout(safeGetUrl, {
           method: "GET",
           referrerPolicy: "no-referrer",
-          cache: "no-store",
-          signal
-        });
+          cache: "no-store"
+        }, signal, 7500);
+
         if (rGet.ok) {
           const rawGet = await rGet.text();
           if (rawGet && rawGet.includes("{")) {
@@ -1574,14 +1591,14 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
         lastErr = e;
       }
 
-      // 3) Si el navegador recibe bloqueo por IP (402/429), intentamos salir a través del Worker proxy configurado
+      // 3) Si hay bloqueo por IP o CORS, usar el Worker proxy configurado con la URL de query segura
       const proxyTpl = el.proxy.value.trim();
       if (proxyTpl) {
         try {
           const proxiedUrl = proxyTpl.includes("{url}")
-            ? proxyTpl.replace("{url}", encodeURIComponent(directGetUrl))
-            : proxyTpl + encodeURIComponent(directGetUrl);
-          const rProxy = await fetch(proxiedUrl, { method: "GET", cache: "no-store", signal });
+            ? proxyTpl.replace("{url}", encodeURIComponent(safeGetUrl))
+            : proxyTpl + encodeURIComponent(safeGetUrl);
+          const rProxy = await fetchWithStepTimeout(proxiedUrl, { method: "GET", cache: "no-store" }, signal, 8000);
           if (rProxy.ok) {
             const rawProxy = await rProxy.text();
             if (rawProxy && rawProxy.includes("{")) {
@@ -1595,7 +1612,7 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
       }
     }
 
-    throw lastErr || new Error("Todos los modelos gratuitos devolvieron límite temporal");
+    throw lastErr || new Error("Modelos gratuitos temporalmente saturados");
   }
 
   function parseLlmJsonVerdict(rawText, fallbackEval) {
@@ -1635,7 +1652,6 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
     return { verdict, confidence: conf, reason };
   }
 
-  // Sincroniza las posiciones de espera (#1, #2...) en las etiquetas de los trenes encolados
   function updateQueuePositionLabels() {
     llmQueue.forEach((qItem, index) => {
       const entry = aiAuditCache.get(qItem.pairKey);
@@ -1648,10 +1664,7 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
     });
   }
 
-  // Limpia de la cola cualquier par que haya salido del panel superior (#redOverlay)
-  // (es decir, que haya pasado a verde o a naranja normal del panel izquierdo)
   function syncLlmQueueWithActivePairs(activeLlmKeys) {
-    // 1. Filtrar la cola de espera: quitar cualquier par que ya no esté en el panel superior
     for (let i = llmQueue.length - 1; i >= 0; i--) {
       const k = llmQueue[i].pairKey;
       if (!activeLlmKeys.has(k)) {
@@ -1660,7 +1673,6 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
       }
     }
 
-    // 2. Si la consulta ahora mismo en vuelo ya no está en el panel superior, se aborta inmediatamente
     if (currentLlmTask && !activeLlmKeys.has(currentLlmTask.pairKey)) {
       el.llmDebugLog.textContent = `[CANCELADA CONSULTA LLM para ${currentLlmTask.pairKey} por salir del panel rojo superior]\nPasando inmediatamente al siguiente par en cola…`;
       currentLlmTask.controller.abort();
@@ -1684,9 +1696,8 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
     const key = pairObj.pairKey;
     const cached = aiAuditCache.get(key);
 
-    // Si ya fue verificado por el LLM hace menos de 3 minutos (o está esperando ventana de reintento), o ya está en vuelo, no duplicamos
     if (cached && cached.llmDone) {
-      const ttl = cached.llmVerified ? 180000 : 12000;
+      const ttl = cached.llmVerified ? 180000 : 10000;
       if (Date.now() - cached.llmTs < ttl) return;
       cached.llmDone = false;
       cached.status = "queued";
@@ -1703,7 +1714,6 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
     }
 
     llmQueue.push({ pairKey: key, pairObj, localEval });
-    // Priorizar siempre en la cola las alertas rojas activas sobre las ya rebajadas a naranja en el panel superior
     llmQueue.sort((x, y) => {
       const xDown = x.pairObj.downgradedByAi ? 1 : 0;
       const yDown = y.pairObj.downgradedByAi ? 1 : 0;
@@ -1715,10 +1725,8 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
   }
 
   async function processNextLlmInQueue() {
-    // Garantía estricta 1 a 1: NO se lanza la siguiente hasta que termine o se aborte la actual
     if (currentLlmTask !== null || !llmQueue.length || el.aiProvider.value === "local") return;
 
-    // Respetar ventana de enfriamiento entre peticiones para evitar HTTP 402 / 429
     const waitMs = nextAllowedLlmTime - Date.now();
     if (waitMs > 0) {
       scheduleQueueRunner(waitMs);
@@ -1729,7 +1737,7 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
     updateQueuePositionLabels();
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 28000);
+    const timeoutId = setTimeout(() => controller.abort(), 42000);
     currentLlmTask = { pairKey: item.pairKey, controller };
 
     const entry = aiAuditCache.get(item.pairKey);
@@ -1763,12 +1771,11 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
       el.llmDebugLog.textContent = `[RESPUESTA LLM (${modelName}) · ${new Date().toLocaleTimeString("es-ES")} · Restantes en cola: ${llmQueue.length}]\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
 
       currentLlmTask = null;
-      // Enfriamiento de 3.2 s entre una consulta completada y la siguiente de la cola para evitar HTTP 402/429
-      nextAllowedLlmTime = Date.now() + 3200;
+      nextAllowedLlmTime = Date.now() + 2500;
       computeProximity();
       render();
 
-      scheduleQueueRunner(3250);
+      scheduleQueueRunner(2550);
     } catch (err) {
       clearTimeout(timeoutId);
       const wasAborted = controller.signal.aborted;
@@ -1777,6 +1784,30 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
       if (!wasAborted) {
         const existing = aiAuditCache.get(item.pairKey);
         const prevRetries = (existing?.retries || 0) + 1;
+
+        preferredFreeModelIdx = (preferredFreeModelIdx + 1) % FREE_LLM_MODELS.length;
+
+        // Si tras 2 rondas completas los nodos gratuitos externos fallan, consolidamos con el Motor Experto CTC Local
+        // para que nunca se quede bloqueado en "Reintentando LLM..." indefinidamente.
+        if (prevRetries >= 2) {
+          aiAuditCache.set(item.pairKey, {
+            status: "done",
+            verdict: item.localEval.verdict,
+            confidence: item.localEval.confidence,
+            reason: item.localEval.reason,
+            source: "🛡️ Motor CTC (Fallback IA)",
+            llmDone: true,
+            llmVerified: true,
+            llmTs: Date.now(),
+            retries: prevRetries
+          });
+          el.llmDebugLog.textContent = `[SERVIDORES LLM EXTERNOS SATURADOS en ${item.pairKey}: ${err.message || err}]\nVeredicto consolidado por el Motor Experto CTC Local (${item.localEval.verdict} · ${item.localEval.confidence}%).`;
+          nextAllowedLlmTime = Date.now() + 2000;
+          computeProximity();
+          render();
+          scheduleQueueRunner(2100);
+          return;
+        }
 
         if (existing) {
           existing.retries = prevRetries;
@@ -1787,14 +1818,11 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
           existing.source = `⏳ Reintentando LLM…`;
         }
 
-        // Rotamos el índice del modelo por defecto para que el reintento entre por otro motor
-        preferredFreeModelIdx = (preferredFreeModelIdx + 1) % FREE_LLM_MODELS.length;
-        nextAllowedLlmTime = Date.now() + 4500;
-
+        nextAllowedLlmTime = Date.now() + 3000;
         el.llmDebugLog.textContent = `[AVISO LLM en ${item.pairKey}: ${err.message || err}]\nRotando a modelo alternativo (${FREE_LLM_MODELS[preferredFreeModelIdx].label}) y reencolando automáticamente…`;
         renderRedOverlayList();
       }
-      scheduleQueueRunner(wasAborted ? 80 : 4500);
+      scheduleQueueRunner(wasAborted ? 80 : 3200);
     }
   }
 
@@ -2821,7 +2849,6 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
             continue;
           }
 
-          // Determinar si pertenece al panel superior (#redOverlay) o si es una naranja normal del panel izquierdo
           const belongsToRedPanel = (geomSeverity === "red")
             || (geomSeverity === "orange" && (
               localEval.verdict === "PROMOTED_FROM_GREEN" ||
@@ -2832,7 +2859,6 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
           if (belongsToRedPanel) {
             let activeEval = aiAuditCache.get(pairKey);
 
-            // Si no existe en caché, la creamos para que entre en la cola del LLM
             if (!activeEval) {
               activeEval = {
                 status: el.aiProvider.value === "local" ? "done" : "queued",
@@ -2847,7 +2873,6 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
               };
               aiAuditCache.set(pairKey, activeEval);
             } else if (!activeEval.llmVerified) {
-              // Mientras no haya sido confirmada por el LLM, actualizamos el pre-diagnóstico sin perder su sitio en la cola
               activeEval.verdict = localEval.verdict;
               activeEval.confidence = localEval.confidence;
               activeEval.reason = localEval.reason;
@@ -2928,8 +2953,6 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
         };
         pairs.push(pairObj);
 
-        // TODAS las alertas del panel rojo superior (inRedPanel === true), incluidas las rebajadas a naranja en ese panel,
-        // se analizan con la cola del LLM. Las naranjas normales del panel izquierdo (!inRedPanel) NO entran jamás.
         if (inRedPanel && el.enableAiAudit.checked && el.aiProvider.value !== "local") {
           activeLlmCandidateKeys.add(pairKey);
           toEnqueueList.push({ pairObj, localEval });
@@ -2941,10 +2964,8 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
       if (!activeRedKeys.has(k)) redAlertStart.delete(k);
     }
 
-    // Cancelar de inmediato cualquier consulta en cola o en vuelo cuyo par haya salido del panel superior
     syncLlmQueueWithActivePairs(activeLlmCandidateKeys);
 
-    // Encolar dando prioridad a las rojas activas más urgentes y después a las rebajadas a naranja del panel superior
     toEnqueueList.sort((x, y) => {
       const xDown = x.pairObj.downgradedByAi ? 1 : 0;
       const yDown = y.pairObj.downgradedByAi ? 1 : 0;
