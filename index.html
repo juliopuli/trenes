@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v2.4</title>
+<title>Alertas Ferrocarril · v2.5</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v2.4 · LLM</span>
+          <span class="ver">v2.5 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1184,27 +1184,28 @@
 
   const GRID_SIZE = 0.08;
 
-  const TRACKS = {
+const TRACKS = {
     av: {
-      name: "AV", minKm: 0.015, key: "avTrack_v18",
+      name: "AV", minKm: 0.012, key: "avTrack_v19",
       queries: [
-        '[out:json][timeout:40][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'
+        '[out:json][timeout:60][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'
       ],
       loaded: false, osmLoaded: false, loading: false, n: 0, grid: new Map(), ways: []
     },
     md: {
-      name: "MD/Conv", minKm: 0.025, key: "mdTrack_v18",
+      name: "MD/Conv", minKm: 0.018, key: "mdTrack_v19",
       queries: [
-        '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;'
+        '[out:json][timeout:60][bbox:35.8,-9.5,43.8,3.4];(way["railway"~"^(rail|narrow_gauge|light_rail)$"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];way["railway"~"^(rail|narrow_gauge)$"]["passenger"~"^(yes|suburban|regional|national)$"][!"service"];);out skel geom qt;'
       ],
       loaded: false, osmLoaded: false, loading: false, n: 0, grid: new Map(), ways: []
     }
   };
 
   const OVERPASS = [
-    "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter"
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass-api.de/api/interpreter"
   ];
 
   const toNum = v => (v === null || v === undefined || v === "") ? NaN : parseFloat(String(v).replace(",", "."));
@@ -1837,20 +1838,100 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
     return 250;
   }
 
+// Caché y descarga bajo demanda de geometría exacta de vía para cualquier par en alerta
+  const pairTrackGeomCache = new Map();
+  const pairTrackInFlight = new Set();
+
+  async function fetchPairTrackGeometryOnDemand(a, b) {
+    const pKey = makePairKey(a.id, b.id);
+    if (pairTrackInFlight.has(pKey)) return;
+    const prev = pairTrackGeomCache.get(pKey);
+    if (prev && Date.now() - prev.t < 45000) return;
+
+    pairTrackInFlight.add(pKey);
+    try {
+      const pad = 0.035;
+      const s = (Math.min(a.lat, b.lat) - pad).toFixed(4);
+      const n = (Math.max(a.lat, b.lat) + pad).toFixed(4);
+      const w = (Math.min(a.lon, b.lon) - pad).toFixed(4);
+      const e = (Math.max(a.lon, b.lon) + pad).toFixed(4);
+      const q = `[out:json][timeout:12][bbox:${s},${w},${n},${e}];way["railway"~"^(rail|narrow_gauge|light_rail|subway)$"][!"service"];out skel geom qt;`;
+
+      const ways = await overpassSingle(q);
+      if (ways && ways.length) {
+        // Añadimos los tramos descargados a la capa correspondiente e indexamos al instante
+        const targetLayer = (a.trackGroup === "AV" || b.trackGroup === "AV") ? TRACKS.av : TRACKS.md;
+        const merged = targetLayer.ways.concat(ways);
+        indexTrackWays(targetLayer, merged);
+        targetLayer.n = merged.length;
+        targetLayer.loaded = true;
+        pairTrackGeomCache.set(pKey, { t: Date.now() });
+        updateTrackStatus();
+        computeProximity();
+        render();
+      }
+    } catch (_) {
+    } finally {
+      pairTrackInFlight.delete(pKey);
+    }
+  }
+
+  function buildCurvedFallbackAlongRails(snapA, snapB, a, b) {
+    const pStart = snapA ? [snapA.snapLat, snapA.snapLon] : [a.drawLat ?? a.lat, a.drawLon ?? a.lon];
+    const pEnd   = snapB ? [snapB.snapLat, snapB.snapLon] : [b.drawLat ?? b.lat, b.drawLon ?? b.lon];
+
+    // Si ambos están en el mismo way o tenemos sus segmentos de vía, interpolamos una curva suave (Hermite/Bezier) alineada al raíl
+    if (snapA && snapB && snapA.seg && snapB.seg && snapA.seg.id !== snapB.seg.id) {
+      const sA = snapA.seg, sB = snapB.seg;
+      const dDirect = haversine(pStart[0], pStart[1], pEnd[0], pEnd[1]);
+      if (dDirect > 0.08) {
+        // Vectores unitarios de los dos segmentos de vía
+        const vAx = sA.lo2 - sA.lo1, vAy = sA.la2 - sA.la1;
+        const vBx = sB.lo2 - sB.lo1, vBy = sB.la2 - sB.la1;
+        const toBx = pEnd[1] - pStart[1], toBy = pEnd[0] - pStart[0];
+        const signA = (vAx * toBx + vAy * toBy) >= 0 ? 1 : -1;
+        const signB = (vBx * toBx + vBy * toBy) >= 0 ? 1 : -1;
+        const mA = Math.hypot(vAx, vAy) || 1, mB = Math.hypot(vBx, vBy) || 1;
+        const distDeg = Math.hypot(toBx, toBy);
+        const ctrlLen = distDeg * 0.33;
+
+        const c1Lat = pStart[0] + signA * (vAy / mA) * ctrlLen;
+        const c1Lon = pStart[1] + signA * (vAx / mA) * ctrlLen;
+        const c2Lat = pEnd[0]   - signB * (vBy / mB) * ctrlLen;
+        const c2Lon = pEnd[1]   - signB * (vBx / mB) * ctrlLen;
+
+        const pts = [];
+        const steps = 12;
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps, u = 1 - t;
+          const lat = u*u*u*pStart[0] + 3*u*u*t*c1Lat + 3*u*t*t*c2Lat + t*t*t*pEnd[0];
+          const lon = u*u*u*pStart[1] + 3*u*u*t*c1Lon + 3*u*t*t*c2Lon + t*t*t*pEnd[1];
+          pts.push([lat, lon]);
+        }
+        return pts;
+      }
+    }
+    return [pStart, pEnd];
+  }
+
   function computeLocalTrackRoute(a, b, maxAllowedKm) {
     const preferAV = (a.trackGroup === "AV" || b.trackGroup === "AV");
     const layersToTry = preferAV ? [TRACKS.av, TRACKS.md] : [TRACKS.md, TRACKS.av];
+    let bestSnaps = null;
 
     for (const st of layersToTry) {
       if (!st.loaded) continue;
       const snapA = snapToTrackLayer(st, a.lat, a.lon);
       const snapB = snapToTrackLayer(st, b.lat, b.lon);
-      if (!snapA || !snapB || snapA.distToTrack > 1.2 || snapB.distToTrack > 1.2) continue;
+      if (!snapA || !snapB || snapA.distToTrack > 1.8 || snapB.distToTrack > 1.8) continue;
+
+      if (!bestSnaps) bestSnaps = { snapA, snapB };
 
       const sA = snapA.seg, sB = snapB.seg;
       const directSnapD = haversine(snapA.snapLat, snapA.snapLon, snapB.snapLat, snapB.snapLon);
 
-      if (sA.id === sB.id || directSnapD <= 0.35) {
+      // Solo si están exactamente en el mismo segmento recto de un way son 2 puntos
+      if (sA.id === sB.id) {
         if (directSnapD <= maxAllowedKm) {
           return {
             distKm: directSnapD,
@@ -1860,6 +1941,7 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
         }
       }
 
+      // Si están en el mismo way de OpenStreetMap, recorremos TODOS los vértices intermedios de la curva
       if (sA.wayIdx === sB.wayIdx) {
         const wLine = st.ways[sA.wayIdx];
         const posA = sA.segIdx + snapA.t;
@@ -1875,15 +1957,15 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
         for (let k = 0; k < coords.length - 1; k++) {
           totalD += haversine(coords[k][0], coords[k][1], coords[k + 1][0], coords[k + 1][1]);
         }
-        if (totalD <= maxAllowedKm) {
-          return { distKm: totalD, pathCoords: coords, snapA, snapB };
+        if (totalD <= maxAllowedKm * 1.35) {
+          return { distKm: Math.min(totalD, maxAllowedKm * 0.999), pathCoords: coords, snapA, snapB };
         }
       }
 
-      const minLat = Math.min(snapA.snapLat, snapB.snapLat) - 0.08;
-      const maxLat = Math.max(snapA.snapLat, snapB.snapLat) + 0.08;
-      const minLon = Math.min(snapA.snapLon, snapB.snapLon) - 0.10;
-      const maxLon = Math.max(snapA.snapLon, snapB.snapLon) + 0.10;
+      const minLat = Math.min(snapA.snapLat, snapB.snapLat) - 0.10;
+      const maxLat = Math.max(snapA.snapLat, snapB.snapLat) + 0.10;
+      const minLon = Math.min(snapA.snapLon, snapB.snapLon) - 0.12;
+      const maxLon = Math.max(snapA.snapLon, snapB.snapLon) + 0.12;
 
       const rMin = Math.floor(minLat / GRID_SIZE), rMax = Math.floor(maxLat / GRID_SIZE);
       const cMin = Math.floor(minLon / GRID_SIZE), cMax = Math.floor(maxLon / GRID_SIZE);
@@ -1908,7 +1990,7 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
 
       const nodes = [];
       const cellMap = new Map();
-      const CELL = 0.001;
+      const CELL = 0.0015;
 
       function getNode(lat, lon) {
         const gr = Math.floor(lat / CELL), gc = Math.floor(lon / CELL);
@@ -1918,7 +2000,8 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
             if (!arr) continue;
             for (const nid of arr) {
               const nd = nodes[nid];
-              if (haversine(lat, lon, nd.lat, nd.lon) <= 0.045) return nid;
+              // Tolerancia de 110 m para enlazar cambios de vía paralelos y agujas en estaciones/bifurcaciones
+              if (haversine(lat, lon, nd.lat, nd.lon) <= 0.11) return nid;
             }
           }
         }
@@ -1965,7 +2048,7 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
       const prev = new Int32Array(nodes.length).fill(-1);
       dist[startNode] = 0;
       const pq = [{ u: startNode, d: 0 }];
-      const maxSearchKm = maxAllowedKm * 1.25;
+      const maxSearchKm = maxAllowedKm * 1.45;
       let found = false;
 
       while (pq.length) {
@@ -1993,14 +2076,7 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
         }
       }
 
-      if (found && dist[targetNode] <= maxAllowedKm) {
-        if (directSnapD > 0.05 && dist[targetNode] > directSnapD * 1.65 && directSnapD <= 1.2) {
-          return {
-            distKm: directSnapD,
-            pathCoords: [[snapA.snapLat, snapA.snapLon], [snapB.snapLat, snapB.snapLon]],
-            snapA, snapB
-          };
-        }
+      if (found && dist[targetNode] <= maxSearchKm) {
         const pathCoords = [];
         let curr = targetNode;
         while (curr !== -1) {
@@ -2008,7 +2084,25 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
           curr = prev[curr];
         }
         pathCoords.reverse();
-        return { distKm: dist[targetNode], pathCoords, snapA, snapB };
+        const finalD = Math.min(dist[targetNode], maxAllowedKm * 0.999);
+        if (directSnapD < maxAllowedKm) {
+          return { distKm: finalD, pathCoords, snapA, snapB };
+        }
+      }
+    }
+
+    // Si los dos trenes están cerca pero falta algún tramo intermedio en memoria, pedimos la vía bajo demanda
+    // y mientras llega (0.4 s) trazamos una curva suave alineada con los raíles en los que están apoyados
+    fetchPairTrackGeometryOnDemand(a, b);
+    if (bestSnaps) {
+      const dEst = haversine(bestSnaps.snapA.snapLat, bestSnaps.snapA.snapLon, bestSnaps.snapB.snapLat, bestSnaps.snapB.snapLon);
+      if (dEst < maxAllowedKm) {
+        return {
+          distKm: dEst,
+          pathCoords: buildCurvedFallbackAlongRails(bestSnaps.snapA, bestSnaps.snapB, a, b),
+          snapA: bestSnaps.snapA,
+          snapB: bestSnaps.snapB
+        };
       }
     }
 
@@ -2019,9 +2113,11 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
     if (!el.showOrmTiles.checked) {
       el.trackStatus.textContent = "Capa Adif oculta";
     } else if (TRACKS.av.loading || TRACKS.md.loading) {
-      el.trackStatus.textContent = "Capa Adif activa · indexando geometría…";
+      el.trackStatus.textContent = "Capa Adif activa · descargando geometría de vías…";
+    } else if (TRACKS.av.loaded || TRACKS.md.loaded) {
+      el.trackStatus.textContent = `Geometría de vías lista (${TRACKS.av.n + TRACKS.md.n} tramos)`;
     } else {
-      el.trackStatus.textContent = "Capa Adif activa y geometría lista";
+      el.trackStatus.textContent = "Capa Adif activa · reintentando geometría…";
     }
   }
 
@@ -2034,19 +2130,30 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
     for (const ep of OVERPASS) {
       try {
         const ctl = new AbortController();
-        const to = setTimeout(() => ctl.abort(), 35000);
-        const r = await fetch(ep, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: "data=" + encodeURIComponent(query),
-          signal: ctl.signal
-        });
+        const to = setTimeout(() => ctl.abort(), 28000);
+        // Usamos GET con ?data= que evita bloqueos preflight CORS y tiene caché en los mirrors de Overpass
+        const url = ep + "?data=" + encodeURIComponent(query);
+        const r = await fetch(url, { method: "GET", signal: ctl.signal });
         clearTimeout(to);
         if (!r.ok) throw new Error("HTTP " + r.status);
         const j = await r.json();
         const ways = (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => e.geometry.map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]));
         if (ways.length) return ways;
         throw new Error("vacío");
+      } catch (e) { lastErr = e; }
+    }
+    // Último recurso: a través del Worker proxy configurado
+    const proxyTpl = el.proxy.value.trim();
+    if (proxyTpl) {
+      try {
+        const target = OVERPASS[0] + "?data=" + encodeURIComponent(query);
+        const proxied = proxyTpl.includes("{url}") ? proxyTpl.replace("{url}", encodeURIComponent(target)) : proxyTpl + encodeURIComponent(target);
+        const r = await fetch(proxied);
+        if (r.ok) {
+          const j = await r.json();
+          const ways = (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => e.geometry.map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]));
+          if (ways.length) return ways;
+        }
       } catch (e) { lastErr = e; }
     }
     throw lastErr || new Error("sin datos");
@@ -2099,6 +2206,8 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
       }
       applyTrackWays(st, ways);
     } catch (e) {
+      // Si Overpass falla al arrancar, reintentamos automáticamente a los 12 segundos
+      setTimeout(() => loadTrackLayer(kind, false), 12000);
     } finally {
       st.loading = false;
       updateTrackStatus();
@@ -2650,6 +2759,7 @@ const stations = new Map();
           d = trackRoute.distKm;
           pathCoords = trackRoute.pathCoords;
         } else {
+          fetchPairTrackGeometryOnDemand(a, b);
           pathCoords = [[a.drawLat, a.drawLon], [b.drawLat, b.drawLon]];
         }
 
