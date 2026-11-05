@@ -2181,11 +2181,6 @@ const pairTrackGeomCache = new Map();
       updateTrackStatus();
     }
   }
-  el.showOrmTiles.addEventListener("change", () => {
-    if (el.showOrmTiles.checked) ormTileLayer.addTo(map);
-    else map.removeLayer(ormTileLayer);
-    updateTrackStatus();
-  });
 
   /* ---------- Estado de Trenes y Descarga Automática del Dataset Oficial GTFS/Adif ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
