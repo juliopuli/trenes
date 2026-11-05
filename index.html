@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v2.5</title>
+<title>Alertas Ferrocarril · v2.6</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v2.5 · LLM</span>
+          <span class="ver">v2.6 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1846,25 +1846,23 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
     const pKey = makePairKey(a.id, b.id);
     if (pairTrackInFlight.has(pKey)) return;
     const prev = pairTrackGeomCache.get(pKey);
-    if (prev && Date.now() - prev.t < 45000) return;
+    if (prev && Date.now() - prev.t < 60000) return;
 
     pairTrackInFlight.add(pKey);
     try {
-      const pad = 0.035;
+      const pad = 0.045;
       const s = (Math.min(a.lat, b.lat) - pad).toFixed(4);
       const n = (Math.max(a.lat, b.lat) + pad).toFixed(4);
       const w = (Math.min(a.lon, b.lon) - pad).toFixed(4);
       const e = (Math.max(a.lon, b.lon) + pad).toFixed(4);
-      const q = `[out:json][timeout:12][bbox:${s},${w},${n},${e}];way["railway"~"^(rail|narrow_gauge|light_rail|subway)$"][!"service"];out skel geom qt;`;
+      const q = `[out:json][timeout:18][bbox:${s},${w},${n},${e}];way["railway"~"^(rail|narrow_gauge|light_rail)$"][!"service"];out skel geom qt;`;
 
       const ways = await overpassSingle(q);
       if (ways && ways.length) {
-        // Añadimos los tramos descargados a la capa correspondiente e indexamos al instante
-        const targetLayer = (a.trackGroup === "AV" || b.trackGroup === "AV") ? TRACKS.av : TRACKS.md;
-        const merged = targetLayer.ways.concat(ways);
-        indexTrackWays(targetLayer, merged);
-        targetLayer.n = merged.length;
-        targetLayer.loaded = true;
+        const merged = TRACKS.md.ways.concat(ways);
+        indexTrackWays(TRACKS.md, merged);
+        TRACKS.md.n = merged.length;
+        TRACKS.md.loaded = true;
         pairTrackGeomCache.set(pKey, { t: Date.now() });
         updateTrackStatus();
         computeProximity();
@@ -1876,236 +1874,218 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
     }
   }
 
-  function buildCurvedFallbackAlongRails(snapA, snapB, a, b) {
-    const pStart = snapA ? [snapA.snapLat, snapA.snapLon] : [a.drawLat ?? a.lat, a.drawLon ?? a.lon];
-    const pEnd   = snapB ? [snapB.snapLat, snapB.snapLon] : [b.drawLat ?? b.lat, b.drawLon ?? b.lon];
-
-    // Si ambos están en el mismo way o tenemos sus segmentos de vía, interpolamos una curva suave (Hermite/Bezier) alineada al raíl
-    if (snapA && snapB && snapA.seg && snapB.seg && snapA.seg.id !== snapB.seg.id) {
-      const sA = snapA.seg, sB = snapB.seg;
-      const dDirect = haversine(pStart[0], pStart[1], pEnd[0], pEnd[1]);
-      if (dDirect > 0.08) {
-        // Vectores unitarios de los dos segmentos de vía
-        const vAx = sA.lo2 - sA.lo1, vAy = sA.la2 - sA.la1;
-        const vBx = sB.lo2 - sB.lo1, vBy = sB.la2 - sB.la1;
-        const toBx = pEnd[1] - pStart[1], toBy = pEnd[0] - pStart[0];
-        const signA = (vAx * toBx + vAy * toBy) >= 0 ? 1 : -1;
-        const signB = (vBx * toBx + vBy * toBy) >= 0 ? 1 : -1;
-        const mA = Math.hypot(vAx, vAy) || 1, mB = Math.hypot(vBx, vBy) || 1;
-        const distDeg = Math.hypot(toBx, toBy);
-        const ctrlLen = distDeg * 0.33;
-
-        const c1Lat = pStart[0] + signA * (vAy / mA) * ctrlLen;
-        const c1Lon = pStart[1] + signA * (vAx / mA) * ctrlLen;
-        const c2Lat = pEnd[0]   - signB * (vBy / mB) * ctrlLen;
-        const c2Lon = pEnd[1]   - signB * (vBx / mB) * ctrlLen;
-
-        const pts = [];
-        const steps = 12;
-        for (let i = 0; i <= steps; i++) {
-          const t = i / steps, u = 1 - t;
-          const lat = u*u*u*pStart[0] + 3*u*u*t*c1Lat + 3*u*t*t*c2Lat + t*t*t*pEnd[0];
-          const lon = u*u*u*pStart[1] + 3*u*u*t*c1Lon + 3*u*t*t*c2Lon + t*t*t*pEnd[1];
-          pts.push([lat, lon]);
-        }
-        return pts;
+  function snapToCombinedTracks(lat, lon, preferAV) {
+    const order = preferAV ? [TRACKS.av, TRACKS.md] : [TRACKS.md, TRACKS.av];
+    let best = null;
+    for (const st of order) {
+      if (!st.loaded) continue;
+      const s = snapToTrackLayer(st, lat, lon);
+      if (s && (!best || s.distToTrack < best.distToTrack)) {
+        best = { ...s, layer: st };
       }
     }
-    return [pStart, pEnd];
+    return best;
   }
 
   function computeLocalTrackRoute(a, b, maxAllowedKm) {
+    if (!TRACKS.av.loaded && !TRACKS.md.loaded) {
+      fetchPairTrackGeometryOnDemand(a, b);
+      return null;
+    }
+
     const preferAV = (a.trackGroup === "AV" || b.trackGroup === "AV");
-    const layersToTry = preferAV ? [TRACKS.av, TRACKS.md] : [TRACKS.md, TRACKS.av];
-    let bestSnaps = null;
+    const snapA = snapToCombinedTracks(a.lat, a.lon, preferAV);
+    const snapB = snapToCombinedTracks(b.lat, b.lon, preferAV);
 
-    for (const st of layersToTry) {
+    if (!snapA || !snapB || snapA.distToTrack > 1.5 || snapB.distToTrack > 1.5) {
+      fetchPairTrackGeometryOnDemand(a, b);
+      return null;
+    }
+
+    const sA = snapA.seg, sB = snapB.seg;
+    const sameLayer = (snapA.layer === snapB.layer);
+    const directSnapD = haversine(snapA.snapLat, snapA.snapLon, snapB.snapLat, snapB.snapLon);
+
+    // 1. Mismo segmento exacto
+    if (sameLayer && sA.id === sB.id) {
+      if (directSnapD <= maxAllowedKm) {
+        return {
+          distKm: directSnapD,
+          pathCoords: [[snapA.snapLat, snapA.snapLon], [snapB.snapLat, snapB.snapLon]],
+          snapA, snapB
+        };
+      }
+    }
+
+    // 2. Mismo way de OpenStreetMap: recorremos todos los vértices originales de la curva
+    if (sameLayer && sA.wayIdx === sB.wayIdx) {
+      const wLine = snapA.layer.ways[sA.wayIdx];
+      const posA = sA.segIdx + snapA.t;
+      const posB = sB.segIdx + snapB.t;
+      const coords = [[snapA.snapLat, snapA.snapLon]];
+      if (posA <= posB) {
+        for (let k = sA.segIdx + 1; k <= sB.segIdx; k++) coords.push(wLine[k]);
+      } else {
+        for (let k = sA.segIdx; k >= sB.segIdx + 1; k--) coords.push(wLine[k]);
+      }
+      coords.push([snapB.snapLat, snapB.snapLon]);
+      let totalD = 0;
+      for (let k = 0; k < coords.length - 1; k++) {
+        totalD += haversine(coords[k][0], coords[k][1], coords[k + 1][0], coords[k + 1][1]);
+      }
+      if (totalD <= maxAllowedKm) {
+        return { distKm: totalD, pathCoords: coords, snapA, snapB };
+      }
+    }
+
+    // 3. Grafo unificado combinando TODOS los segmentos de AV y MD en el recuadro entre ambos trenes
+    // sin deformar ningún vértice intermedio (tolerancia estricta de 12 metros para conservar todas las curvas)
+    const minLat = Math.min(snapA.snapLat, snapB.snapLat) - 0.08;
+    const maxLat = Math.max(snapA.snapLat, snapB.snapLat) + 0.08;
+    const minLon = Math.min(snapA.snapLon, snapB.snapLon) - 0.10;
+    const maxLon = Math.max(snapA.snapLon, snapB.snapLon) + 0.10;
+
+    const rMin = Math.floor(minLat / GRID_SIZE), rMax = Math.floor(maxLat / GRID_SIZE);
+    const cMin = Math.floor(minLon / GRID_SIZE), cMax = Math.floor(maxLon / GRID_SIZE);
+
+    const localSegs = [];
+    for (const st of [TRACKS.av, TRACKS.md]) {
       if (!st.loaded) continue;
-      const snapA = snapToTrackLayer(st, a.lat, a.lon);
-      const snapB = snapToTrackLayer(st, b.lat, b.lon);
-      if (!snapA || !snapB || snapA.distToTrack > 1.8 || snapB.distToTrack > 1.8) continue;
-
-      if (!bestSnaps) bestSnaps = { snapA, snapB };
-
-      const sA = snapA.seg, sB = snapB.seg;
-      const directSnapD = haversine(snapA.snapLat, snapA.snapLon, snapB.snapLat, snapB.snapLon);
-
-      // Solo si están exactamente en el mismo segmento recto de un way son 2 puntos
-      if (sA.id === sB.id) {
-        if (directSnapD <= maxAllowedKm) {
-          return {
-            distKm: directSnapD,
-            pathCoords: [[snapA.snapLat, snapA.snapLon], [snapB.snapLat, snapB.snapLon]],
-            snapA, snapB
-          };
-        }
-      }
-
-      // Si están en el mismo way de OpenStreetMap, recorremos TODOS los vértices intermedios de la curva
-      if (sA.wayIdx === sB.wayIdx) {
-        const wLine = st.ways[sA.wayIdx];
-        const posA = sA.segIdx + snapA.t;
-        const posB = sB.segIdx + snapB.t;
-        const coords = [[snapA.snapLat, snapA.snapLon]];
-        if (posA <= posB) {
-          for (let k = sA.segIdx + 1; k <= sB.segIdx; k++) coords.push(wLine[k]);
-        } else {
-          for (let k = sA.segIdx; k >= sB.segIdx + 1; k--) coords.push(wLine[k]);
-        }
-        coords.push([snapB.snapLat, snapB.snapLon]);
-        let totalD = 0;
-        for (let k = 0; k < coords.length - 1; k++) {
-          totalD += haversine(coords[k][0], coords[k][1], coords[k + 1][0], coords[k + 1][1]);
-        }
-        if (totalD <= maxAllowedKm * 1.35) {
-          return { distKm: Math.min(totalD, maxAllowedKm * 0.999), pathCoords: coords, snapA, snapB };
-        }
-      }
-
-      const minLat = Math.min(snapA.snapLat, snapB.snapLat) - 0.10;
-      const maxLat = Math.max(snapA.snapLat, snapB.snapLat) + 0.10;
-      const minLon = Math.min(snapA.snapLon, snapB.snapLon) - 0.12;
-      const maxLon = Math.max(snapA.snapLon, snapB.snapLon) + 0.12;
-
-      const rMin = Math.floor(minLat / GRID_SIZE), rMax = Math.floor(maxLat / GRID_SIZE);
-      const cMin = Math.floor(minLon / GRID_SIZE), cMax = Math.floor(maxLon / GRID_SIZE);
-
-      const seenSegs = new Set();
-      const localSegs = [];
+      const seenInLayer = new Set();
       for (let r = rMin; r <= rMax; r++) {
         for (let c = cMin; c <= cMax; c++) {
           const list = st.grid.get(r + "," + c);
           if (!list) continue;
           for (let i = 0; i < list.length; i++) {
             const sg = list[i];
-            if (!seenSegs.has(sg.id)) {
-              seenSegs.add(sg.id);
-              localSegs.push(sg);
+            if (!seenInLayer.has(sg.id)) {
+              seenInLayer.add(sg.id);
+              localSegs.push({ sg, layer: st });
             }
           }
-        }
-      }
-
-      if (!localSegs.length) continue;
-
-      const nodes = [];
-      const cellMap = new Map();
-      const CELL = 0.0015;
-
-      function getNode(lat, lon) {
-        const gr = Math.floor(lat / CELL), gc = Math.floor(lon / CELL);
-        for (let dr = -1; dr <= 1; dr++) {
-          for (let dc = -1; dc <= 1; dc++) {
-            const arr = cellMap.get((gr + dr) + "," + (gc + dc));
-            if (!arr) continue;
-            for (const nid of arr) {
-              const nd = nodes[nid];
-              // Tolerancia de 110 m para enlazar cambios de vía paralelos y agujas en estaciones/bifurcaciones
-              if (haversine(lat, lon, nd.lat, nd.lon) <= 0.11) return nid;
-            }
-          }
-        }
-        const id = nodes.length;
-        nodes.push({ lat, lon, adj: [] });
-        const key = gr + "," + gc;
-        let arr = cellMap.get(key);
-        if (!arr) { arr = []; cellMap.set(key, arr); }
-        arr.push(id);
-        return id;
-      }
-
-      function addEdge(u, v, w) {
-        if (u === v) return;
-        nodes[u].adj.push({ to: v, w });
-        nodes[v].adj.push({ to: u, w });
-      }
-
-      let startNode = -1, targetNode = -1;
-
-      for (let i = 0; i < localSegs.length; i++) {
-        const sg = localSegs[i];
-        const u = getNode(sg.la1, sg.lo1);
-        const v = getNode(sg.la2, sg.lo2);
-
-        if (sg.id === sA.id) {
-          startNode = nodes.length;
-          nodes.push({ lat: snapA.snapLat, lon: snapA.snapLon, adj: [] });
-          addEdge(startNode, u, haversine(snapA.snapLat, snapA.snapLon, sg.la1, sg.lo1));
-          addEdge(startNode, v, haversine(snapA.snapLat, snapA.snapLon, sg.la2, sg.lo2));
-        }
-        if (sg.id === sB.id) {
-          targetNode = nodes.length;
-          nodes.push({ lat: snapB.snapLat, lon: snapB.snapLon, adj: [] });
-          addEdge(targetNode, u, haversine(snapB.snapLat, snapB.snapLon, sg.la1, sg.lo1));
-          addEdge(targetNode, v, haversine(snapB.snapLat, snapB.snapLon, sg.la2, sg.lo2));
-        }
-        addEdge(u, v, sg.lenKm);
-      }
-
-      if (startNode === -1 || targetNode === -1) continue;
-
-      const dist = new Float64Array(nodes.length).fill(Infinity);
-      const prev = new Int32Array(nodes.length).fill(-1);
-      dist[startNode] = 0;
-      const pq = [{ u: startNode, d: 0 }];
-      const maxSearchKm = maxAllowedKm * 1.45;
-      let found = false;
-
-      while (pq.length) {
-        let minIdx = 0;
-        for (let k = 1; k < pq.length; k++) {
-          if (pq[k].d < pq[minIdx].d) minIdx = k;
-        }
-        const { u, d } = pq[minIdx];
-        pq[minIdx] = pq[pq.length - 1];
-        pq.pop();
-
-        if (d > dist[u]) continue;
-        if (u === targetNode) { found = true; break; }
-        if (d > maxSearchKm) continue;
-
-        const adj = nodes[u].adj;
-        for (let k = 0; k < adj.length; k++) {
-          const ed = adj[k];
-          const nd = d + ed.w;
-          if (nd <= maxSearchKm && nd < dist[ed.to]) {
-            dist[ed.to] = nd;
-            prev[ed.to] = u;
-            pq.push({ u: ed.to, d: nd });
-          }
-        }
-      }
-
-      if (found && dist[targetNode] <= maxSearchKm) {
-        const pathCoords = [];
-        let curr = targetNode;
-        while (curr !== -1) {
-          pathCoords.push([nodes[curr].lat, nodes[curr].lon]);
-          curr = prev[curr];
-        }
-        pathCoords.reverse();
-        const finalD = Math.min(dist[targetNode], maxAllowedKm * 0.999);
-        if (directSnapD < maxAllowedKm) {
-          return { distKm: finalD, pathCoords, snapA, snapB };
         }
       }
     }
 
-    // Si los dos trenes están cerca pero falta algún tramo intermedio en memoria, pedimos la vía bajo demanda
-    // y mientras llega (0.4 s) trazamos una curva suave alineada con los raíles en los que están apoyados
+    if (!localSegs.length) return null;
+
+    const nodes = [];
+    const cellMap = new Map();
+    const CELL = 0.0005; // Celdas de ~50m
+
+    function getNode(lat, lon) {
+      const gr = Math.floor(lat / CELL), gc = Math.floor(lon / CELL);
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const arr = cellMap.get((gr + dr) + "," + (gc + dc));
+          if (!arr) continue;
+          for (const nid of arr) {
+            const nd = nodes[nid];
+            // Solo fusionamos puntos que estén a menos de 12 metros (nodos compartidos entre ways sin comer vértices de curva)
+            if (haversine(lat, lon, nd.lat, nd.lon) <= 0.012) return nid;
+          }
+        }
+      }
+      const id = nodes.length;
+      nodes.push({ lat, lon, adj: [] });
+      const key = gr + "," + gc;
+      let arr = cellMap.get(key);
+      if (!arr) { arr = []; cellMap.set(key, arr); }
+      arr.push(id);
+      return id;
+    }
+
+    function addEdge(u, v, w) {
+      if (u === v) return;
+      nodes[u].adj.push({ to: v, w });
+      nodes[v].adj.push({ to: u, w });
+    }
+
+    let startNode = -1, targetNode = -1;
+
+    for (let i = 0; i < localSegs.length; i++) {
+      const { sg, layer } = localSegs[i];
+      const u = getNode(sg.la1, sg.lo1);
+      const v = getNode(sg.la2, sg.lo2);
+
+      if (layer === snapA.layer && sg.id === sA.id) {
+        startNode = nodes.length;
+        nodes.push({ lat: snapA.snapLat, lon: snapA.snapLon, adj: [] });
+        addEdge(startNode, u, haversine(snapA.snapLat, snapA.snapLon, sg.la1, sg.lo1));
+        addEdge(startNode, v, haversine(snapA.snapLat, snapA.snapLon, sg.la2, sg.lo2));
+      }
+      if (layer === snapB.layer && sg.id === sB.id) {
+        targetNode = nodes.length;
+        nodes.push({ lat: snapB.snapLat, lon: snapB.snapLon, adj: [] });
+        addEdge(targetNode, u, haversine(snapB.snapLat, snapB.snapLon, sg.la1, sg.lo1));
+        addEdge(targetNode, v, haversine(snapB.snapLat, snapB.snapLon, sg.la2, sg.lo2));
+      }
+      addEdge(u, v, sg.lenKm);
+    }
+
+    // Puentes cortos (<45 m) solo entre nodos con grado 1 (finales de vía en cambios de aguja) para no saltar curvas
+    const deadEnds = [];
+    for (let i = 0; i < nodes.length; i++) {
+      if (nodes[i].adj.length === 1) deadEnds.push(i);
+    }
+    for (let i = 0; i < deadEnds.length; i++) {
+      const u = deadEnds[i], nu = nodes[u];
+      for (let j = i + 1; j < deadEnds.length; j++) {
+        const v = deadEnds[j], nv = nodes[v];
+        if (Math.abs(nu.lat - nv.lat) < 0.0006 && Math.abs(nu.lon - nv.lon) < 0.0006) {
+          const gap = haversine(nu.lat, nu.lon, nv.lat, nv.lon);
+          if (gap <= 0.045) addEdge(u, v, gap);
+        }
+      }
+    }
+
+    if (startNode === -1 || targetNode === -1) return null;
+
+    const dist = new Float64Array(nodes.length).fill(Infinity);
+    const prev = new Int32Array(nodes.length).fill(-1);
+    dist[startNode] = 0;
+    const pq = [{ u: startNode, d: 0 }];
+    const maxSearchKm = maxAllowedKm * 1.35;
+    let found = false;
+
+    while (pq.length) {
+      let minIdx = 0;
+      for (let k = 1; k < pq.length; k++) {
+        if (pq[k].d < pq[minIdx].d) minIdx = k;
+      }
+      const { u, d } = pq[minIdx];
+      pq[minIdx] = pq[pq.length - 1];
+      pq.pop();
+
+      if (d > dist[u]) continue;
+      if (u === targetNode) { found = true; break; }
+      if (d > maxSearchKm) continue;
+
+      const adj = nodes[u].adj;
+      for (let k = 0; k < adj.length; k++) {
+        const ed = adj[k];
+        const nd = d + ed.w;
+        if (nd <= maxSearchKm && nd < dist[ed.to]) {
+          dist[ed.to] = nd;
+          prev[ed.to] = u;
+          pq.push({ u: ed.to, d: nd });
+        }
+      }
+    }
+
+    if (found && dist[targetNode] <= maxAllowedKm) {
+      const pathCoords = [];
+      let curr = targetNode;
+      while (curr !== -1) {
+        pathCoords.push([nodes[curr].lat, nodes[curr].lon]);
+        curr = prev[curr];
+      }
+      pathCoords.reverse();
+      return { distKm: dist[targetNode], pathCoords, snapA, snapB };
+    }
+
+    // Si los trenes están cerca en línea recta pero algún tramo OSM intermedio aún no estaba en memoria, lo pedimos
     fetchPairTrackGeometryOnDemand(a, b);
-    if (bestSnaps) {
-      const dEst = haversine(bestSnaps.snapA.snapLat, bestSnaps.snapA.snapLon, bestSnaps.snapB.snapLat, bestSnaps.snapB.snapLon);
-      if (dEst < maxAllowedKm) {
-        return {
-          distKm: dEst,
-          pathCoords: buildCurvedFallbackAlongRails(bestSnaps.snapA, bestSnaps.snapB, a, b),
-          snapA: bestSnaps.snapA,
-          snapB: bestSnaps.snapB
-        };
-      }
-    }
-
     return null;
   }
 
