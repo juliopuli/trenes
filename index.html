@@ -506,6 +506,15 @@
     #redOverlay{left:48px;right:150px;max-width:none}
     .fl-btn span.lbl{display:none}
   }
+    .ro-btn-ai{
+    display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+    border-radius:5px;border:1.5px solid var(--ai);background:transparent;
+    color:var(--ai);font-size:10px;font-weight:700;cursor:pointer;
+    white-space:nowrap;flex-shrink:0;transition:background .15s;
+  }
+  .ro-btn-ai:hover{background:rgba(124,58,237,.12)}
+  .ro-btn-ai:disabled{opacity:.45;cursor:default}
+  .ro-btn-ai.loading{opacity:.7;cursor:wait}
 </style>
 </head>
 <body>
@@ -1479,7 +1488,7 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
       return { text: j.choices?.[0]?.message?.content || "", modelName: "☁️ LLM: Llama 3.3 70B", isCloud: true };
     }
 
-    // 3. MODO GRATUITO SIN API KEY: intento con openrouter.ai modelo gratuito, con cooldown anti-429
+    // 3. MODO GRATUITO SIN API KEY: Pollinations text API (no requiere registro)
     if (Date.now() >= freeCloudCooldownUntil) {
       try {
         const stepCtl = new AbortController();
@@ -1487,41 +1496,28 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
         const onAbort = () => stepCtl.abort();
         signal?.addEventListener("abort", onAbort, { once: true });
 
-        const rFree = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://juliopuli.github.io/trenes/",
-            "X-Title": "Alertas Ferrocarril"
-          },
-          signal: stepCtl.signal,
-          body: JSON.stringify({
-            model: "meta-llama/llama-3.1-8b-instruct:free",
-            temperature: 0.1,
-            messages: [
-              { role: "system", content: sysMsg },
-              { role: "user", content: promptText }
-            ]
-          })
+        const fullPrompt = encodeURIComponent(sysMsg + "\n\n" + promptText);
+        const rFree = await fetch(`https://text.pollinations.ai/${fullPrompt}?model=openai&json=true&seed=${Math.floor(Math.random()*99999)}`, {
+          method: "GET",
+          signal: stepCtl.signal
         });
         clearTimeout(tId);
         signal?.removeEventListener("abort", onAbort);
 
         if (rFree.ok) {
-          const jFree = await rFree.json();
-          const contentFree = jFree.choices?.[0]?.message?.content || "";
-          if (contentFree && contentFree.includes("{")) {
-            return { text: contentFree, modelName: "☁️ LLM Nube (Llama 3.1 8B)", isCloud: true };
+          const textFree = await rFree.text();
+          if (textFree && textFree.includes("{")) {
+            return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
           }
-        } else if (rFree.status === 429) {
-          freeCloudCooldownUntil = Date.now() + 60000; // 60 s de cooldown si hay 429
+        } else if (rFree.status === 429 || rFree.status === 503) {
+          freeCloudCooldownUntil = Date.now() + 120000; // 2 min de cooldown
         }
       } catch (e) {
         if (signal?.aborted) throw e;
       }
     }
 
-    // Respaldo instantáneo por Reglas CTC Locales mientras la pasarela gratuita está en enfriamiento
+    // Respaldo instantáneo por Reglas CTC Locales mientras la pasarela está en enfriamiento
     const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
     return {
       text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
@@ -1711,7 +1707,26 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
       setTimeout(processNextLlmInQueue, wasAborted ? 50 : 2500);
     }
   }
-
+  window.__analyzeAlert = function(btn) {
+    const pkey = btn.dataset.pkey;
+    const pairObj = pairs.find(p => p.pairKey === pkey);
+    if (!pairObj) return;
+    // Forzar análisis inmediato saltando la cola
+    const localEval = evaluateAlertWithCtcBrain(
+      pairObj.trailing, pairObj.leading, pairObj.d,
+      pairObj.geomSeverity, toNum(el.thSpeed.value) || 100
+    );
+    // Marcar como en vuelo para que el botón muestre "Analizando…"
+    aiAuditCache.set(pkey, {
+      status: "queued", verdict: localEval.verdict,
+      confidence: localEval.confidence, reason: localEval.reason,
+      source: "⏳ En cola LLM", llmDone: false, llmVerified: false, llmTs: 0
+    });
+    // Poner primero en la cola (máxima prioridad)
+    llmQueue.unshift({ pairKey: pkey, pairObj, localEval });
+    renderRedOverlayList();
+    processNextLlmInQueue();
+  };
   el.btnReauditAll.addEventListener("click", () => {
     if (currentLlmTask) {
       currentLlmTask.controller.abort();
@@ -2771,9 +2786,14 @@ const stations = new Map();
 
         // TODAS las alertas del panel rojo superior (inRedPanel === true), incluidas las rebajadas a naranja en ese panel,
         // se analizan con la cola del LLM. Las naranjas normales del panel izquierdo (!inRedPanel) NO entran jamás.
-        if (inRedPanel && el.enableAiAudit.checked && el.aiProvider.value !== "local") {
+       if (inRedPanel && el.enableAiAudit.checked && el.aiProvider.value !== "local") {
           activeLlmCandidateKeys.add(pairKey);
-          toEnqueueList.push({ pairObj, localEval });
+          // Solo auto-encolar si ya tiene un veredicto LLM previo (para mantener refresco)
+          // Las alertas nuevas esperan al botón "Analizar con IA" del usuario
+          const existingCache = aiAuditCache.get(pairKey);
+          if (existingCache && existingCache.llmVerified) {
+            toEnqueueList.push({ pairObj, localEval });
+          }
         }
       }
     }
@@ -2924,16 +2944,23 @@ const stations = new Map();
     return `${esc(la)} ↔ ${esc(lb)}`;
   }
 
-  function formatAiRowHtml(p) {
+  function formatAiRowHtml(p, showBtn) {
     if (!el.enableAiAudit.checked) return "";
     const audit = aiAuditCache.get(p.pairKey);
+
+    // Si no hay audit todavía o está en cola esperando, mostrar botón bajo demanda
+    if (showBtn && (!audit || (audit.status === "queued" && !audit.llmVerified))) {
+      const isLoading = audit && audit.status === "in_flight";
+      const btnTxt = isLoading ? "🧠 Analizando…" : "🤖 Analizar con IA";
+      return `<div class="ai-row"><button class="ro-btn-ai${isLoading ? " loading" : ""}" ${isLoading ? "disabled" : ""} data-pkey="${esc(p.pairKey)}" onclick="window.__analyzeAlert(this)">${btnTxt}</button><span class="ai-reason" style="color:var(--muted);font-size:10.5px">Pulsa para auditar esta alerta con el LLM neuronal</span></div>`;
+    }
+
     if (!audit) return "";
 
     const stCls = audit.status === "in_flight"
       ? " consulting"
       : (audit.status === "queued" ? " queued" : (audit.llmVerified ? " llm-ok" : ""));
     const srcTag = audit.source ? `<span class="ai-source-tag${stCls}">${esc(audit.source)}</span>` : "";
-
     const actor = audit.llmVerified ? "LLM" : "Pre-IA";
 
     if (p.downgradedByAi) {
@@ -2995,7 +3022,7 @@ const stations = new Map();
 
         return `<div class="ro-item${extraCls}" data-i="${idx}">` +
           `<div class="ro-top"><span>${dotIcon} ${formatPairText(p)}</span><span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span></div>` +
-          formatAiRowHtml(p) +
+          formatAiRowHtml(p, true) +
           `</div>`;
       }).join("");
       el.redOverlay.classList.toggle("has-persistent", anyPersistent);
