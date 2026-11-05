@@ -1846,6 +1846,341 @@ const pairTrackGeomCache = new Map();
     const prev = pairTrackGeomCache.get(pKey);
     if (prev && Date.now() - prev.t < 120000) return;
 
+    pairTrackInFlight.add(pKey);
+    try {
+      const pad = 0.045;
+      const s = (Math.min(a.lat, b.lat) - pad).toFixed(4);
+      const n = (Math.max(a.lat, b.lat) + pad).toFixed(4);
+      const w = (Math.min(a.lon, b.lon) - pad).toFixed(4);
+      const e = (Math.max(a.lon, b.lon) + pad).toFixed(4);
+      const q = `[out:json][timeout:18][bbox:${s},${w},${n},${e}];way["railway"~"^(rail|narrow_gauge|light_rail)$"][!"service"];out skel geom qt;`;
+
+      const ways = await overpassSingle(q);
+      if (ways && ways.length) {
+        const merged = TRACKS.md.ways.concat(ways);
+        indexTrackWays(TRACKS.md, merged);
+        TRACKS.md.n = merged.length;
+        TRACKS.md.loaded = true;
+        pairTrackGeomCache.set(pKey, { t: Date.now() });
+        updateTrackStatus();
+        computeProximity();
+        render();
+      }
+    } catch (_) {
+    } finally {
+      pairTrackInFlight.delete(pKey);
+    }
+  }
+
+  function snapToCombinedTracks(lat, lon, preferAV) {
+    const order = preferAV ? [TRACKS.av, TRACKS.md] : [TRACKS.md, TRACKS.av];
+    let best = null;
+    for (const st of order) {
+      if (!st.loaded) continue;
+      const s = snapToTrackLayer(st, lat, lon);
+      if (s && (!best || s.distToTrack < best.distToTrack)) {
+        best = { ...s, layer: st };
+      }
+    }
+    return best;
+  }
+
+  function computeLocalTrackRoute(a, b, maxAllowedKm) {
+    if (!TRACKS.av.loaded && !TRACKS.md.loaded) {
+      fetchPairTrackGeometryOnDemand(a, b);
+      return null;
+    }
+
+    const preferAV = (a.trackGroup === "AV" || b.trackGroup === "AV");
+    const snapA = snapToCombinedTracks(a.lat, a.lon, preferAV);
+    const snapB = snapToCombinedTracks(b.lat, b.lon, preferAV);
+
+    if (!snapA || !snapB || snapA.distToTrack > 1.5 || snapB.distToTrack > 1.5) {
+      fetchPairTrackGeometryOnDemand(a, b);
+      return null;
+    }
+
+    const sA = snapA.seg, sB = snapB.seg;
+    const sameLayer = (snapA.layer === snapB.layer);
+    const directSnapD = haversine(snapA.snapLat, snapA.snapLon, snapB.snapLat, snapB.snapLon);
+
+    if (sameLayer && sA.id === sB.id) {
+      if (directSnapD <= maxAllowedKm) {
+        return {
+          distKm: directSnapD,
+          pathCoords: [[snapA.snapLat, snapA.snapLon], [snapB.snapLat, snapB.snapLon]],
+          snapA, snapB
+        };
+      }
+    }
+
+    if (sameLayer && sA.wayIdx === sB.wayIdx) {
+      const wLine = snapA.layer.ways[sA.wayIdx];
+      const posA = sA.segIdx + snapA.t;
+      const posB = sB.segIdx + snapB.t;
+      const coords = [[snapA.snapLat, snapA.snapLon]];
+      if (posA <= posB) {
+        for (let k = sA.segIdx + 1; k <= sB.segIdx; k++) coords.push(wLine[k]);
+      } else {
+        for (let k = sA.segIdx; k >= sB.segIdx + 1; k--) coords.push(wLine[k]);
+      }
+      coords.push([snapB.snapLat, snapB.snapLon]);
+      let totalD = 0;
+      for (let k = 0; k < coords.length - 1; k++) {
+        totalD += haversine(coords[k][0], coords[k][1], coords[k + 1][0], coords[k + 1][1]);
+      }
+      if (totalD <= maxAllowedKm) {
+        return { distKm: totalD, pathCoords: coords, snapA, snapB };
+      }
+    }
+
+    const minLat = Math.min(snapA.snapLat, snapB.snapLat) - 0.08;
+    const maxLat = Math.max(snapA.snapLat, snapB.snapLat) + 0.08;
+    const minLon = Math.min(snapA.snapLon, snapB.snapLon) - 0.10;
+    const maxLon = Math.max(snapA.snapLon, snapB.snapLon) + 0.10;
+
+    const rMin = Math.floor(minLat / GRID_SIZE), rMax = Math.floor(maxLat / GRID_SIZE);
+    const cMin = Math.floor(minLon / GRID_SIZE), cMax = Math.floor(maxLon / GRID_SIZE);
+
+    const localSegs = [];
+    for (const st of [TRACKS.av, TRACKS.md]) {
+      if (!st.loaded) continue;
+      const seenInLayer = new Set();
+      for (let r = rMin; r <= rMax; r++) {
+        for (let c = cMin; c <= cMax; c++) {
+          const list = st.grid.get(r + "," + c);
+          if (!list) continue;
+          for (let i = 0; i < list.length; i++) {
+            const sg = list[i];
+            if (!seenInLayer.has(sg.id)) {
+              seenInLayer.add(sg.id);
+              localSegs.push({ sg, layer: st });
+            }
+          }
+        }
+      }
+    }
+
+    if (!localSegs.length) return null;
+
+    const nodes = [];
+    const cellMap = new Map();
+    const CELL = 0.0005;
+
+    function getNode(lat, lon) {
+      const gr = Math.floor(lat / CELL), gc = Math.floor(lon / CELL);
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const arr = cellMap.get((gr + dr) + "," + (gc + dc));
+          if (!arr) continue;
+          for (const nid of arr) {
+            const nd = nodes[nid];
+            if (haversine(lat, lon, nd.lat, nd.lon) <= 0.012) return nid;
+          }
+        }
+      }
+      const id = nodes.length;
+      nodes.push({ lat, lon, adj: [] });
+      const key = gr + "," + gc;
+      let arr = cellMap.get(key);
+      if (!arr) { arr = []; cellMap.set(key, arr); }
+      arr.push(id);
+      return id;
+    }
+
+    function addEdge(u, v, w) {
+      if (u === v) return;
+      nodes[u].adj.push({ to: v, w });
+      nodes[v].adj.push({ to: u, w });
+    }
+
+    let startNode = -1, targetNode = -1;
+
+    for (let i = 0; i < localSegs.length; i++) {
+      const { sg, layer } = localSegs[i];
+      const u = getNode(sg.la1, sg.lo1);
+      const v = getNode(sg.la2, sg.lo2);
+
+      if (layer === snapA.layer && sg.id === sA.id) {
+        startNode = nodes.length;
+        nodes.push({ lat: snapA.snapLat, lon: snapA.snapLon, adj: [] });
+        addEdge(startNode, u, haversine(snapA.snapLat, snapA.snapLon, sg.la1, sg.lo1));
+        addEdge(startNode, v, haversine(snapA.snapLat, snapA.snapLon, sg.la2, sg.lo2));
+      }
+      if (layer === snapB.layer && sg.id === sB.id) {
+        targetNode = nodes.length;
+        nodes.push({ lat: snapB.snapLat, lon: snapB.snapLon, adj: [] });
+        addEdge(targetNode, u, haversine(snapB.snapLat, snapB.snapLon, sg.la1, sg.lo1));
+        addEdge(targetNode, v, haversine(snapB.snapLat, snapB.snapLon, sg.la2, sg.lo2));
+      }
+      addEdge(u, v, sg.lenKm);
+    }
+
+    const deadEnds = [];
+    for (let i = 0; i < nodes.length; i++) {
+      if (nodes[i].adj.length === 1) deadEnds.push(i);
+    }
+    for (let i = 0; i < deadEnds.length; i++) {
+      const u = deadEnds[i], nu = nodes[u];
+      for (let j = i + 1; j < deadEnds.length; j++) {
+        const v = deadEnds[j], nv = nodes[v];
+        if (Math.abs(nu.lat - nv.lat) < 0.0006 && Math.abs(nu.lon - nv.lon) < 0.0006) {
+          const gap = haversine(nu.lat, nu.lon, nv.lat, nv.lon);
+          if (gap <= 0.045) addEdge(u, v, gap);
+        }
+      }
+    }
+
+    if (startNode === -1 || targetNode === -1) return null;
+
+    const dist = new Float64Array(nodes.length).fill(Infinity);
+    const prev = new Int32Array(nodes.length).fill(-1);
+    dist[startNode] = 0;
+    const pq = [{ u: startNode, d: 0 }];
+    const maxSearchKm = maxAllowedKm * 1.35;
+    let found = false;
+
+    while (pq.length) {
+      let minIdx = 0;
+      for (let k = 1; k < pq.length; k++) {
+        if (pq[k].d < pq[minIdx].d) minIdx = k;
+      }
+      const { u, d } = pq[minIdx];
+      pq[minIdx] = pq[pq.length - 1];
+      pq.pop();
+
+      if (d > dist[u]) continue;
+      if (u === targetNode) { found = true; break; }
+      if (d > maxSearchKm) continue;
+
+      const adj = nodes[u].adj;
+      for (let k = 0; k < adj.length; k++) {
+        const ed = adj[k];
+        const nd = d + ed.w;
+        if (nd <= maxSearchKm && nd < dist[ed.to]) {
+          dist[ed.to] = nd;
+          prev[ed.to] = u;
+          pq.push({ u: ed.to, d: nd });
+        }
+      }
+    }
+
+    if (found && dist[targetNode] <= maxAllowedKm) {
+      const pathCoords = [];
+      let curr = targetNode;
+      while (curr !== -1) {
+        pathCoords.push([nodes[curr].lat, nodes[curr].lon]);
+        curr = prev[curr];
+      }
+      pathCoords.reverse();
+      return { distKm: dist[targetNode], pathCoords, snapA, snapB };
+    }
+
+    fetchPairTrackGeometryOnDemand(a, b);
+    return null;
+  }
+
+  function updateTrackStatus() {
+    if (!el.showOrmTiles.checked) {
+      el.trackStatus.textContent = "Capa Adif oculta";
+    } else if (TRACKS.av.loading || TRACKS.md.loading) {
+      el.trackStatus.textContent = "Capa Adif activa · descargando geometría de vías…";
+    } else if (TRACKS.av.loaded || TRACKS.md.loaded) {
+      el.trackStatus.textContent = `Geometría de vías lista (${TRACKS.av.n + TRACKS.md.n} tramos)`;
+    } else {
+      el.trackStatus.textContent = "Capa Adif activa · reintentando geometría…";
+    }
+  }
+
+  function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+  async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } }
+  async function idbSet(k, v) { try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }
+
+  async function overpassSingle(query) {
+    let lastErr;
+    for (const ep of OVERPASS) {
+      try {
+        const ctl = new AbortController();
+        const to = setTimeout(() => ctl.abort(), 28000);
+        const url = ep + "?data=" + encodeURIComponent(query);
+        const r = await fetch(url, { method: "GET", signal: ctl.signal });
+        clearTimeout(to);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const j = await r.json();
+        const ways = (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => e.geometry.map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]));
+        if (ways.length) return ways;
+        throw new Error("vacío");
+      } catch (e) { lastErr = e; }
+    }
+    const proxyTpl = el.proxy.value.trim();
+    if (proxyTpl) {
+      try {
+        const target = OVERPASS[0] + "?data=" + encodeURIComponent(query);
+        const proxied = proxyTpl.includes("{url}") ? proxyTpl.replace("{url}", encodeURIComponent(target)) : proxyTpl + encodeURIComponent(target);
+        const r = await fetch(proxied);
+        if (r.ok) {
+          const j = await r.json();
+          const ways = (j.elements || []).filter(e => e.geometry && e.geometry.length > 1).map(e => e.geometry.map(p => [+p.lat.toFixed(5), +p.lon.toFixed(5)]));
+          if (ways.length) return ways;
+        }
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error("sin datos");
+  }
+
+  function decimate(pts, minKm) {
+    const out = [pts[0]]; let last = pts[0];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const p = pts[i];
+      const dy = (p[0] - last[0]) * 111.19, dx = (p[1] - last[1]) * 111.19 * Math.cos(p[0] * Math.PI / 180);
+      if (dx * dx + dy * dy >= minKm * minKm) { out.push(p); last = p; }
+    }
+    out.push(pts[pts.length - 1]);
+    return out;
+  }
+
+  function applyTrackWays(st, ways) {
+    indexTrackWays(st, ways);
+    st.n = ways.length;
+    st.loaded = true;
+    st.osmLoaded = true;
+    updateTrackStatus();
+    if (trains.length) { computeProximity(); render(); }
+  }
+
+  async function loadTrackLayer(kind, force) {
+    const st = TRACKS[kind];
+    if (st.loading) return;
+    if (st.osmLoaded && !force) return;
+
+    st.loading = true; updateTrackStatus();
+    try {
+      let ways = null;
+      if (!force) {
+        const c = await idbGet(st.key);
+        if (c && c.ways && c.ways.length && Date.now() - c.t < 30 * 864e5) ways = c.ways;
+      }
+      if (!ways) {
+        const allWays = [];
+        for (const q of st.queries) {
+          try {
+            const raw = await overpassSingle(q);
+            const dec = raw.map(w => decimate(w, st.minKm));
+            allWays.push(...dec);
+          } catch (e) {}
+        }
+        if (!allWays.length) throw new Error("sin respuesta OSM");
+        ways = allWays;
+        idbSet(st.key, { t: Date.now(), ways });
+      }
+      applyTrackWays(st, ways);
+    } catch (e) {
+      setTimeout(() => loadTrackLayer(kind, false), 12000);
+    } finally {
+      st.loading = false;
+      updateTrackStatus();
+    }
+  }
   el.showOrmTiles.addEventListener("change", () => {
     if (el.showOrmTiles.checked) ormTileLayer.addTo(map);
     else map.removeLayer(ormTileLayer);
