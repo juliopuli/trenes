@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.19</title>
+<title>Trenes Renfe en tiempo real · v1.23</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -32,10 +32,10 @@
   .sub{font-size:12px;color:var(--muted)}
   fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
   legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
-  label{display:block;font-size:12px;margin:6px 0 3px}
+  label{display:block;font-size:11.5px;margin:6px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   input[type=text],input[type=number],select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px}
   .row{display:flex;gap:8px}
-  .row>*{flex:1}
+  .row>*{flex:1;min-width:0}
   .chk{display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0;cursor:pointer}
   .dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25)}
   .chk .n{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
@@ -65,9 +65,9 @@
     border:2px solid var(--red);
     border-radius:10px;
     box-shadow:0 4px 16px rgba(0,0,0,.28);
-    min-width:290px;
-    max-width:410px;
-    max-height:260px;
+    min-width:340px;
+    max-width:540px;
+    max-height:270px;
     display:flex;
     flex-direction:column;
     overflow:hidden;
@@ -76,6 +76,9 @@
   #redOverlay.empty{
     border-color:var(--line);
     opacity:0.9;
+  }
+  #redOverlay.has-persistent{
+    box-shadow:0 0 0 3px rgba(229,57,53,.45), 0 6px 22px rgba(229,57,53,.5);
   }
   .ro-head{
     background:var(--red);
@@ -97,20 +100,71 @@
     padding:6px 8px;
     overflow-y:auto;
     font-size:12px;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
   }
   .ro-item{
     display:flex;
     justify-content:space-between;
     align-items:center;
     gap:8px;
-    padding:5px 4px;
-    border-bottom:1px solid var(--line);
+    padding:6px 7px;
+    border-radius:6px;
+    border:1px solid var(--line);
     cursor:pointer;
     font-weight:600;
+    transition:background .15s;
   }
-  .ro-item:last-child{border-bottom:0}
   .ro-item:hover{background:var(--bg)}
-  .ro-item .ro-d{color:var(--red);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ro-item .ro-right{display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .ro-item .ro-d{color:var(--red);font-variant-numeric:tabular-nums}
+  .ro-item .ro-tti{
+    background:var(--red);
+    color:#fff;
+    font-size:11px;
+    font-weight:700;
+    padding:2px 6px;
+    border-radius:5px;
+    font-variant-numeric:tabular-nums;
+  }
+  .ro-item .ro-pers{
+    background:#7f1d1d;
+    color:#fff;
+    font-size:10.5px;
+    font-weight:700;
+    padding:2px 5px;
+    border-radius:4px;
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* Parpadeo intenso en el mapa para alertas rojas que superan el tiempo de persistencia */
+  @keyframes blinkPersistentAlert{
+    0%, 100%{
+      background:#dc2626;
+      color:#ffffff;
+      border-color:#991b1b;
+      box-shadow:0 0 12px rgba(220,38,38,.85);
+    }
+    50%{
+      background:#fff1f2;
+      color:#991b1b;
+      border-color:#dc2626;
+      box-shadow:0 0 2px rgba(220,38,38,.2);
+    }
+  }
+  .ro-item.persistent-blink{
+    animation:blinkPersistentAlert 0.75s infinite ease-in-out;
+  }
+  .ro-item.persistent-blink .ro-d{
+    color:inherit;
+    font-weight:800;
+  }
+  .ro-item.persistent-blink .ro-tti{
+    background:rgba(0,0,0,.28);
+    color:inherit;
+    border:1px solid currentColor;
+  }
 
   /* Botones flotantes superior derecha (Actualizar / Pausar) */
   #topRightControls{
@@ -246,7 +300,7 @@
     <div>
       <div class="side-top">
         <button class="help-btn" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
-        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.19</span></h1>
+        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.23</span></h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
@@ -254,13 +308,23 @@
     <fieldset>
       <legend>Reglas de alerta (por trazado de vía)</legend>
       <div class="row">
-        <div><label for="thOrange" title="Distancia de seguridad medida siguiendo las curvas reales de la vía">Distancia &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.5" step="0.5"></div>
-        <div><label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
+        <div>
+          <label for="thOrange" title="Distancia de seguridad medida siguiendo las curvas reales de la vía">Distancia &lt; (km)</label>
+          <input type="number" id="thOrange" value="5" min="0.5" step="0.5">
+        </div>
+        <div>
+          <label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label>
+          <input type="number" id="thSpeed" value="100" min="20" step="10">
+        </div>
+        <div>
+          <label for="thPersist" title="Segundos seguidos en alerta roja a partir de los cuales la alerta parpadea intensamente en el mapa">Persistencia (s)</label>
+          <input type="number" id="thPersist" value="30" min="5" step="5">
+        </div>
       </div>
       <div class="help">
         • <b>Distancia por vía:</b> medida sobre los raíles entre ambos trenes.<br>
-        • <b>Unión sobre vía:</b> el trazo naranja/rojo dibuja la vía que los separa.<br>
-        • <b>Rojo:</b> el tren trasero va a &gt; 100 km/h y más rápido que el delantero.
+        • <b>Velocidad limitada por tipo:</b> AVE 320, ALVIA 250/220, AVANT 250, MD 160, Cercanías/Reg. 140 km/h.<br>
+        • <b>Persistencia roja:</b> si una alerta roja supera el tiempo indicado, parpadea en el panel superior del mapa.
       </div>
     </fieldset>
 
@@ -290,6 +354,9 @@
       <input type="checkbox" id="showRed" checked>
       <input type="checkbox" id="showOrange" checked>
       <input type="checkbox" id="showGreen" checked>
+      <input type="checkbox" id="showTrackAV" checked>
+      <input type="checkbox" id="showTrackMD" checked>
+      <button id="btnReloadTrack"></button>
     </div>
   </aside>
 
@@ -357,21 +424,16 @@
         </div>
       </div>
 
-      <!-- 3. Capas de vías -->
+      <!-- 3. Capas de vías (Solo Detalle Adif / OpenRailwayMap) -->
       <div class="fl-wrap">
         <button class="fl-btn" data-pop="popTracks" title="Capas de vías ferroviarias">
           <svg viewBox="0 0 24 24"><path d="M5 3v18h2v-6.5l7 6.5h3l-8-7.5V3H5zm12 0v8.5l-3.5 3.2 1.4 1.5L19 12.4V3h-2z"/></svg>
           <span class="lbl">Capas de vías</span>
         </button>
-        <div class="fl-pop" id="popTracks" style="min-width:265px">
-          <div class="fl-title">Trazado ferroviario real</div>
-          <label class="chk"><input type="checkbox" id="showTrackAV" checked>Vía Alta Velocidad<span class="n" style="color:#7b1fa2;font-weight:700">▬▬</span></label>
-          <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía Convencional / MD<span class="n" style="color:#0066cc;font-weight:700">▬▬</span></label>
+        <div class="fl-pop" id="popTracks" style="min-width:255px">
+          <div class="fl-title">Capa de infraestructura</div>
           <label class="chk"><input type="checkbox" id="showOrmTiles" checked>Detalle Adif / OpenRailwayMap<span class="n" style="color:#d97706;font-weight:700">┼┼</span></label>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding-top:6px;border-top:1px solid var(--line)">
-            <div class="help" id="trackStatus" style="margin:0">Cargando vías…</div>
-            <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías reales">Recargar</button>
-          </div>
+          <div class="help" id="trackStatus" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)">Cargando geometría para cálculo…</div>
         </div>
       </div>
 
@@ -438,19 +500,18 @@
       </div>
 
       <div class="hm-box" style="border-left:5px solid #e53935">
-        <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO PARPADEANTE (¡Peligro por alcance!)</div>
+        <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO y Parpadeo por Persistencia</div>
         <div>
-          Salta la <b>Alerta Roja</b> arriba en el mapa cuando se cumplen estas 4 cosas a la vez:
+          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) cuando:
           <ol style="margin:4px 0 0;padding-left:18px">
-            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> (un AVE nunca puede chocar con un Media Distancia convencional aunque sus vías pasen juntas).</li>
-            <li>Van en el <b>mismo sentido de la marcha</b> a <b>menos de 5 km medidos siguiendo las curvas de la vía</b>.</li>
-            <li>El tren que viene por <b>detrás va lanzado a más de 100 km/h</b>.</li>
-            <li>El tren de <b>atrás va más rápido (o igual) que el de delante</b>, por lo que le está recortando distancia rápidamente.</li>
+            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> y van en el <b>mismo sentido</b> a <b>menos de 5 km</b>.</li>
+            <li>El tren que viene por <b>detrás supera los 100 km/h</b> y va <b>más rápido (o igual) que el de delante</b>.</li>
+            <li><b>Aviso de Persistencia:</b> Si una misma alerta roja se mantiene activa de forma ininterrumpida durante más segundos de los configurados en <b>Persistencia (s)</b>, su fila en el panel superior del mapa comienza a <b>parpadear intensamente en rojo</b> para alertar al operador.</li>
           </ol>
         </div>
         <div class="hm-diagram" style="border-color:#e53935">
           <span style="color:#e53935;font-weight:700">🚆 Detrás (180 km/h) ➔➔</span>
-          <span style="color:#e53935;font-weight:700">── ¡3 km por vía y acercándose! ──</span>
+          <span style="color:#e53935;font-weight:700">── 3 km · ⏱ Impacto: 1m 48s ──</span>
           <span>🚆 Delante (80 km/h) ➔</span>
         </div>
       </div>
@@ -464,7 +525,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.19";
+  const VERSION = "1.23";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -645,7 +706,7 @@
   const el = {
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
     interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
-    thOrange: $("thOrange"), thSpeed: $("thSpeed"),
+    thOrange: $("thOrange"), thSpeed: $("thSpeed"), thPersist: $("thPersist"),
     showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"), showOrmTiles: $("showOrmTiles"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
@@ -654,7 +715,7 @@
     lblSource: $("lblSource"), lblBase: $("lblBase"), helpModal: $("helpModal")
   };
 
-  /* ---------- Mapa Base y Capa Oficial OpenRailwayMap ---------- */
+  /* ---------- Mapa Base y Capa Oficial OpenRailwayMap (Única capa visual de vías) ---------- */
   const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const BASES = {
@@ -673,14 +734,10 @@
   const ormTileLayer = L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png", {
     subdomains: ["a", "b", "c"],
     maxZoom: 19,
-    opacity: 0.78,
+    opacity: 0.85,
     attribution: "&copy; OpenRailwayMap"
   }).addTo(map);
 
-  const trackCanvas = L.canvas({ padding: 0.5 });
-  const trackLayer = L.layerGroup().addTo(map);
-
-  // Pane exclusivo superior para las líneas de alerta sobre la vía (por encima de todas las vías y teselas, y justo debajo de los iconos de los trenes)
   const alertPane = map.createPane("alertTrackPane");
   alertPane.style.zIndex = 460;
   alertPane.style.pointerEvents = "none";
@@ -691,18 +748,18 @@
 
   const TRACKS = {
     av: {
-      name: "AV", color: "#7b1fa2", weight: 3.0, opacity: 0.85, minKm: 0.015, key: "avTrack_v18",
+      name: "AV", minKm: 0.015, key: "avTrack_v18",
       queries: [
         '[out:json][timeout:40][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'
       ],
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map(), ways: []
+      loaded: false, osmLoaded: false, loading: false, n: 0, grid: new Map(), ways: []
     },
     md: {
-      name: "MD/Conv", color: "#0066cc", weight: 2.2, opacity: 0.8, minKm: 0.025, key: "mdTrack_v18",
+      name: "MD/Conv", minKm: 0.025, key: "mdTrack_v18",
       queries: [
         '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;'
       ],
-      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map(), ways: []
+      loaded: false, osmLoaded: false, loading: false, n: 0, grid: new Map(), ways: []
     }
   };
 
@@ -721,9 +778,26 @@
     return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
   }
   const fmtKm = d => d < 1 ? Math.round(d * 1000) + " m" : d.toFixed(2) + " km";
+  const fmtImpactTime = sec => {
+    if (!isFinite(sec) || sec <= 0) return "Vel. igualada";
+    const s = Math.round(sec);
+    if (s < 60) return `${s} s`;
+    const m = Math.floor(s / 60);
+    const remS = s % 60;
+    if (m < 60) return remS > 0 ? `${m}m ${remS}s` : `${m} min`;
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+    return `${h}h ${remM}m`;
+  };
+  const fmtDuration = sec => {
+    const s = Math.max(0, Math.round(sec));
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60), remS = s % 60;
+    return remS > 0 ? `${m}m ${remS}s` : `${m}m`;
+  };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Indexación Espacial de Sub-segmentos y Enrutamiento Local Exacto sobre la Vía ---------- */
+  /* ---------- Indexación Espacial en Memoria para Cálculo por Vía ---------- */
   function indexTrackWays(st, lines) {
     st.grid.clear();
     st.ways = lines;
@@ -793,6 +867,25 @@
     return best;
   }
 
+  /* ---------- Límite de Velocidad Máxima por Tipo de Tren e Infraestructura ---------- */
+  function getMaxSpeedForTrain(tipoStr, lat, lon) {
+    const tipo = (tipoStr || "").toUpperCase();
+    if (tipo === "AVE" || tipo === "AVLO") return 320;
+    if (tipo === "AVANT") return 250;
+    if (tipo === "MD") return 160;
+    if (tipo === "CERCANÍAS" || tipo === "REGIONAL" || tipo === "REG.EXP") return 140;
+
+    // ALVIA y trenes de ancho variable: 250 km/h en vía AVE y 220 km/h en vía convencional
+    const sAV = TRACKS.av.loaded ? snapToTrackLayer(TRACKS.av, lat, lon) : null;
+    const sMD = TRACKS.md.loaded ? snapToTrackLayer(TRACKS.md, lat, lon) : null;
+    const dAV = sAV ? sAV.distToTrack : Infinity;
+    const dMD = sMD ? sMD.distToTrack : Infinity;
+
+    if (dAV <= 1.2 && dAV <= dMD) return 250;
+    if (dMD <= 1.2 && dMD < dAV) return 220;
+    return 250;
+  }
+
   function computeLocalTrackRoute(a, b, maxAllowedKm) {
     const preferAV = (a.trackGroup === "AV" || b.trackGroup === "AV");
     const layersToTry = preferAV ? [TRACKS.av, TRACKS.md] : [TRACKS.md, TRACKS.av];
@@ -805,7 +898,6 @@
 
       const sA = snapA.seg, sB = snapB.seg;
 
-      // Caso 1: Mismo sub-segmento
       if (sA.id === sB.id) {
         const d = haversine(snapA.snapLat, snapA.snapLon, snapB.snapLat, snapB.snapLon);
         if (d <= maxAllowedKm) {
@@ -817,7 +909,6 @@
         }
       }
 
-      // Caso 2: Mismo way de OSM -> recorrer vértices intermedios
       if (sA.wayIdx === sB.wayIdx) {
         const wLine = st.ways[sA.wayIdx];
         const posA = sA.segIdx + snapA.t;
@@ -838,7 +929,6 @@
         }
       }
 
-      // Caso 3: Grafo fino local sobre los sub-segmentos de la zona
       const minLat = Math.min(snapA.snapLat, snapB.snapLat) - 0.08;
       const maxLat = Math.max(snapA.snapLat, snapB.snapLat) + 0.08;
       const minLon = Math.min(snapA.snapLon, snapB.snapLon) - 0.10;
@@ -968,15 +1058,13 @@
   }
 
   function updateTrackStatus() {
-    const part = st => {
-      if (st.loading) return `${st.name}: descargando trazado real…`;
-      if (st.osmLoaded) return `${st.name}: ${st.n} tramos reales`;
-      return `${st.name}: pendiente`;
-    };
-    const parts = [];
-    if (el.showTrackAV.checked) parts.push(part(TRACKS.av));
-    if (el.showTrackMD.checked) parts.push(part(TRACKS.md));
-    el.trackStatus.textContent = parts.length ? parts.join(" · ") : "Vías vectoriales ocultas";
+    if (!el.showOrmTiles.checked) {
+      el.trackStatus.textContent = "Capa Adif oculta";
+    } else if (TRACKS.av.loading || TRACKS.md.loading) {
+      el.trackStatus.textContent = "Capa Adif activa · indexando geometría…";
+    } else {
+      el.trackStatus.textContent = "Capa Adif activa y geometría lista";
+    }
   }
 
   function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
@@ -1042,19 +1130,11 @@
     return out;
   }
 
-  function syncTrackVisibility() {
-    trackLayer.clearLayers();
-    if (el.showTrackMD.checked && TRACKS.md.poly) TRACKS.md.poly.addTo(trackLayer);
-    if (el.showTrackAV.checked && TRACKS.av.poly) TRACKS.av.poly.addTo(trackLayer);
-  }
-
   function applyTrackWays(st, ways) {
     indexTrackWays(st, ways);
-    st.poly = L.polyline(ways, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
     st.n = ways.length;
     st.loaded = true;
     st.osmLoaded = true;
-    syncTrackVisibility();
     updateTrackStatus();
     if (trains.length) { computeProximity(); render(); }
   }
@@ -1096,25 +1176,17 @@
     }
   }
 
-  function onTrackToggle(kind, chk) {
-    if (chk.checked && !TRACKS[kind].osmLoaded) loadTrackLayer(kind);
-    syncTrackVisibility();
-    updateTrackStatus();
-  }
-  el.showTrackAV.addEventListener("change", () => onTrackToggle("av", el.showTrackAV));
-  el.showTrackMD.addEventListener("change", () => onTrackToggle("md", el.showTrackMD));
   el.showOrmTiles.addEventListener("change", () => {
     if (el.showOrmTiles.checked) ormTileLayer.addTo(map);
     else map.removeLayer(ormTileLayer);
-  });
-  el.btnReloadTrack.addEventListener("click", () => {
-    if (el.showTrackAV.checked) loadTrackLayer("av", true);
-    if (el.showTrackMD.checked) loadTrackLayer("md", true);
+    updateTrackStatus();
   });
 
-  /* ---------- Estado de Trenes ---------- */
+  /* ---------- Estado de Trenes y Memoria de Persistencia de Alertas Rojas ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
+  // Mapa pairKey -> timestamp (ms) en que comenzó ininterrumpidamente la alerta roja para ese par
+  const redAlertStart = new Map();
 
   const stations = new Map();
   function registerStation(code, name) {
@@ -1213,6 +1285,9 @@
   function updateTrainKinematics(trainObj) {
     const now = Date.now();
     const id = trainObj.id;
+    const maxSpeed = getMaxSpeedForTrain(trainObj.tipo, trainObj.lat, trainObj.lon);
+    trainObj.maxAllowedSpeed = maxSpeed;
+
     let h = trainHistory.get(id);
     if (!h) {
       h = { pts: [{ lat: trainObj.lat, lon: trainObj.lon, t: now }], speeds: [], dLat: 0, dLon: 0, hasVector: false, calcSpeed: null, measures: 0 };
@@ -1223,14 +1298,15 @@
       const distKm = haversine(lastPt.lat, lastPt.lon, trainObj.lat, trainObj.lon);
 
       if (distKm >= 0.015 && dtSec >= 1.5) {
-        const vKmh = (distKm / dtSec) * 3600;
-        if (vKmh <= 380) {
+        const rawV = (distKm / dtSec) * 3600;
+        if (rawV <= 600) {
+          const cappedV = Math.min(rawV, maxSpeed);
           h.dLat = trainObj.lat - lastPt.lat;
           h.dLon = trainObj.lon - lastPt.lon;
           h.hasVector = true;
           h.pts.push({ lat: trainObj.lat, lon: trainObj.lon, t: now });
           if (h.pts.length > 4) h.pts.shift();
-          h.speeds.push(vKmh);
+          h.speeds.push(cappedV);
           if (h.speeds.length > 2) h.speeds.shift();
         }
       } else if (dtSec > 95) {
@@ -1239,17 +1315,21 @@
         h.pts[h.pts.length - 1].t = now;
       }
 
+      for (let i = 0; i < h.speeds.length; i++) {
+        if (h.speeds[i] > maxSpeed) h.speeds[i] = maxSpeed;
+      }
+
       h.measures = h.speeds.length;
       if (h.speeds.length === 2) {
-        h.calcSpeed = Math.round((h.speeds[0] + h.speeds[1]) / 2);
+        h.calcSpeed = Math.min(maxSpeed, Math.round((h.speeds[0] + h.speeds[1]) / 2));
       } else if (h.speeds.length === 1) {
-        h.calcSpeed = Math.round(h.speeds[0]);
+        h.calcSpeed = Math.min(maxSpeed, Math.round(h.speeds[0]));
       }
     }
 
     const rawVel = toNum(trainObj.raw && (trainObj.raw.velocidad ?? trainObj.raw.vel ?? trainObj.raw.speed ?? trainObj.raw["Velocidad (km/h)"]));
     if (h.calcSpeed === null && isFinite(rawVel) && rawVel >= 0) {
-      h.calcSpeed = Math.round(rawVel);
+      h.calcSpeed = Math.min(maxSpeed, Math.round(rawVel));
       h.measures = 2;
     }
 
@@ -1311,7 +1391,9 @@
 
     const orig = resolveStation(origRaw), dest = resolveStation(destRaw), sig = resolveStation(sigRaw), ant = resolveStation(antRaw);
     const horaSal = r.horaSalida ?? r.salida ?? get(/hora.*sal/i) ?? "", horaLleg = r.horaLlegada ?? r.llegada ?? get(/hora.*lleg/i) ?? "";
-    const vel = t.calcSpeed !== null && t.calcSpeed !== undefined ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
+    const maxSpd = t.maxAllowedSpeed || getMaxSpeedForTrain(t.tipo, t.lat, t.lon);
+    const rawVel = t.calcSpeed !== null && t.calcSpeed !== undefined ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
+    const vel = isFinite(rawVel) && rawVel >= 0 ? Math.min(maxSpd, Math.round(rawVel)) : null;
     const ret = toNum(r.retraso ?? r.demora ?? r.delay ?? get(/retraso|demora/i));
     const mat = r.mat ?? r.material ?? r.composicion ?? "", corredor = r.corredor ?? r.linea ?? r.nucleo ?? r.Línea ?? "";
 
@@ -1325,7 +1407,8 @@
       numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "",
       orig, dest, sig, ant,
       horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(),
-      vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null,
+      vel,
+      maxSpd,
       measures: t.speedMeasures || 0,
       speedsList: t.speedsList || [],
       ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim()
@@ -1350,21 +1433,32 @@
       group = "CONV";
       bestSnap = sMD;
     } else {
-      if (isFinite(t.calcSpeed) && t.calcSpeed > 205) {
-        group = "AV";
-        bestSnap = sAV;
-      } else if (dAV <= 1.2 && dAV < dMD * 0.85) {
+      if (dAV <= 1.2 && dAV < dMD * 0.85) {
         group = "AV";
         bestSnap = sAV;
       } else if (dMD <= 1.2 && dMD < dAV * 0.85) {
         group = "CONV";
         bestSnap = sMD;
+      } else if (isFinite(t.calcSpeed) && t.calcSpeed > 220) {
+        group = "AV";
+        bestSnap = sAV;
       } else {
         bestSnap = dAV <= dMD ? sAV : sMD;
       }
     }
 
     t.trackGroup = group;
+    const maxSpeed = (tipo === "ALVIA" || group === "HYB")
+      ? (group === "CONV" ? 220 : 250)
+      : getMaxSpeedForTrain(tipo, t.lat, t.lon);
+    t.maxAllowedSpeed = maxSpeed;
+    if (t.calcSpeed !== null && t.calcSpeed > maxSpeed) {
+      t.calcSpeed = maxSpeed;
+    }
+    if (t.speedsList && t.speedsList.length) {
+      t.speedsList = t.speedsList.map(v => Math.min(v, maxSpeed));
+    }
+
     if (bestSnap && bestSnap.distToTrack <= 0.8) {
       t.drawLat = bestSnap.snapLat;
       t.drawLon = bestSnap.snapLon;
@@ -1502,19 +1596,26 @@
     return false;
   }
 
+  function makePairKey(id1, id2) {
+    return id1 < id2 ? `${id1}|${id2}` : `${id2}|${id1}`;
+  }
+
   function computeProximity() {
     const tO = Math.max(0.5, toNum(el.thOrange.value) || 5);
     const minSpeed = Math.max(10, toNum(el.thSpeed.value) || 100);
+    const now = Date.now();
+    const activeRedKeys = new Set();
 
     trains.forEach(t => {
       t.d = Infinity;
       t.nearTrain = null;
       t.hasRedPair = false;
       t.roleInfo = "";
+      t.impactSec = null;
       t.inStation = isInStationArea(t.lat, t.lon, 2.2);
+      assignTrainTrackAndSnap(t);
       t.isFast = isConfirmedHighSpeed(t, minSpeed);
       t._info = trainInfo(t);
-      assignTrainTrackAndSnap(t);
       t.routeVec = getRouteVector(t);
     });
 
@@ -1555,18 +1656,32 @@
         const order = getTrailingAndLeading(a, b);
         let pairSeverity = "orange";
         let trailing = a, leading = b;
+        let impactSec = null;
 
         if (order) {
           trailing = order.trailing;
           leading = order.leading;
           const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
           const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
+          const closingSpeed = vTrail - vLead;
 
-          if (trailing.isFast && vTrail >= vLead) {
+          if (trailing.isFast && closingSpeed >= 0) {
             pairSeverity = "red";
+            impactSec = closingSpeed > 0 ? (d / closingSpeed) * 3600 : Infinity;
           } else {
             pairSeverity = "orange";
           }
+        }
+
+        const pairKey = makePairKey(a.id, b.id);
+        let redStartMs = null;
+
+        if (pairSeverity === "red") {
+          activeRedKeys.add(pairKey);
+          if (!redAlertStart.has(pairKey)) {
+            redAlertStart.set(pairKey, now);
+          }
+          redStartMs = redAlertStart.get(pairKey);
         }
 
         if (d < a.d) { a.d = d; a.nearTrain = b; }
@@ -1574,14 +1689,23 @@
         if (pairSeverity === "red") {
           a.hasRedPair = true;
           b.hasRedPair = true;
+          if (impactSec !== null) {
+            if (a.impactSec === null || impactSec < a.impactSec) a.impactSec = impactSec;
+            if (b.impactSec === null || impactSec < b.impactSec) b.impactSec = impactSec;
+          }
         }
         if (order) {
           trailing.roleInfo = `Detrás de ${leading.tipo} ${leading.label}`;
           leading.roleInfo  = `Delante de ${trailing.tipo} ${trailing.label}`;
         }
 
-        pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, pathCoords, severity: pairSeverity });
+        pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, pathCoords, severity: pairSeverity, impactSec, pairKey, redStartMs });
       }
+    }
+
+    // Limpiar del historial de persistencia cualquier par que haya dejado de estar en alerta roja
+    for (const k of redAlertStart.keys()) {
+      if (!activeRedKeys.has(k)) redAlertStart.delete(k);
     }
 
     trains.forEach(t => {
@@ -1606,7 +1730,7 @@
     const paradas = [];
     if (x.sig) paradas.push(`Próxima: <b>${esc(x.sig)}</b>`);
     if (x.vel !== null) {
-      const mTag = x.measures >= 2 ? " (2 med.)" : " (1 med.)";
+      const mTag = x.measures >= 2 ? ` (máx. ${x.maxSpd})` : " (1 med.)";
       paradas.push(`Vel. GPS: <b>${x.vel} km/h</b>${mTag}`);
     } else {
       paradas.push(`Vel. GPS: <i>calculando…</i>`);
@@ -1619,7 +1743,8 @@
     let near = "";
     if (!t.inStation && isFinite(t.d)) {
       if (t.color === "red") {
-        near = `<div style="color:#e53935;font-weight:700;margin-top:3px">🚨 PELIGRO ALCANCE: A ${fmtKm(t.d)} por vía${esc(roleTxt)}</div>`;
+        const ttiTxt = t.impactSec !== null ? ` · ⏱ Impacto: ${fmtImpactTime(t.impactSec)}` : "";
+        near = `<div style="color:#e53935;font-weight:700;margin-top:3px">🚨 PELIGRO ALCANCE: A ${fmtKm(t.d)} por vía${esc(roleTxt)}${esc(ttiTxt)}</div>`;
       } else {
         near = `<div style="color:#d97706;font-weight:700;margin-top:3px">⚠ Precaución: A ${fmtKm(t.d)} por vía de ${esc(nearName)}${esc(roleTxt)}</div>`;
       }
@@ -1631,7 +1756,7 @@
     const x = t._info || trainInfo(t);
     const vGrp = t.trackGroup === "AV" ? "Alta Velocidad (UIC)" : (t.trackGroup === "CONV" ? "Convencional (Ibérico)" : "Ancho Variable / Mixto");
     const mainRows = [
-      ["Tipo de servicio", x.tipo],
+      ["Tipo de servicio", `${x.tipo} (Límite: ${x.maxSpd} km/h)`],
       ["Infraestructura", vGrp],
       ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
       ["Origen", x.orig || "—"],
@@ -1650,6 +1775,9 @@
     if (t.roleInfo) mainRows.push(["Posición en vía", t.roleInfo]);
     mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.color === "red" ? "ROJO (Alcance a >100 km/h)" : (t.color === "orange" ? "AMARILLO/NARANJA (<5 km sin alcance)" : "Normal en ruta"))]);
     if (!t.inStation && isFinite(t.d)) mainRows.push(["Distancia por vía", `${fmtKm(t.d)}`]);
+    if (t.color === "red" && t.impactSec !== null) {
+      mainRows.push(["Tiempo hasta impacto", `<b style="color:#e53935">⏱ ${esc(fmtImpactTime(t.impactSec))}</b>`, true]);
+    }
 
     const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
     const rawRows = Object.entries(t.raw || {}).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
@@ -1676,6 +1804,52 @@
     const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label;
     const lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
     return `${esc(la)} ↔ ${esc(lb)}`;
+  }
+
+  // Actualiza únicamente el panel superior de alertas rojas (se llama tanto en render() como cada segundo para activar el parpadeo en tiempo real)
+  function renderRedOverlayList() {
+    const redPairs = [];
+    pairs.forEach((p, idx) => {
+      if (p.severity === "red") redPairs.push({ p, idx });
+    });
+
+    redPairs.sort((a, b) => {
+      const tA = (a.p.impactSec !== null && isFinite(a.p.impactSec)) ? a.p.impactSec : Infinity;
+      const tB = (b.p.impactSec !== null && isFinite(b.p.impactSec)) ? b.p.impactSec : Infinity;
+      if (tA !== tB) return tA - tB;
+      return a.p.d - b.p.d;
+    });
+
+    const persistThresholdSec = Math.max(1, toNum(el.thPersist.value) || 30);
+    const now = Date.now();
+    let anyPersistent = false;
+
+    el.roCount.textContent = redPairs.length;
+    if (!redPairs.length) {
+      el.redOverlay.classList.add("empty");
+      el.redOverlay.classList.remove("has-persistent");
+      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
+    } else {
+      el.redOverlay.classList.remove("empty");
+      el.redList.innerHTML = redPairs.map(({ p, idx }) => {
+        const elapsedSec = p.redStartMs ? (now - p.redStartMs) / 1000 : 0;
+        const isPersistent = elapsedSec >= persistThresholdSec;
+        if (isPersistent) anyPersistent = true;
+
+        const ttiBadge = p.impactSec !== null
+          ? `<span class="ro-tti" title="Tiempo estimado hasta el impacto manteniendo velocidades actuales">⏱ Impacto: ${esc(fmtImpactTime(p.impactSec))}</span>`
+          : "";
+        const persBadge = isPersistent
+          ? `<span class="ro-pers" title="Esta alerta roja lleva más de ${persistThresholdSec} s activa de forma continua">🔥 ${esc(fmtDuration(elapsedSec))}</span>`
+          : "";
+
+        return `<div class="ro-item${isPersistent ? " persistent-blink" : ""}" data-i="${idx}">` +
+          `<span>🔴 ${formatPairText(p)}</span>` +
+          `<span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span>` +
+          `</div>`;
+      }).join("");
+      el.redOverlay.classList.toggle("has-persistent", anyPersistent);
+    }
   }
 
   function render() {
@@ -1713,7 +1887,7 @@
     });
     for (const [id, m] of markers) if (!alive.has(id)) { map.removeLayer(m); markers.delete(id); }
 
-    // Dibujar unión MUY GRUESA Y DESTACADA siguiendo exactamente los vértices de la vía entre ambos trenes
+    // Dibujar unión gruesa y destacada siguiendo los vértices de la vía entre ambos trenes
     linesLayer.clearLayers();
     if (el.showLines.checked) {
       pairs.forEach(p => {
@@ -1722,21 +1896,18 @@
         const col = isRed ? "#ff1744" : "#ff9100";
         const coreCol = isRed ? "#ffebee" : "#fff8e1";
 
-        // 1. Halo exterior blanco muy ancho para separar el tramo de cualquier fondo o vía
         L.polyline(p.pathCoords, {
           pane: "alertTrackPane", renderer: alertCanvas,
           color: "#ffffff", weight: isRed ? 16 : 14, opacity: 0.95,
           lineCap: "round", lineJoin: "round", interactive: false
         }).addTo(linesLayer);
 
-        // 2. Trazo principal grueso en rojo intenso o naranja vivo
         L.polyline(p.pathCoords, {
           pane: "alertTrackPane", renderer: alertCanvas,
           color: col, weight: isRed ? 10 : 8.5, opacity: 1.0,
           lineCap: "round", lineJoin: "round", interactive: false
         }).addTo(linesLayer);
 
-        // 3. Núcleo central discontinuo luminoso para resaltar el corredor entre ambos trenes
         L.polyline(p.pathCoords, {
           pane: "alertTrackPane", renderer: alertCanvas,
           color: coreCol, weight: 3, opacity: 0.95, dashArray: "6, 8",
@@ -1748,29 +1919,15 @@
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
     el.nTotal.textContent = visible + " / " + trains.length;
 
-    const redPairs = [];
-    const orangePairs = [];
-    pairs.forEach((p, idx) => {
-      if (p.severity === "red") redPairs.push({ p, idx });
-      else orangePairs.push({ p, idx });
-    });
-
-    // 1. Recuadro superior izquierdo del mapa (Solo Alertas Rojas por alcance)
-    el.roCount.textContent = redPairs.length;
-    if (!redPairs.length) {
-      el.redOverlay.classList.add("empty");
-      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
-    } else {
-      el.redOverlay.classList.remove("empty");
-      el.redList.innerHTML = redPairs.map(({ p, idx }) => {
-        return `<div class="ro-item" data-i="${idx}">` +
-          `<span>🔴 ${formatPairText(p)}</span>` +
-          `<span class="ro-d">${fmtKm(p.d)}</span>` +
-          `</div>`;
-      }).join("");
-    }
+    // 1. Actualizar el recuadro superior izquierdo del mapa (Alertas Rojas + Persistencia)
+    renderRedOverlayList();
 
     // 2. Banda lateral izquierda (Solo Amarillos/Naranjas en precaución o alejándose)
+    const orangePairs = [];
+    pairs.forEach((p, idx) => {
+      if (p.severity !== "red") orangePairs.push({ p, idx });
+    });
+
     if (!orangePairs.length) {
       el.pairs.innerHTML = '<div class="sub">Ningún par en precaución (amarillo/naranja).</div>';
     } else {
@@ -1779,6 +1936,13 @@
       }).join("");
     }
   }
+
+  // Reloj ligero de 1 segundo para activar el parpadeo de persistencia en cuanto se cumple el umbral
+  setInterval(() => {
+    if (!paused && redAlertStart.size > 0) {
+      renderRedOverlayList();
+    }
+  }, 1000);
 
   function updateTypes() {
     const counts = {};
@@ -1868,12 +2032,9 @@
     $("sourceSwitch").querySelectorAll(".sw-opt").forEach(b => b.classList.toggle("active", b === opt));
     el.source.value = val;
     el.lblSource.textContent = val === "ld" ? "LD / Alta Velocidad" : "Cercanías";
-    if (val === "visor" && !el.showTrackMD.checked) {
-      el.showTrackMD.checked = true;
-      onTrackToggle("md", el.showTrackMD);
-    }
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     trainHistory.clear();
+    redAlertStart.clear();
     stationsTried = false;
     refresh();
   });
@@ -1900,6 +2061,7 @@
   });
 
   [el.thOrange, el.thSpeed].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
+  el.thPersist.addEventListener("input", () => { if (trains.length) renderRedOverlayList(); });
   el.showLines.addEventListener("change", render);
   el.search.addEventListener("input", render);
   el.pairs.addEventListener("click", e => {
@@ -1917,8 +2079,9 @@
     el.proxy.value = "/api?url={url}";
   }
 
-  if (el.showTrackAV.checked) loadTrackLayer("av");
-  if (el.showTrackMD.checked) loadTrackLayer("md");
+  // Cargar geometría en segundo plano (sin pintarla) para cálculo de distancias y trazado de alertas sobre raíl
+  loadTrackLayer("av");
+  loadTrackLayer("md");
   updateTrackStatus();
   refresh();
   schedule();
