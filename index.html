@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v3.1</title>
+<title>Alertas Ferrocarril · v3.2</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v3.1 · LLM</span>
+          <span class="ver">v3.2 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1438,7 +1438,9 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
 {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"PROMOTED_RED","confidence":90,"reason":"Explicación técnica del LLM en español (máx 16 palabras) citando estaciones o vía"}`;
   }
 
-let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 429
+let freeCloudCooldownUntil = (() => {
+  try { return parseInt(localStorage.getItem("llmCooldownUntil") || "0", 10) || 0; } catch(e) { return 0; }
+})();
 
   async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     const prov = el.aiProvider.value;
@@ -1519,7 +1521,8 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
             return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
           }
         } else if (rFree.status === 429 || rFree.status === 503) {
-          freeCloudCooldownUntil = Date.now() + 30000; // 30 s de enfriamiento si hay límite de ráfaga
+          freeCloudCooldownUntil = Date.now() + 60000; // 60 s de enfriamiento
+          try { localStorage.setItem("llmCooldownUntil", String(freeCloudCooldownUntil)); } catch(e) {}
         }
       } catch (e) {
         if (signal?.aborted) throw e;
@@ -1753,6 +1756,7 @@ window.__analyzeAlert = function(btn, ev) {
     llmQueue.length = 0;
     aiAuditCache.clear();
     freeCloudCooldownUntil = 0;
+    try { localStorage.removeItem("llmCooldownUntil"); } catch(e) {}
     nextQueueAllowedAt = 0;
     computeProximity();
     render();
@@ -2047,9 +2051,7 @@ async function overpassSingle(query) {
         const ctl = new AbortController();
         const to = setTimeout(() => ctl.abort(), 28000);
         const targetUrl = ep + "?data=" + encodeURIComponent(query);
-        // Usamos el proxy Cloudflare para evitar bloqueos CORS en GitHub Pages
-        const proxiedUrl = proxify(targetUrl);
-        const r = await fetch(proxiedUrl, { method: "GET", signal: ctl.signal });
+        const r = await fetch(targetUrl, { method: "GET", signal: ctl.signal });
         clearTimeout(to);
         if (!r.ok) throw new Error("HTTP " + r.status);
         const j = await r.json();
@@ -2063,7 +2065,9 @@ async function overpassSingle(query) {
 
   function proxify(url) {
     const p = el.proxy.value.trim();
-    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
+    if (!p) return url;
+    // La URL ya puede ir parcialmente codificada; pasamos la URL sin re-codificar el path
+    return p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url);
   }
 
   async function fetchRenfeOfficialLines() {
