@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v2.9</title>
+<title>Alertas Ferrocarril · v3.0</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v2.9 · LLM</span>
+          <span class="ver">v3.0 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1716,22 +1716,31 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
       setTimeout(processNextLlmInQueue, wasAborted ? 50 : 2500);
     }
   }
-  window.__analyzeAlert = function(btn) {
+window.__analyzeAlert = function(btn, ev) {
+    if (ev) ev.stopPropagation();
     const pkey = btn.dataset.pkey;
     const pairObj = pairs.find(p => p.pairKey === pkey);
     if (!pairObj) return;
-    // Forzar análisis inmediato saltando la cola
+
     const localEval = evaluateAlertWithCtcBrain(
       pairObj.trailing, pairObj.leading, pairObj.d,
       pairObj.geomSeverity, toNum(el.thSpeed.value) || 100
     );
-    // Marcar como en vuelo para que el botón muestre "Analizando…"
+
     aiAuditCache.set(pkey, {
-      status: "queued", verdict: localEval.verdict,
-      confidence: localEval.confidence, reason: localEval.reason,
-      source: "⏳ En cola LLM", llmDone: false, llmVerified: false, llmTs: 0
+      status: "in_flight",
+      verdict: localEval.verdict,
+      confidence: localEval.confidence,
+      reason: localEval.reason,
+      source: "🧠 Analizando…",
+      llmDone: false,
+      llmVerified: false,
+      llmTs: 0
     });
-    // Poner primero en la cola (máxima prioridad)
+
+    const existingIdx = llmQueue.findIndex(item => item.pairKey === pkey);
+    if (existingIdx !== -1) llmQueue.splice(existingIdx, 1);
+
     llmQueue.unshift({ pairKey: pkey, pairObj, localEval });
     renderRedOverlayList();
     processNextLlmInQueue();
@@ -2980,35 +2989,34 @@ const stations = new Map();
     return `${esc(la)} ↔ ${esc(lb)}`;
   }
 
-  function formatAiRowHtml(p, showBtn) {
+function formatAiRowHtml(p, showBtn) {
     if (!el.enableAiAudit.checked) return "";
     const audit = aiAuditCache.get(p.pairKey);
-
-    // Si no hay audit todavía o está en cola esperando, mostrar botón bajo demanda
-    if (showBtn && (!audit || (audit.status === "queued" && !audit.llmVerified))) {
-      const isLoading = audit && audit.status === "in_flight";
-      const btnTxt = isLoading ? "🧠 Analizando…" : "🤖 Analizar con IA";
-      return `<div class="ai-row"><button class="ro-btn-ai${isLoading ? " loading" : ""}" ${isLoading ? "disabled" : ""} data-pkey="${esc(p.pairKey)}" onclick="window.__analyzeAlert(this)">${btnTxt}</button><span class="ai-reason" style="color:var(--muted);font-size:10.5px">Pulsa para auditar esta alerta con el LLM neuronal</span></div>`;
-    }
-
     if (!audit) return "";
 
-    const stCls = audit.status === "in_flight"
-      ? " consulting"
-      : (audit.status === "queued" ? " queued" : (audit.llmVerified ? " llm-ok" : ""));
-    const srcTag = audit.source ? `<span class="ai-source-tag${stCls}">${esc(audit.source)}</span>` : "";
-    const actor = audit.llmVerified ? "LLM" : "Pre-IA";
+    const actor = audit.llmVerified ? "LLM" : "CTC Local";
+    const isConsulting = audit.status === "in_flight";
+    const needsLlmBtn = showBtn && el.aiProvider.value !== "local" && !audit.llmVerified;
+
+    let actionRight = "";
+    if (needsLlmBtn) {
+      const btnTxt = isConsulting ? "🧠 Analizando…" : "🤖 Analizar con IA";
+      actionRight = `<button type="button" class="ro-btn-ai${isConsulting ? " loading" : ""}" style="margin-left:auto" ${isConsulting ? "disabled" : ""} data-pkey="${esc(p.pairKey)}" onclick="window.__analyzeAlert(this, event)">${btnTxt}</button>`;
+    } else if (audit.source) {
+      const stCls = isConsulting ? " consulting" : (audit.llmVerified ? " llm-ok" : "");
+      actionRight = `<span class="ai-source-tag${stCls}">${esc(audit.source)}</span>`;
+    }
 
     if (p.downgradedByAi) {
-      return `<div class="ai-row"><span class="ai-badge downgraded">🟠 Rebajada de 🔴 Roja a Naranja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+      return `<div class="ai-row"><span class="ai-badge downgraded">🟠 Rebajada a Naranja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${actionRight}</div>`;
     }
     if (p.promotedFrom === "green") {
-      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟢 Verde a 🔴 Roja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟢 Verde a 🔴 Roja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${actionRight}</div>`;
     }
     if (p.promotedFrom === "orange") {
-      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟠 Naranja a 🔴 Roja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟠 Naranja a 🔴 Roja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${actionRight}</div>`;
     }
-    return `<div class="ai-row"><span class="ai-badge real">✅ ${actor}: Riesgo Confirmado (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+    return `<div class="ai-row"><span class="ai-badge real">✅ ${actor}: Riesgo Confirmado (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${actionRight}</div>`;
   }
 
   function renderRedOverlayList() {
