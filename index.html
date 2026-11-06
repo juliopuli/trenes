@@ -3,41 +3,45 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trenes Renfe en tiempo real · v1.23</title>
+<title>Alertas Ferrocarril · v2.8</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
     --bg:#f6f7f9; --panel:#ffffff; --text:#1b1f24; --muted:#667085; --line:#e3e6ea;
-    --accent:#1d4ed8; --red:#e53935; --orange:#f59e0b; --green:#43a047;
+    --accent:#1d4ed8; --red:#e53935; --orange:#f59e0b; --green:#43a047; --ai:#7c3aed;
   }
   @media (prefers-color-scheme: dark){
-    :root{ --bg:#14171b; --panel:#1c2026; --text:#e8eaed; --muted:#9aa3ad; --line:#2d333b; --accent:#6ea0ff; }
+    :root{ --bg:#14171b; --panel:#1c2026; --text:#e8eaed; --muted:#9aa3ad; --line:#2d333b; --accent:#6ea0ff; --ai:#a78bfa; }
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
   #app{display:grid;grid-template-columns:340px 1fr;height:100%}
-  #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:14px 14px 24px;display:flex;flex-direction:column;gap:14px}
+  #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden;padding:14px 12px 18px;display:flex;flex-direction:column;gap:14px}
   #mapWrap{position:relative;height:100%;width:100%}
   #map{height:100%;width:100%;background:#cfd8e3}
-  h1{font-size:16px;margin:0;display:flex;align-items:center;gap:8px;flex:1}
-  .side-top{display:flex;align-items:center;gap:8px}
-  .help-btn{
-    width:26px;height:26px;border-radius:50%;border:1.5px solid var(--accent);
-    background:var(--accent);color:#fff;font-weight:800;font-size:14px;
-    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
-    flex-shrink:0;padding:0;box-shadow:0 2px 5px rgba(29,78,216,.3);
+  h1{font-size:18px;margin:0;display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+  .emerg-title{
+    color:var(--red);
+    font-family:"Impact","Arial Black","Franklin Gothic Heavy",system-ui,sans-serif;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    font-size:18.5px;
+    line-height:1.1;
+    text-shadow:0 1px 2px rgba(229,57,53,.18);
   }
-  .help-btn:hover{filter:brightness(1.08);transform:scale(1.05)}
-  .ver{font-size:11px;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line);margin-left:auto}
+  .side-top{display:flex;align-items:center;gap:8px}
+  .ver{font-size:11px;font-family:system-ui,sans-serif;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line);margin-left:auto;letter-spacing:normal;flex-shrink:0}
   .sub{font-size:12px;color:var(--muted)}
-  fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
+  fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin:0;min-width:0;width:100%;max-width:100%}
   legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
   label{display:block;font-size:11.5px;margin:6px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  input[type=text],input[type=number],select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px}
+  input[type=text],input[type=number],input[type=password],select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px}
   .row{display:flex;gap:8px}
   .row>*{flex:1;min-width:0}
-  .chk{display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0;cursor:pointer}
-  .dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25)}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12.5px;margin:6px 0;cursor:pointer;white-space:normal;line-height:1.3}
+  .dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25);flex-shrink:0}
   .chk .n{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
   button{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;cursor:pointer}
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -45,17 +49,33 @@
   button:hover{filter:brightness(.96)}
   #status{font-size:12px;color:var(--muted);line-height:1.4;margin-top:4px}
   #status.err{color:var(--red)}
-  #pairs{max-height:280px;overflow-y:auto;font-size:12px}
-  .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+  #pairs{max-height:240px;overflow-y:auto;font-size:12px}
+  .pair{display:flex;flex-direction:column;gap:3px;padding:6px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:5px}
   .pair:hover{background:var(--bg)}
+  .pair.active-pair{background:rgba(29,78,216,.12);outline:1.5px solid var(--accent)}
+  .pair-main{display:flex;justify-content:space-between;align-items:center;gap:6px;width:100%}
   .pair .d{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
   .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
 
-  /* Contadores resumen compactos en el faldón */
-  .stat-pills{display:flex;gap:6px;margin-top:8px}
-  .stat-pill{flex:1;display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:7px;background:var(--bg);border:1px solid var(--line);font-size:12px;font-weight:600}
+  /* Aviso legal inferior en el faldón izquierdo */
+  .disclaimer{
+    margin-top:auto;
+    padding:9px 10px;
+    border-radius:8px;
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-left:3.5px solid var(--orange);
+    font-size:11px;
+    color:var(--muted);
+    line-height:1.4;
+  }
+  .disclaimer b{color:var(--text)}
 
-  /* Panel flotante superior izquierdo en el mapa para Alertas Rojas */
+  /* Contadores resumen compactos en el faldón */
+  .stat-pills{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px;width:100%}
+  .stat-pill{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:5px 6px;border-radius:7px;background:var(--bg);border:1px solid var(--line);font-size:11.5px;font-weight:600;min-width:0;white-space:nowrap}
+
+  /* Panel flotante superior izquierdo en el mapa para Alertas Rojas (y las auditadas por IA) */
   #redOverlay{
     position:absolute;
     top:12px;
@@ -65,9 +85,9 @@
     border:2px solid var(--red);
     border-radius:10px;
     box-shadow:0 4px 16px rgba(0,0,0,.28);
-    min-width:340px;
-    max-width:540px;
-    max-height:270px;
+    min-width:370px;
+    max-width:650px;
+    max-height:340px;
     display:flex;
     flex-direction:column;
     overflow:hidden;
@@ -102,21 +122,22 @@
     font-size:12px;
     display:flex;
     flex-direction:column;
-    gap:3px;
+    gap:5px;
   }
   .ro-item{
     display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:8px;
-    padding:6px 7px;
+    flex-direction:column;
+    gap:4px;
+    padding:6px 8px;
     border-radius:6px;
-    border:1px solid var(--line);
+    border:1.5px solid var(--line);
     cursor:pointer;
     font-weight:600;
     transition:background .15s;
   }
   .ro-item:hover{background:var(--bg)}
+  .ro-item.active-pair{outline:2px solid var(--accent);background:rgba(29,78,216,.1)}
+  .ro-top{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%}
   .ro-item .ro-right{display:flex;align-items:center;gap:6px;white-space:nowrap}
   .ro-item .ro-d{color:var(--red);font-variant-numeric:tabular-nums}
   .ro-item .ro-tti{
@@ -138,7 +159,105 @@
     font-variant-numeric:tabular-nums;
   }
 
-  /* Parpadeo intenso en el mapa para alertas rojas que superan el tiempo de persistencia */
+  /* Estilo para alertas que la geometría marcó como ROJAS pero la IA ha rebajado a NARANJA dentro del mismo panel (sin parpadear) */
+  .ro-item.ai-downgraded{
+    background:rgba(245,158,11,.13);
+    border-color:var(--orange);
+    border-left:5px solid var(--orange);
+    animation:none !important;
+  }
+  .ro-item.ai-downgraded .ro-d{
+    color:#d97706;
+  }
+  .ro-item.ai-downgraded .ro-tti{
+    background:var(--orange);
+    color:#fff;
+  }
+  .ro-item.ai-downgraded .ai-row{
+    background:rgba(245,158,11,.16);
+    border-left-color:#d97706;
+  }
+
+  /* Estilo para alertas que eran VERDES o NARANJAS y han sido ASCENDIDAS a ROJA por la IA */
+  .ro-item.ai-promoted{
+    border-color:var(--red);
+    border-left:5px solid var(--ai);
+    background:rgba(229,57,53,.06);
+  }
+
+  /* Etiquetas y dictamen del Auditor IA en las alertas */
+  .ai-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:11px;
+    font-weight:500;
+    padding:3px 6px;
+    border-radius:5px;
+    background:rgba(124,58,237,.08);
+    border-left:3px solid var(--ai);
+    color:var(--text);
+    line-height:1.3;
+  }
+  .ai-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:3px;
+    font-size:10px;
+    font-weight:800;
+    padding:2px 6px;
+    border-radius:4px;
+    text-transform:uppercase;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  .ai-badge.pending{background:#6d28d9;color:#fff}
+  .ai-badge.queued{background:#475569;color:#fff}
+  .ai-badge.real{background:#b91c1c;color:#fff}
+  .ai-badge.promoted{background:#7c3aed;color:#fff}
+  .ai-badge.downgraded{background:#d97706;color:#fff}
+  .ai-source-tag{
+    font-size:9.5px;
+    font-weight:700;
+    padding:1px 5px;
+    border-radius:3px;
+    background:rgba(0,0,0,.14);
+    color:inherit;
+    margin-left:auto;
+    flex-shrink:0;
+    white-space:nowrap;
+  }
+  .ai-source-tag.consulting{
+    background:#7c3aed;
+    color:#fff;
+  }
+  .ai-source-tag.queued{
+    background:#64748b;
+    color:#fff;
+  }
+  .ai-source-tag.llm-ok{
+    background:#059669;
+    color:#fff;
+  }
+  .ai-reason{flex:1;overflow:hidden;text-overflow:ellipsis}
+
+  /* Inspector de Prompt y Respuesta LLM en vivo */
+  .llm-log-box{
+    margin-top:8px;
+    padding:6px 8px;
+    border-radius:6px;
+    background:var(--bg);
+    border:1px solid var(--line);
+    font-family:monospace;
+    font-size:10.5px;
+    max-height:130px;
+    overflow-y:auto;
+    white-space:pre-wrap;
+    color:var(--muted);
+    line-height:1.35;
+  }
+
+  /* Parpadeo intenso en el mapa SOLO para alertas rojas reales que superan el tiempo de persistencia */
   @keyframes blinkPersistentAlert{
     0%, 100%{
       background:#dc2626;
@@ -156,9 +275,9 @@
   .ro-item.persistent-blink{
     animation:blinkPersistentAlert 0.75s infinite ease-in-out;
   }
-  .ro-item.persistent-blink .ro-d{
+  .ro-item.persistent-blink .ro-d,
+  .ro-item.persistent-blink .ai-row{
     color:inherit;
-    font-weight:800;
   }
   .ro-item.persistent-blink .ro-tti{
     background:rgba(0,0,0,.28);
@@ -166,26 +285,42 @@
     border:1px solid currentColor;
   }
 
-  /* Botones flotantes superior derecha (Actualizar / Pausar) */
+  /* Botones flotantes superior derecha */
   #topRightControls{
     position:absolute;
     top:12px;
     right:12px;
     z-index:1000;
     display:flex;
+    flex-direction:column;
+    align-items:flex-end;
     gap:8px;
+  }
+  .tr-row{
+    display:flex;
+    gap:8px;
+    align-items:center;
   }
   .fab-btn{
     width:40px;height:40px;border-radius:10px;background:var(--panel);
     border:1px solid var(--line);color:var(--text);display:flex;
     align-items:center;justify-content:center;cursor:pointer;
     box-shadow:0 3px 12px rgba(0,0,0,.22);padding:0;
+    font-size:17px;font-weight:800;
   }
   .fab-btn:hover{background:var(--bg);border-color:var(--accent)}
   .fab-btn svg{width:20px;height:20px;fill:currentColor}
   @keyframes giroRefresh{to{transform:rotate(360deg)}}
   .fab-btn.spinning svg{animation:giroRefresh .8s linear infinite}
   .fab-btn.paused{border-color:var(--orange);color:var(--orange)}
+  .fab-btn.help-fab{
+    background:var(--accent);
+    color:#fff;
+    border-color:var(--accent);
+  }
+  .fab-btn.help-fab:hover{
+    filter:brightness(1.08);
+  }
 
   /* Barra flotante inferior izquierda */
   #bottomLeftControls{
@@ -206,6 +341,7 @@
   }
   .fl-btn:hover,.fl-btn.active{border-color:var(--accent);background:var(--bg)}
   .fl-btn svg{width:19px;height:19px;fill:currentColor;flex-shrink:0}
+  .fl-btn.ai-btn{border-color:var(--ai)}
   .fl-pop{
     position:absolute;
     bottom:50px;
@@ -215,7 +351,7 @@
     border-radius:12px;
     box-shadow:0 6px 24px rgba(0,0,0,.28);
     padding:12px;
-    min-width:240px;
+    min-width:320px;
     display:none;
     z-index:1002;
   }
@@ -242,7 +378,7 @@
   #helpModal.open{display:flex}
   .hm-card{
     background:var(--panel);color:var(--text);border:1px solid var(--line);
-    border-radius:16px;max-width:580px;width:100%;max-height:88vh;
+    border-radius:16px;max-width:600px;width:100%;max-height:88vh;
     display:flex;flex-direction:column;box-shadow:0 16px 40px rgba(0,0,0,.4);overflow:hidden;
   }
   .hm-head{
@@ -259,13 +395,91 @@
     display:flex;align-items:center;justify-content:space-between;gap:6px;
   }
 
+  /* Marcadores de trenes: sin position:relative en .tm para no interferir con Leaflet */
   .tm{background:none;border:0}
-  .tm .b{width:28px;height:28px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.45);transition:transform .15s}
+  .tm-wrap{position:relative;width:28px;height:28px}
+  .tm .b{width:28px;height:28px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.45);transition:transform .15s;position:relative;z-index:2}
   .tm:hover .b{transform:scale(1.25)}
   .tm.red .b{background:#e53935;width:34px;height:34px;margin:-3px;animation:pulsoRojo 0.9s infinite}
   .tm.orange .b{background:#f59e0b;width:30px;height:30px;margin:-1px}
   .tm.green .b{background:#43a047}
-  .tm svg{width:17px;height:17px;fill:#fff}
+  .tm .b svg{width:17px;height:17px;fill:#fff}
+
+  @keyframes pulsoSeleccion{
+    0%,100%{transform:scale(1);opacity:1}
+    50%{transform:scale(1.22);opacity:0.75}
+  }
+  .tm.selected-pair .tm-wrap::before{
+    content:"";
+    position:absolute;
+    inset:-9px;
+    border-radius:50%;
+    border:3.5px solid #2563eb;
+    box-shadow:0 0 14px rgba(37,99,235,.95), inset 0 0 8px rgba(37,99,235,.6);
+    animation:pulsoSeleccion 0.9s infinite ease-in-out;
+    z-index:1;
+    pointer-events:none;
+  }
+
+  .tm-tag{
+    position:absolute;
+    top:31px;
+    left:50%;
+    transform:translateX(-50%);
+    background:rgba(20,23,27,.92);
+    color:#fff;
+    font-size:10.5px;
+    font-weight:700;
+    padding:1.5px 6px;
+    border-radius:4px;
+    white-space:nowrap;
+    pointer-events:none;
+    z-index:4;
+    border:1.5px solid #fff;
+    box-shadow:0 2px 5px rgba(0,0,0,.45);
+    letter-spacing:.01em;
+  }
+  .tm.red .tm-tag{
+    top:34px;
+    background:#b91c1c;
+    border-color:#fecaca;
+  }
+  .tm.orange .tm-tag{
+    top:32px;
+    background:#b45309;
+    border-color:#fde68a;
+  }
+  .tm.selected-pair .tm-tag{
+    background:#1d4ed8 !important;
+    border-color:#ffffff !important;
+    font-size:11.5px;
+    padding:2px 7px;
+    box-shadow:0 0 12px rgba(29,78,216,.95);
+  }
+
+  .tm .dir-arrow{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    z-index:3;
+    transform-origin:14px 14px;
+  }
+  .tm .dir-arrow svg{
+    position:absolute;
+    left:50%;
+    top:-14px;
+    width:18px;
+    height:18px;
+    margin-left:-9px;
+    filter:drop-shadow(0 1px 3px rgba(0,0,0,.55));
+  }
+  .tm.red .dir-arrow svg{
+    top:-17px;
+    width:20px;
+    height:20px;
+    margin-left:-10px;
+  }
+
   @keyframes pulsoRojo{
     0%{box-shadow:0 0 0 0 rgba(229,57,53,.9);transform:scale(1)}
     50%{box-shadow:0 0 0 14px rgba(229,57,53,0);transform:scale(1.12)}
@@ -289,9 +503,18 @@
   @media (max-width:760px){
     #app{grid-template-columns:1fr;grid-template-rows:46% 54%}
     #side{order:2;border-right:0;border-top:1px solid var(--line)}
-    #redOverlay{left:48px;right:60px;max-width:none}
+    #redOverlay{left:48px;right:150px;max-width:none}
     .fl-btn span.lbl{display:none}
   }
+    .ro-btn-ai{
+    display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+    border-radius:5px;border:1.5px solid var(--ai);background:transparent;
+    color:var(--ai);font-size:10px;font-weight:700;cursor:pointer;
+    white-space:nowrap;flex-shrink:0;transition:background .15s;
+  }
+  .ro-btn-ai:hover{background:rgba(124,58,237,.12)}
+  .ro-btn-ai:disabled{opacity:.45;cursor:default}
+  .ro-btn-ai.loading{opacity:.7;cursor:wait}
 </style>
 </head>
 <body>
@@ -299,14 +522,17 @@
   <aside id="side">
     <div>
       <div class="side-top">
-        <button class="help-btn" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
-        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.23</span></h1>
+        <h1>
+          <span>🚆</span>
+          <span class="emerg-title">Alertas Ferrocarril</span>
+          <span class="ver">v2.8 · LLM</span>
+        </h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
 
     <fieldset>
-      <legend>Reglas de alerta (por trazado de vía)</legend>
+      <legend>Reglas de alerta + Auditor Híbrido IA</legend>
       <div class="row">
         <div>
           <label for="thOrange" title="Distancia de seguridad medida siguiendo las curvas reales de la vía">Distancia &lt; (km)</label>
@@ -321,10 +547,13 @@
           <input type="number" id="thPersist" value="30" min="5" step="5">
         </div>
       </div>
+      <label class="chk" style="margin-top:8px">
+        <input type="checkbox" id="enableAiAudit" checked>
+        <span>🤖 <b>Auditoría Híbrida (Reglas CTC + Cola LLM Secuencial):</b> audita con LLM todas las alertas del panel rojo superior (incluidas las rebajadas a naranja)</span>
+      </label>
       <div class="help">
-        • <b>Distancia por vía:</b> medida sobre los raíles entre ambos trenes.<br>
-        • <b>Velocidad limitada por tipo:</b> AVE 320, ALVIA 250/220, AVANT 250, MD 160, Cercanías/Reg. 140 km/h.<br>
-        • <b>Persistencia roja:</b> si una alerta roja supera el tiempo indicado, parpadea en el panel superior del mapa.
+        • <b>Cola estricta 1 a 1:</b> audita todas las alertas del panel superior (rojas y rebajadas a naranja en ese panel) sin tocar las naranjas del panel izquierdo.<br>
+        • <b>Auto-cancelación:</b> si una alerta sale del panel superior (pasa a verde o a naranja normal del panel izquierdo), se aborta al instante.
       </div>
     </fieldset>
 
@@ -332,7 +561,7 @@
       <legend>Búsqueda y pantalla</legend>
       <label class="chk" style="margin-top:0"><input type="checkbox" id="showLines" checked>Pintar sobre la vía el tramo entre trenes cercanos</label>
       <label for="search">Buscar tren / origen / destino</label>
-      <input type="text" id="search" placeholder="p. ej. 02112, ALVIA, Málaga, Madrid…">
+      <input type="text" id="search" placeholder="p. ej. 17018, Cáceres, Málaga, Madrid…">
       <div class="stat-pills">
         <div class="stat-pill"><span>🔴 Peligro</span><span id="nRed">0</span></div>
         <div class="stat-pill"><span>🟠 Precaución</span><span id="nOrange">0</span></div>
@@ -345,6 +574,10 @@
       <legend>Trenes en precaución (amarillo/naranja)</legend>
       <div id="pairs"><div class="sub">Sin datos todavía.</div></div>
     </fieldset>
+
+    <div class="disclaimer">
+      ⚠️ <b>Aviso importante:</b> Esta aplicación no es oficial. Los datos mostrados provienen de las fuentes públicas de Renfe (sujetas a posibles retrasos o imprecisiones de GPS) y <b>no debe utilizarse como sistema infalible ni oficial de alertas o seguridad ferroviaria</b>.
+    </div>
 
     <!-- Controles internos ocultos -->
     <div style="display:none">
@@ -361,10 +594,10 @@
   </aside>
 
   <main id="mapWrap">
-    <!-- Panel flotante superior izquierdo: Alertas Rojas -->
+    <!-- Panel flotante superior izquierdo: Alertas Rojas y auditadas por IA -->
     <div id="redOverlay" class="empty">
       <div class="ro-head">
-        <span>🚨 ALERTAS ROJAS POR ALCANCE</span>
+        <span>🚨 ALERTAS ROJAS Y AUDITORÍA IA</span>
         <span id="roCount">0</span>
       </div>
       <div id="redList">
@@ -372,14 +605,20 @@
       </div>
     </div>
 
-    <!-- Controles flotantes superior derecha: Actualizar (fijo 10s) y Pausar -->
+    <!-- Controles flotantes superior derecha: Restablecer vista, Actualizar, Pausar y debajo (?) -->
     <div id="topRightControls">
-      <button class="fab-btn" id="btnRefresh" title="Actualizar ahora (automático cada 10 s)">
-        <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-      </button>
-      <button class="fab-btn" id="btnPause" title="Pausar / Reanudar actualización automática">
-        <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-      </button>
+      <div class="tr-row">
+        <button class="fab-btn" id="btnResetView" title="Restablecer vista a toda España">
+          <svg viewBox="0 0 24 24"><path d="M5 5h5V3H3v7h2V5zm14 0v5h2V3h-7v2h5zm0 14h-5v2h7v-7h-2v5zM5 14H3v7h7v-2H5v-5zm7-5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+        </button>
+        <button class="fab-btn" id="btnRefresh" title="Actualizar ahora (automático cada 10 s)">
+          <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        </button>
+        <button class="fab-btn" id="btnPause" title="Pausar / Reanudar actualización automática">
+          <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+      </div>
+      <button class="fab-btn help-fab" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
     </div>
 
     <!-- Barra flotante inferior izquierda -->
@@ -424,7 +663,7 @@
         </div>
       </div>
 
-      <!-- 3. Capas de vías (Solo Detalle Adif / OpenRailwayMap) -->
+      <!-- 3. Capas de vías -->
       <div class="fl-wrap">
         <button class="fl-btn" data-pop="popTracks" title="Capas de vías ferroviarias">
           <svg viewBox="0 0 24 24"><path d="M5 3v18h2v-6.5l7 6.5h3l-8-7.5V3H5zm12 0v8.5l-3.5 3.2 1.4 1.5L19 12.4V3h-2z"/></svg>
@@ -448,6 +687,34 @@
           <div id="types"><div class="sub">Aparecerán al cargar los datos.</div></div>
         </div>
       </div>
+
+      <!-- 5. Configuración del Motor de IA e Inspector de Prompts -->
+      <div class="fl-wrap">
+        <button class="fl-btn ai-btn" data-pop="popAi" title="Configurar Motor LLM y ver Prompts enviados">
+          <span>🤖</span>
+          <span class="lbl" id="lblAiProvider">IA: Híbrido + LLM</span>
+        </button>
+        <div class="fl-pop" id="popAi" style="min-width:340px">
+          <div class="fl-title">🤖 Arquitectura IA (Reglas CTC + Cola LLM)</div>
+          <label for="aiProvider" style="margin-top:0">Proveedor LLM Neuronal</label>
+<select id="aiProvider">
+            <option value="pollinations" selected>🌐 LLM Gratis sin API Key (Auto-fallback · Cola 1 a 1)</option>
+            <option value="gemini">✨ Google Gemini 2.5 Flash-Lite (Con tu API Key gratis)</option>
+            <option value="groq">⚡ Groq · Llama 3.3 70B (Con tu API Key gratis)</option>
+            <option value="local">🛡️ Solo Reglas CTC Locales (Sin llamadas externas)</option>
+          </select>
+          <div id="aiKeyWrap" style="display:none;margin-top:6px">
+            <label for="aiApiKey">API Key gratuita (guardada solo en tu navegador)</label>
+            <input type="password" id="aiApiKey" placeholder="Pega tu API Key de Gemini o Groq…">
+          </div>
+          <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+            <span class="sub" id="aiStats">Cargando catálogo Adif…</span>
+            <button type="button" class="sm" id="btnReauditAll">Re-analizar cola LLM</button>
+          </div>
+          <label style="margin-top:8px">Último Prompt enviado y respuesta del LLM:</label>
+          <div class="llm-log-box" id="llmDebugLog">Esperando la primera alerta del panel rojo para enviar el prompt al LLM…</div>
+        </div>
+      </div>
     </div>
 
     <div id="map"></div>
@@ -458,61 +725,33 @@
 <div id="helpModal">
   <div class="hm-card">
     <div class="hm-head">
-      <span>❓ ¿Cómo funciona el radar de trenes?</span>
+      <span>❓ ¿Cómo funciona el radar + Cola Secuencial LLM?</span>
       <button class="hm-close" id="btnCloseHelp" title="Cerrar">×</button>
     </div>
     <div class="hm-body">
       <p style="margin:0">
-        Esta aplicación es un <b>sistema inteligente de alertas de proximidad de trenes en España</b>. Cada 10 segundos mira dónde está cada tren por GPS, lo coloca exactamente sobre su vía real y mide la distancia siguiendo todas las curvas del trazado ferroviario.
+        Esta aplicación utiliza una <b>arquitectura de IA en 2 capas</b>: un <b>Sistema Experto CTC Local</b> (que pre-evalúa las alertas en 0 ms) y una <b>Cola Secuencial LLM 1 a 1</b> que consulta al modelo neuronal para todas las alertas situadas en el panel superior de Alertas Rojas (tanto las rojas como las rebajadas a naranja dentro de ese panel).
       </p>
 
-      <div class="hm-box" style="border-left:5px solid #43a047">
-        <div class="hm-box-title"><span class="dot" style="background:#43a047;width:14px;height:14px"></span> 1. Trenes en VERDE (Todo tranquilo)</div>
+      <div class="hm-box" style="border-left:5px solid #d97706">
+        <div class="hm-box-title">🟠 Rojas Geométricas rebajadas a Naranja en el panel superior</div>
         <div>
-          El tren viaja con total normalidad:
+          Cuando la geometría pura detecta una Alerta Roja pero las reglas pre-evalúan que <b>no hay riesgo real de colisión</b>:
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li>No tiene ningún otro tren cerca (a menos de <b>5 km medidos por la vía</b>) en su misma vía y dirección.</li>
-            <li>Si se cruza de frente con otro tren en sentido contrario, <b>sigue en verde</b> porque cada uno va por su vía paralela.</li>
-            <li>Si llega a una estación grande (como Atocha, Sants o Málaga), también se pone en verde porque allí los trenes van muy despacio para aparcar en su andén.</li>
+            <li>La alerta <b>permanece visible en el panel superior de Alertas Rojas</b> pintada en <b>color Naranja</b> y <b>también pasa por la cola del LLM</b> para que el modelo neuronal confirme o rectifique ese dictamen.</li>
+            <li>Las alertas naranjas normales del panel izquierdo (precaución por distancia sin velocidad de alcance) <b>no</b> se envían al LLM.</li>
           </ul>
-        </div>
-        <div class="hm-diagram">
-          <span>🚆 Tren A ➔</span>
-          <span style="color:#43a047;font-weight:700">─── Más de 5 km por vía (Seguro) ───</span>
-          <span>🚆 Tren B ➔</span>
         </div>
       </div>
 
-      <div class="hm-box" style="border-left:5px solid #f59e0b">
-        <div class="hm-box-title"><span class="dot" style="background:#f59e0b;width:14px;height:14px"></span> 2. Trenes en NARANJA (Precaución, sin peligro de choque)</div>
+      <div class="hm-box" style="border-left:5px solid #7c3aed">
+        <div class="hm-box-title">⏳ Gestión de Cola LLM (1 a 1 con auto-cancelación)</div>
         <div>
-          Dos trenes van por la <b>misma vía y en el mismo sentido</b> a <b>menos de 5 km sobre el raíl</b>, pero <b>NO hay peligro inminente</b> porque:
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li>Ambos van despacito (a menos de 100 km/h) o están parados esperando señal.</li>
-            <li>O bien <b>el tren que va delante corre más que el que va detrás</b>, así que cada vez se alejan más el uno del otro.</li>
+            <li>El sistema consulta al LLM <b>de una en una</b>: primero las rojas más urgentes y a continuación las rebajadas a naranja del panel superior.</li>
+            <li>Las alertas que esperan su turno muestran <b>⏳ En cola LLM (#1, #2…)</b> y al recibir el veredicto muestran el modelo neuronal que ha respondido.</li>
+            <li>Si mientras espera o se está consultando el par sale del panel superior (porque pasa a verde o a naranja normal del panel izquierdo), esa consulta <b>se cancela en el acto</b> y pasa inmediatamente a la siguiente.</li>
           </ul>
-        </div>
-        <div class="hm-diagram">
-          <span>🚆 Detrás (90 km/h) ➔</span>
-          <span style="color:#d97706;font-weight:700">── 3 km por vía (Se aleja) ──</span>
-          <span>🚆 Delante (130 km/h) ➔➔</span>
-        </div>
-      </div>
-
-      <div class="hm-box" style="border-left:5px solid #e53935">
-        <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO y Parpadeo por Persistencia</div>
-        <div>
-          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) cuando:
-          <ol style="margin:4px 0 0;padding-left:18px">
-            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> y van en el <b>mismo sentido</b> a <b>menos de 5 km</b>.</li>
-            <li>El tren que viene por <b>detrás supera los 100 km/h</b> y va <b>más rápido (o igual) que el de delante</b>.</li>
-            <li><b>Aviso de Persistencia:</b> Si una misma alerta roja se mantiene activa de forma ininterrumpida durante más segundos de los configurados en <b>Persistencia (s)</b>, su fila en el panel superior del mapa comienza a <b>parpadear intensamente en rojo</b> para alertar al operador.</li>
-          </ol>
-        </div>
-        <div class="hm-diagram" style="border-color:#e53935">
-          <span style="color:#e53935;font-weight:700">🚆 Detrás (180 km/h) ➔➔</span>
-          <span style="color:#e53935;font-weight:700">── 3 km · ⏱ Impacto: 1m 48s ──</span>
-          <span>🚆 Delante (80 km/h) ➔</span>
         </div>
       </div>
     </div>
@@ -525,7 +764,9 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.23";
+  const VERSION = "2.2";
+  const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
+  const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -539,6 +780,26 @@
     ALTARIA: "#00695c", "CERCANÍAS": "#ea580c", TREN: "#475569"
   };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
+
+  /* ---------- Bloqueo de Suspensión y Protector de Pantalla (Screen Wake Lock API) ---------- */
+  let wakeLockSentinel = null;
+  async function requestWakeLock() {
+    if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+    if (wakeLockSentinel && !wakeLockSentinel.released) return;
+    try {
+      wakeLockSentinel = await navigator.wakeLock.request("screen");
+      wakeLockSentinel.addEventListener("release", () => { wakeLockSentinel = null; });
+    } catch (e) {}
+  }
+  requestWakeLock();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") requestWakeLock();
+  });
+  ["click", "keydown", "touchstart"].forEach(ev => {
+    document.addEventListener(ev, () => {
+      if (!wakeLockSentinel) requestWakeLock();
+    }, { passive: true });
+  });
 
   /* ---------- Traductor Oficial de Códigos Numéricos de Producto de Renfe ---------- */
   const PRODUCT_CODES = {
@@ -565,13 +826,20 @@
     return "AVE";
   }
 
-  /* ---------- Coordenadas Geográficas de Estaciones/Ciudades ---------- */
+  /* ---------- Coordenadas Geográficas Desglosadas por Estación Exacta ---------- */
   const CITY_GEO = [
-    { keys: ["atocha", "madrid-puerta", "madrid atocha", "principe pio", "príncipe pío"], lat: 40.4065, lon: -3.6896, main: true },
-    { keys: ["chamartin", "chamartín", "madrid-chamartin", "madrid"], lat: 40.4722, lon: -3.6822, main: true },
-    { keys: ["barcelona", "sants", "passeig de gracia", "frança"], lat: 41.3791, lon: 2.1401, main: true },
-    { keys: ["valencia", "valència", "sorolla", "estacio del nord"], lat: 39.4601, lon: -0.3816, main: true },
-    { keys: ["sevilla", "santa justa", "san bernardo"], lat: 37.3919, lon: -5.9753, main: true },
+    { keys: ["principe pio", "príncipe pío"], lat: 40.4213, lon: -3.7205, main: true },
+    { keys: ["atocha", "madrid-puerta", "madrid atocha", "almudena grandes"], lat: 40.4065, lon: -3.6896, main: true },
+    { keys: ["chamartin", "chamartín", "madrid-chamartin", "clara campoamor", "madrid"], lat: 40.4722, lon: -3.6822, main: true },
+    { keys: ["frança", "franca", "estació de frança", "estacio de franca"], lat: 41.3840, lon: 2.1856, main: true },
+    { keys: ["passeig de gracia", "passeig de gràcia"], lat: 41.3920, lon: 2.1653, main: true },
+    { keys: ["clot", "sagrera", "sant andreu"], lat: 41.4116, lon: 2.1873, main: true },
+    { keys: ["sants", "barcelona-sants", "barcelona"], lat: 41.3791, lon: 2.1401, main: true },
+    { keys: ["cabanyal"], lat: 39.4705, lon: -0.3340, main: false },
+    { keys: ["estacio del nord", "estació del nord"], lat: 39.4668, lon: -0.3772, main: true },
+    { keys: ["sorolla", "valencia", "valència"], lat: 39.4601, lon: -0.3816, main: true },
+    { keys: ["san bernardo"], lat: 37.3788, lon: -5.9793, main: true },
+    { keys: ["santa justa", "sevilla"], lat: 37.3919, lon: -5.9753, main: true },
     { keys: ["malaga", "málaga", "zambrano"], lat: 36.7115, lon: -4.4316, main: true },
     { keys: ["zaragoza", "delicias", "portillo"], lat: 41.6587, lon: -0.9114, main: true },
     { keys: ["bilbao", "abando", "concordia"], lat: 43.2614, lon: -2.9277, main: true },
@@ -583,7 +851,8 @@
     { keys: ["cuenca", "zobel", "zóbel"], lat: 40.0442, lon: -2.1380, main: true },
     { keys: ["albacete", "los llanos"], lat: 38.9997, lon: -1.8490, main: true },
     { keys: ["castellon", "castelló"], lat: 39.9870, lon: -0.0528, main: true },
-    { keys: ["tarragona", "camp de tarragona"], lat: 41.1992, lon: 1.2690, main: true },
+    { keys: ["camp de tarragona"], lat: 41.1992, lon: 1.2690, main: true },
+    { keys: ["tarragona"], lat: 41.1120, lon: 1.2550, main: true },
     { keys: ["ourense"], lat: 42.3411, lon: -7.8647, main: true },
     { keys: ["santiago"], lat: 42.8705, lon: -8.5446, main: true },
     { keys: ["coruña", "coruna"], lat: 43.3526, lon: -8.4098, main: true },
@@ -591,7 +860,7 @@
     { keys: ["oviedo"], lat: 43.3662, lon: -5.8536, main: true },
     { keys: ["gijon", "gijón"], lat: 43.5390, lon: -5.6760, main: true },
     { keys: ["murcia"], lat: 37.9746, lon: -1.1301, main: true },
-    { keys: ["lleida", "lerida"], lat: 41.6208, lon: 0.6327, main: true },
+    { keys: ["lleida", "lerida", "pirineus"], lat: 41.6208, lon: 0.6327, main: true },
     { keys: ["girona", "gerona"], lat: 41.9793, lon: 2.8169, main: false },
     { keys: ["figueres", "vilafant"], lat: 42.2654, lon: 2.9436, main: true },
     { keys: ["calatayud"], lat: 41.3410, lon: -1.6440, main: false },
@@ -632,25 +901,36 @@
     { keys: ["medina"], lat: 41.3186, lon: -4.9089, main: false },
     { keys: ["salamanca"], lat: 40.9765, lon: -5.6496, main: true },
     { keys: ["avila", "ávila"], lat: 40.6596, lon: -4.6869, main: false },
-    { keys: ["caceres", "cáceres"], lat: 39.4650, lon: -6.3840, main: false },
+    { keys: ["caceres", "cáceres"], lat: 39.4650, lon: -6.3840, main: true },
     { keys: ["merida", "mérida"], lat: 38.9218, lon: -6.3426, main: false },
     { keys: ["badajoz"], lat: 38.8878, lon: -6.9822, main: true },
     { keys: ["plasencia"], lat: 39.9678, lon: -6.1030, main: false },
+    { keys: ["talavera"], lat: 39.9686, lon: -4.8286, main: false },
+    { keys: ["navalmoral"], lat: 39.8950, lon: -5.5419, main: false },
+    { keys: ["illescas"], lat: 40.1239, lon: -3.8419, main: false },
+    { keys: ["torrijos"], lat: 40.9839, lon: -4.2814, main: false },
     { keys: ["requena", "utiel"], lat: 39.5890, lon: -1.1740, main: false },
     { keys: ["villena"], lat: 38.6064, lon: -0.9234, main: false },
     { keys: ["elx", "elche"], lat: 38.2480, lon: -0.7420, main: false },
     { keys: ["orihuela"], lat: 38.0830, lon: -0.9460, main: false },
     { keys: ["cartagena"], lat: 37.6050, lon: -0.9860, main: true },
     { keys: ["alcazar", "alcázar"], lat: 39.3880, lon: -3.2180, main: false },
-    { keys: ["aranjuez"], lat: 40.0320, lon: -3.6060, main: false },
+    { keys: ["aranjuez"], lat: 40.0320, lon: -3.6060, main: true },
     { keys: ["teruel"], lat: 40.3420, lon: -1.1120, main: false },
     { keys: ["vinaros", "vinaròs", "benicarlo", "benicarló"], lat: 40.4700, lon: 0.4730, main: false },
-    { keys: ["tortosa"], lat: 40.8120, lon: 0.5210, main: false }
+    { keys: ["tortosa"], lat: 40.8120, lon: 0.5210, main: false },
+    { keys: ["reus"], lat: 41.1558, lon: 1.1086, main: false },
+    { keys: ["portbou"], lat: 42.4247, lon: 3.1585, main: false },
+    { keys: ["bobadilla"], lat: 37.0420, lon: -4.7250, main: false }
   ];
+
+  const dynamicStationCoords = new Map();
+  const allStationCoordsList = [];
 
   function findStationCoords(name) {
     if (!name) return null;
-    const s = String(name).toLowerCase();
+    const s = String(name).toLowerCase().trim();
+    if (dynamicStationCoords.has(s)) return dynamicStationCoords.get(s);
     for (const c of CITY_GEO) {
       for (const k of c.keys) {
         if (s.includes(k)) return [c.lat, c.lon];
@@ -659,54 +939,212 @@
     return null;
   }
 
-  function isInStationArea(lat, lon, thresholdKm = 2.2) {
+  function isInStationArea(lat, lon, thresholdKm = 1.6) {
     for (const c of CITY_GEO) {
       if (c.main && haversine(lat, lon, c.lat, c.lon) <= thresholdKm) return true;
     }
     return false;
   }
 
-  /* ---------- Diccionario Maestro de Estaciones ---------- */
+  function isNearAnyKnownStation(lat, lon, radiusKm = 0.65) {
+    for (const c of CITY_GEO) {
+      if (haversine(lat, lon, c.lat, c.lon) <= radiusKm) return true;
+    }
+    for (let i = 0; i < allStationCoordsList.length; i++) {
+      const pt = allStationCoordsList[i];
+      if (Math.abs(pt[0] - lat) < 0.01 && Math.abs(pt[1] - lon) < 0.015) {
+        if (haversine(lat, lon, pt[0], pt[1]) <= radiusKm) return true;
+      }
+    }
+    return false;
+  }
+
+/* ---------- Diccionario Maestro Oficial de Códigos Adif (Extraído de estaciones.xlsx: 1.033 estaciones) ---------- */
   const DEFAULT_STATIONS = {
-    "10000": "Madrid-Chamartín-Clara Campoamor", "10001": "Madrid-Chamartín-Clara Campoamor", "17000": "Madrid-Príncipe Pío",
-    "18000": "Madrid-Atocha Cercanías", "60000": "Madrid-Puerta de Atocha-Almudena Grandes", "60001": "Madrid-Puerta de Atocha",
-    "10100": "Madrid-Nuevos Ministerios", "10101": "Madrid-Sol", "10102": "Madrid-Recoletos", "92102": "Toledo",
-    "71801": "Barcelona-Sants", "71802": "Barcelona-Passeig de Gràcia", "79400": "Barcelona-Estació de França",
-    "71800": "Barcelona-Catalunya", "71805": "Barcelona-Arc de Triomf", "71806": "Barcelona-Sagrera",
-    "79300": "Girona", "79303": "Figueres-Vilafant", "71500": "Camp de Tarragona", "78400": "Lleida-Pirineus",
-    "79100": "Mataró", "79200": "Granollers", "71400": "Vic", "71200": "Manresa", "78200": "Tortosa",
-    "04040": "Zaragoza-Delicias", "04001": "Zaragoza-Portillo", "04002": "Zaragoza-Goya", "70600": "Calatayud",
-    "04104": "Huesca", "04007": "Tardienta", "81100": "Logroño", "81202": "Miranda de Ebro",
-    "13200": "Bilbao-Abando", "13000": "Bilbao-La Concordia", "11200": "Vitoria/Gasteiz", "11511": "San Sebastián/Donostia",
-    "11600": "Irun", "80100": "Pamplona/Iruña", "13100": "Barakaldo", "13300": "Durango",
-    "14223": "Santander", "14202": "Torrelavega", "15211": "Oviedo", "15212": "Gijón-Sanz Crespo",
-    "15205": "Mieres-Puente", "15200": "Pola de Lena", "15100": "León", "15400": "Ponferrada",
-    "10600": "Valladolid-Campo Grande", "10605": "Valladolid-Universidad", "14100": "Palencia", "11014": "Burgos-Rosa Manzano",
-    "12100": "Segovia-Guiomar", "10200": "Ávila", "10300": "Medina del Campo", "10500": "Medina del Campo AV",
-    "30100": "Zamora", "30200": "Sanabria AV", "32008": "Salamanca",
-    "31200": "Ourense", "31400": "Santiago de Compostela", "31412": "A Coruña", "31300": "Ferrol",
-    "22100": "Lugo", "22300": "Monforte de Lemos", "23004": "Pontevedra", "23005": "Vigo-Urzáiz",
-    "23100": "Vigo-Guixar", "23002": "Vilagarcía de Arousa",
-    "35002": "Cáceres", "35109": "Mérida", "37606": "Badajoz", "35010": "Plasencia",
-    "60200": "Ciudad Real", "60400": "Puertollano", "60600": "Albacete-Los Llanos", "60911": "Cuenca-Fernando Zóbel",
-    "60913": "Requena-Utiel", "70200": "Guadalajara-Yebes", "60700": "Villena", "60905": "Villena AV",
-    "50500": "Córdoba", "51003": "Sevilla-Santa Justa", "51001": "Sevilla-San Bernardo", "51002": "Sevilla-Virgen del Rocío",
-    "51405": "Cádiz", "51300": "Jerez de la Frontera", "51400": "El Puerto de Santa María", "51402": "San Fernando-Bahía Sur",
-    "43003": "Huelva", "54413": "Málaga-María Zambrano", "54405": "Antequera-Santa Ana", "54415": "Antequera AV",
-    "05482": "Puente Genil-Herrera", "55020": "Ronda", "55104": "Algeciras", "05000": "Granada", "05475": "Loja",
-    "50300": "Linares-Baeza", "50411": "Jaén", "56312": "Almería", "56106": "Guadix",
-    "65000": "València-Joaquín Sorolla", "65001": "València-Estació del Nord", "65005": "València-Cabanyal",
-    "65300": "Castelló", "65402": "Vinaròs", "65400": "Benicarló-Peñíscola", "61200": "Alacant-Terminal",
-    "62109": "Elx AV / Elche AV", "62103": "Orihuela-Miguel Hernández", "61307": "Murcia del Carmen", "61300": "Cartagena",
-    "39000": "Palma de Mallorca", "07000": "Eivissa", "00000": "Estación Central", "99999": "En ruta"
+    "01003":"ARAHAL|37.2681|-5.5485", "01005":"MARCHENA|37.3343|-5.4255", "01007":"OSUNA|37.2339|-5.115", "01009":"PEDRERA|37.2224|-4.8935", "02002":"PUENTE GENIL-HERRERA|37.3579|-4.8216", "02003":"ANTEQUERA-SANTA ANA|37.0699|-4.719",
+    "02030":"ANTEQUERA AV|37.0334|-4.5613", "03001":"MENGÍBAR-ARTICHUELA|37.9782|-3.8033", "03100":"JAÉN|37.7798|-3.7908", "03208":"CUENCA-FERNANDO ZÓBEL|40.0352|-2.1444", "03213":"REQUENA-UTIEL|39.5198|-1.1276", "03216":"VALÈNCIA-JOAQUÍN SOROLLA|39.4591|-0.3829",
+    "03309":"VILLENA ALTA VELOCIDAD|38.5853|-0.8733", "03410":"ELCHE/ELX AV|38.2455|-0.7668", "03412":"CALLOSA DE SEGURA-COX|38.1228|-0.8746", "04007":"GUADALAJARA-YEBES|40.5873|-3.1243", "04040":"ZARAGOZA DELICIAS|41.6587|-0.9113", "04104":"CAMP DE TARRAGONA|41.1921|1.2727",
+    "04307":"FIGUERES-VILAFANT|42.2648|2.9435", "05000":"GRANADA|37.184|-3.6092", "05012":"LOJA|37.1754|-4.1348", "05102":"SAN XOÁN|43.4946|-8.2143", "05103":"SANTA ICÍA|43.4998|-8.1999", "05104":"VIRXE DO MAR|43.4965|-8.2049",
+    "05105":"PIÑEIROS|43.5095|-8.184", "05106":"O PONTO|43.5148|-8.1778", "05107":"XUVIA|43.5172|-8.1613", "05108":"O ALTO DO CASTIÑEIRO|43.5032|-8.1955", "05109":"FERRERÍAS|43.528|-8.1504", "05111":"SEDES|43.5426|-8.1402",
+    "05113":"PEDROSO DE NARÓN|43.5367|-8.1092", "05115":"SAN SADURNIÑO|43.5461|-8.0781", "05117":"LAMAS|43.5473|-8.049", "05119":"APALLA|43.5505|-8.0186", "05121":"MOECHE|43.5621|-8.0028", "05123":"LABACENGOS|43.5653|-7.9802",
+    "05125":"ENTRAMBARRÍAS|43.5771|-7.9543", "05127":"CERDIDO|43.5873|-7.9343", "05129":"A CUQUEIRA|43.6078|-7.9219", "05131":"SANTA MARÍA DE MERA|43.6409|-7.9162", "05133":"PONTE MERA|43.666|-7.9026", "05135":"SAN CLODIO|43.6609|-7.8735",
+    "05137":"SENRA|43.6688|-7.8546", "05139":"ORTIGUEIRA|43.6862|-7.8496", "05141":"ESPASANTE|43.7089|-7.8049", "05143":"LOIBA|43.7304|-7.75", "05145":"O BARQUEIRO|43.7356|-7.7029", "05147":"O VICEDO|43.731|-7.6732",
+    "05149":"MOSENDE|43.7062|-7.6355", "05151":"FOLGUEIRO|43.6928|-7.635", "05153":"COVAS DE VIVEIRO|43.6703|-7.6146", "05155":"VIVEIRO|43.6569|-7.6003", "05156":"VIVEIRO APEADERO|43.6614|-7.5945", "05157":"XUANCES|43.688|-7.5539",
+    "05159":"XOVE POBO|43.6836|-7.5109", "05161":"XOVE|43.6811|-7.4953", "05163":"LAGO|43.6871|-7.4819", "05165":"BIDUEIROS|43.6967|-7.4688", "05167":"SAN CIBRAO|43.6923|-7.4418", "05169":"MADEIRO|43.6862|-7.4129",
+    "05171":"BURELA|43.6606|-7.3612", "05173":"CANGAS DE FOZ|43.6261|-7.3333", "05175":"NOIS|43.6103|-7.3122", "05177":"FAZOURO|43.6005|-7.2998", "05179":"MARZÁN|43.5748|-7.2694", "05181":"FOZ|43.5609|-7.2722",
+    "05183":"BARREIROS|43.5474|-7.2253", "05185":"REINANTE|43.5499|-7.1743", "05187":"ESTEIRO|43.5517|-7.1461", "05189":"OS CASTROS|43.5516|-7.1309", "05191":"RINLO|43.5498|-7.1086", "05193":"RIBADEO|43.5361|-7.0556",
+    "05197":"VEGADEO PUEBLO|43.4797|-7.0573", "05199":"VILAVEDELLE|43.4905|-7.0384", "05239":"SANTIANES|43.5038|-6.0918", "05241":"LOS CABOS|43.5124|-6.0975", "05243":"MUROS DEL NALÓN|43.543|-6.1111", "05244":"EL PITO PIÑERA|43.5469|-6.1433",
+    "05245":"CUDILLERO|43.5509|-6.1519", "05247":"VILLADEMAR|43.5571|-6.1555", "05249":"LA MAGDALENA|43.5593|-6.1849", "05251":"SAN MARTÍN DE LUIÑA|43.5448|-6.2287", "05253":"SAN COSME|43.5441|-6.2481", "05255":"SOTO DE LUIÑA|43.5596|-6.2344",
+    "05257":"VALDREDO|43.5664|-6.2632", "05259":"NOVELLANA|43.5578|-6.2896", "05261":"SANTA MARINA|43.5527|-6.3052", "05263":"BALLOTA|43.5507|-6.3228", "05265":"TABLIZO|43.5473|-6.3512", "05267":"CADAVEDO|43.543|-6.3916",
+    "05269":"SAN CRISTÓBAL|43.5472|-6.4153", "05271":"CANERO|43.5419|-6.4459", "05273":"BARCIA|43.5468|-6.5083", "05275":"LUARCA|43.5379|-6.5366", "05277":"OTUR|43.5405|-6.5936", "05279":"VILLAPEDRE|43.5467|-6.6459",
+    "05281":"PIÑERA-VILLAORIL|43.5357|-6.6854", "05283":"NAVIA|43.5368|-6.7194", "05285":"MEDAL|43.5457|-6.753", "05287":"LOZA|43.5513|-6.7717", "05289":"CARTAVIO|43.5507|-6.7896", "05291":"LA CARIDAD|43.5471|-6.8275",
+    "05293":"TAPIA|43.535|-6.9093", "05295":"TOL|43.5272|-6.9521", "05297":"LAS CAMPAS DE CASTROPOL|43.5203|-6.9771", "05299":"CASTROPOL|43.5096|-7.0148", "05300":"VALLOBÍN|43.3652|-5.8648", "05301":"ARGAÑOSA-LAVAPIÉS|43.3658|-5.87",
+    "05302":"LAS CAMPAS|43.3639|-5.8834", "05303":"LAS MAZAS|43.3587|-5.8976", "05304":"SAN CLAUDIO|43.3554|-5.9178", "05306":"SAN PEDRO DE NORA|43.3687|-5.9586", "05308":"SOTO UDRIÓN|43.3564|-5.965", "05311":"TRUBIA|43.3486|-5.9678",
+    "05313":"SANTA MARÍA DE GRADO|43.3842|-5.9827", "05315":"VEGA DE ANZO|43.3893|-6.0057", "05316":"PEÑAFLOR DE GRADO|43.4029|-6.0454", "05317":"GRADO|43.3945|-6.0637", "05319":"SANDICHE|43.4256|-6.0599", "05320":"ACES|43.4399|-6.0658",
+    "05321":"SAN ROMÁN|43.4489|-6.0772", "05323":"BEIFAR|43.4701|-6.0989", "05325":"PRAVIA|43.4909|-6.1105", "05451":"BILBAO LA CONCORDIA|43.2602|-2.9264", "05455":"BASURTO HOSPITAL|43.2598|-2.9538", "05457":"ZORROTZA ZORROZGOITI|43.274|-2.974",
+    "05459":"SANTA ÁGUEDA|43.2619|-2.973", "05460":"KASTREXANA|43.2555|-2.9721", "05461":"IRAUREGUI|43.2484|-2.9901", "05463":"ZARAMILLO|43.2333|-3.0159", "05465":"LA QUADRA|43.2227|-3.025", "05467":"SODUPE|43.202|-3.0505",
+    "05469":"ARTXUBE|43.201|-3.0715", "05470":"LAMBARRI|43.2061|-3.0825", "05471":"GÜEÑES|43.209|-3.0952", "05473":"ARANGUREN|43.2105|-3.1084", "05474":"ARANGUREN-APEADERO|43.2104|-3.1141", "05475":"ZALLA|43.2129|-3.1333",
+    "05477":"COLEGIO|43.2113|-3.1381", "05479":"IBARRA|43.204|-3.1448", "05481":"LA HERRERA|43.2035|-3.1706", "05483":"BALMASEDA|43.1964|-3.19", "05484":"MIMETIZ|43.2158|-3.1313", "05487":"TRASLAVIÑA|43.2333|-3.1983",
+    "05489":"ARTZENTALES|43.2355|-3.2134", "05493":"VILLAVERDE DE TRUCIOS|43.2413|-3.2505", "05497":"KARRANTZA|43.2389|-3.3578", "05504":"PARQUE PRINCIPADO|43.3866|-5.8088", "05505":"COLLOTO|43.3795|-5.7924", "05507":"MERES|43.381|-5.7487",
+    "05508":"FONCIELLO|43.3818|-5.7297", "05509":"EL BERRÓN|43.3827|-5.7027", "05511":"LA CARRERA DE SIERO|43.3869|-5.6753", "05513":"POLA DE SIERO|43.3882|-5.6648", "05515":"LOS CORROS|43.3768|-5.6014", "05517":"LIERES|43.3806|-5.5826",
+    "05521":"EL REMEDIO|43.3751|-5.5462", "05522":"LLAMES|43.3688|-5.5252", "05523":"NAVA|43.3612|-5.5091", "05525":"FUENTE SANTA DE NAVA|43.3556|-5.4784", "05527":"CECEDA|43.3562|-5.4511", "05529":"CARANCOS|43.3556|-5.4344",
+    "05531":"PINTUELES|43.3599|-5.3841", "05533":"INFIESTO|43.3518|-5.3692", "05534":"INFIESTO APEADERO|43.344|-5.3606", "05535":"VILLAMAYOR|43.3631|-5.3029", "05537":"SEBARES|43.3624|-5.2574", "05539":"SOTO DE DUEÑAS|43.3583|-5.2269",
+    "05541":"OZANES|43.3684|-5.1852", "05542":"POLICLÍNICO|43.3786|-5.186", "05543":"ARRIONDAS|43.3875|-5.1883", "05545":"FUENTES|43.4014|-5.1431", "05547":"TORAÑO|43.4123|-5.118", "05549":"CUEVAS|43.4311|-5.0733",
+    "05551":"LLOVIO|43.4406|-5.0556", "05553":"RIBADESELLA|43.4594|-5.0545", "05555":"CAMANGO|43.4482|-5.0188", "05557":"BELMONTE DE PRÍA|43.4398|-4.9823", "05559":"NUEVA|43.4406|-4.9355", "05561":"VILLAHORMES|43.442|-4.9038",
+    "05563":"POSADA|43.4248|-4.865", "05565":"BALMORI|43.4215|-4.8358", "05567":"CELORIO|43.425|-4.8113", "05569":"POO|43.4243|-4.7819", "05571":"LLANES|43.4209|-4.7587", "05573":"SAN ROQUE DEL ACEBAL|43.3947|-4.7301",
+    "05575":"VIDIAGO|43.3965|-4.673", "05577":"PENDUELES|43.3928|-4.6304", "05579":"COLOMBRES|43.3827|-4.5571", "05602":"VALDECILLA LA MARGA|43.4529|-3.8282", "05621":"TORRELAVEGA-CENTRO|43.351|-4.0512", "05623":"PUENTE SAN MIGUEL|43.3587|-4.0878",
+    "05637":"CABEZÓN DE LA SAL|43.3079|-4.2319", "05641":"TRECEÑO|43.3183|-4.309", "05643":"ROIZ|43.3282|-4.3493", "05644":"EL BARCENAL|43.3403|-4.3833", "05645":"SAN VICENTE DE LA BARQUERA|43.3678|-4.4045", "05647":"PESUÉS|43.3703|-4.4802",
+    "05649":"UNQUERA|43.3748|-4.5143", "05651":"NUEVA MONTAÑA|43.4402|-3.8494", "05652":"VALLE REAL|43.4275|-3.8405", "05655":"MALIAÑO VIDRIERA|43.416|-3.8411", "05657":"ASTILLERO|43.4037|-3.8207", "05661":"HERAS|43.4009|-3.7666",
+    "05663":"OREJO|43.3995|-3.7384", "05672":"PUENTE AGÜERO|43.4065|-3.7193", "05673":"VILLAVERDE DE PONTONES|43.4113|-3.7036", "05675":"HOZ DE ANERO|43.4049|-3.6669", "05677":"BERANGA|43.4137|-3.5771", "05679":"GAMA|43.4231|-3.5247",
+    "05681":"CICERO|43.4171|-3.4905", "05683":"TRETO|43.3941|-3.4692", "05685":"LIMPIAS|43.3588|-3.4333", "05687":"MARRÓN|43.3466|-3.4209", "05689":"UDALLA|43.3137|-3.4455", "05691":"GIBAJA|43.2822|-3.4383",
+    "05721":"ARLA BERRÓN|43.1667|-3.2276", "05722":"UNGO NAVA|43.1429|-3.2647", "05724":"MERCADILLO VILLASANA|43.1052|-3.2645", "05727":"CADAGUA|43.0682|-3.3473", "05730":"BERCEDO-MONTIJA|43.0885|-3.456", "05731":"QUINTANA DE LOS PRADOS|43.08|-3.51",
+    "05732":"ESPINOSA DE LOS MONTEROS|43.0743|-3.5371", "05733":"REDONDO|43.063|-3.6079", "05734":"SOTOSCUEVA|43.0453|-3.6883", "05735":"PEDROSA|43.0124|-3.7379", "05736":"DOSANTE CIDAD|43.0012|-3.7452", "05737":"ROBREDO AHEDO|43.0191|-3.8092",
+    "05738":"SONCILLO|43.0058|-3.8449", "05739":"CABAÑAS DE VIRTUS|42.9964|-3.8585", "05740":"ARIJA|42.9913|-3.945", "05741":"LLANO|42.9881|-3.9824", "05742":"LAS ROZAS DE VALDEARROYO|42.9736|-4.0299", "05743":"MONTES CLAROS|42.9343|-4.0501",
+    "05744":"LOS CARABEOS|42.9103|-4.0752", "05747":"CILLAMAYOR|42.8578|-4.2792", "05748":"SALINAS DE PISUERGA|42.8513|-4.3862", "05749":"VADO-CERVERA|42.8394|-4.4948", "05750":"CASTREJÓN DE LA PEÑA|42.812|-4.6016", "05751":"VILLAVERDE TARILONTE|42.8184|-4.6854",
+    "05752":"SANTIBÁÑEZ DE LA PEÑA|42.802|-4.7415", "05753":"GUARDO APEADERO|42.7877|-4.8451", "05754":"GUARDO|42.791|-4.8519", "05755":"LA LLAMA DE LA GUZPEÑA|42.7702|-5.0412", "05756":"LA ESPINA|42.7869|-4.9052", "05757":"VALCUENDE|42.7656|-4.9293",
+    "05758":"PUENTE ALMUHEY|42.7876|-4.9719", "05759":"PRADO DE LA GUZPEÑA|42.7832|-5.0271", "05760":"VALLE DE LAS CASAS|42.7678|-5.0714", "05761":"CISTIERNA|42.8032|-5.1308", "05763":"LA ERCINA|42.8088|-5.2139", "05766":"BOÑAR|42.8628|-5.3285",
+    "05767":"LA VECILLA|42.8551|-5.4121", "05770":"MATALLANA|42.8411|-5.5219", "05776":"SAN FELIZ|42.6823|-5.5379", "05778":"FEVE-LEÓN|42.6025|-5.5749", "05790":"SORRIBA|42.7863|-5.1275", "05799":"CEREZAL DE LA GUZPEÑA|42.7798|-5.0056",
+    "05803":"LA ASUNCIÓN UNIVERSIDAD|42.6161|-5.5661", "06002":"ALHAMA DE MURCIA|37.8494|-1.4145", "06003":"TOTANA|37.7635|-1.4956", "06006":"LORCA-SUTULLENA|37.6721|-1.6962", "07004":"ÁGUILAS|37.4099|-1.5725", "08004":"SEGOVIA-GUIOMAR|40.9106|-4.0946",
+    "08223":"VIGO URZAIZ|42.2342|-8.7137", "08224":"REDONDELA AV|42.2845|-8.6036", "08240":"MEDINA DEL CAMPO AV|41.3175|-4.9101", "08247":"SANABRIA AV|42.0451|-6.5631", "08251":"A GUDIÑA-PORTA DE GALICIA|42.0635|-7.1356", "10000":"MADRID-PRÍNCIPE PÍO|40.4215|-3.719",
+    "10001":"ARAVACA|40.4485|-3.7856", "10002":"POZUELO|40.4475|-3.8003", "10005":"LAS ROZAS|40.4943|-3.8682", "10100":"PINAR DE LAS ROZAS|40.5223|-3.8822", "10101":"LAS MATAS|40.5524|-3.8968", "10103":"TORRELODONES|40.5746|-3.9566",
+    "10104":"GALAPAGAR-LA NAVATA|40.6003|-3.9823", "10200":"VILLALBA DE GUADARRAMA|40.6265|-4.008", "10201":"SAN YAGO|40.6179|-4.0311", "10202":"LAS ZORRERAS-NAVALQUEJIGO|40.6093|-4.0464", "10203":"EL ESCORIAL|40.5854|-4.1324", "10204":"ZARZALEJO|40.5389|-4.1581",
+    "10205":"ROBLEDO DE CHAVELA|40.5208|-4.2468", "10206":"SANTA MARÍA DE LA ALAMEDA-PEGUERINOS|40.569|-4.2691", "10207":"LAS NAVAS DEL MARQUÉS|40.5892|-4.3623", "10208":"NAVALPERAL|40.5912|-4.4084", "10209":"EL PIMPOLLAR|40.5676|-4.2835", "10300":"HERRADÓN-LA CAÑADA|40.5993|-4.495",
+    "10302":"GUIMORCONDO|40.6491|-4.615", "10400":"ÁVILA|40.6573|-4.6833", "10409":"ARÉVALO|41.0471|-4.702", "10500":"MEDINA DEL CAMPO|41.3176|-4.9099", "10501":"POZALDEZ|41.3679|-4.836", "10502":"MATAPOZUELOS|41.4228|-4.801",
+    "10503":"VALDESTILLAS|41.4887|-4.7729", "10504":"VIANA|41.5241|-4.7545", "10600":"VALLADOLID-CAMPO GRANDE|41.6422|-4.727", "10602":"CABEZÓN DEL PISUERGA|41.7373|-4.6513", "10603":"CORCOS-AGUILAREJO|41.7664|-4.6235", "10604":"CUBILLAS DE SANTA MARTA|41.8089|-4.5798",
+    "10605":"DUEÑAS|41.8705|-4.5412", "10610":"VALLADOLID UNIVERSIDAD|41.6603|-4.704", "11000":"VENTA DE BAÑOS|41.9174|-4.4958", "11004":"MAGAZ|41.9766|-4.4321", "11006":"QUINTANA DEL PUENTE|42.08|-4.1986", "11009":"VILLAQUIRÁN|42.2157|-3.9994",
+    "11014":"BURGOS-ROSA MANZANO|42.3712|-3.6663", "11109":"BRIVIESCA|42.5428|-3.3193", "11111":"PANCORBO|42.6305|-3.1123", "11200":"MIRANDA DE EBRO|42.691|-2.9404", "11203":"MANZANOS|42.7429|-2.8675", "11204":"LA PUEBLA DE ARGANZÓN|42.7652|-2.8304",
+    "11205":"NANCLARES-LANGRAIZ|42.8162|-2.8049", "11208":"VITORIA-GASTEIZ|42.8415|-2.6726", "11210":"ALEGRÍA-DULANTZI|42.8487|-2.5147", "11212":"AGURAIN-SALVATIERRA DE ÁLAVA|42.8464|-2.3892", "11213":"ARAIA|42.8696|-2.3068", "11300":"ALTSASU|42.8948|-2.1812",
+    "11305":"BRINKOLA|43.019|-2.3347", "11306":"LEGAZPI|43.051|-2.3306", "11400":"ZUMARRAGA|43.0871|-2.3202", "11402":"ORMÁIZTEGUI|43.0403|-2.2565", "11404":"BEASAIN|43.0463|-2.2023", "11405":"ORDIZIA|43.0528|-2.1792",
+    "11500":"TOLOSA|43.1354|-2.0791", "11501":"TOLOSA-CENTRO|43.1394|-2.0741", "11503":"BILLABONA-ZIZURKIL|43.1892|-2.0554", "11504":"ANDOAIN-CENTRO|43.2156|-2.0205", "11507":"HERNANI-ERDIA|43.2665|-1.9726", "11511":"SAN SEBASTIÁN-DONOSTIA|43.3177|-1.9767",
+    "11515":"PASAIA|43.3189|-1.9172", "11516":"LEZO-RENTERÍA|43.3159|-1.8994", "11600":"IRUN|43.3395|-1.8013", "12001":"LOS NEGRALES|40.6386|-4.0219", "12002":"ALPEDRETE|40.6581|-4.035", "12004":"COLLADO MEDIANO|40.6929|-4.0359",
+    "12005":"LOS MOLINOS-GUADARRAMA|40.7066|-4.0672", "12006":"CERCEDILLA|40.7376|-4.0663", "12007":"TABLADA|40.7056|-4.1253", "12008":"GUDILLOS|40.7169|-4.1577", "12009":"SAN RAFAEL|40.7149|-4.1814", "12010":"EL ESPINAR|40.7409|-4.1895",
+    "12011":"LOS ÁNGELES DE SAN RAFAEL|40.7779|-4.2069", "12012":"OTERO-HERREROS|40.801|-4.2035", "12013":"ORTIGOSA DEL MONTE|40.8328|-4.1681", "12014":"NAVAS DE RIOFRÍO-LA LOSA|40.8567|-4.1411", "12020":"PUERTO DE NAVACERRADA|40.7845|-4.0048", "12023":"LOS COTOS|40.8223|-3.9645",
+    "12100":"SEGOVIA|40.934|-4.1136", "13106":"LLODIO|43.1424|-2.9607", "13200":"BILBAO-INTERMOD. ABANDO INDALECIO PRIETO|43.2601|-2.9286", "13206":"AMETZOLA|43.2547|-2.9437", "14100":"PALENCIA|42.0157|-4.5341", "14101":"MONZÓN DE CAMPOS|42.1055|-4.5017",
+    "14102":"AMUSCO|42.178|-4.4807", "14103":"PIÑA|42.2117|-4.4347", "14104":"FRÓMISTA|42.2649|-4.4024", "14107":"OSORNO|42.4151|-4.3574", "14108":"ESPINOSA DE VILLAGONZALO|42.4524|-4.3678", "14111":"HERRERA DE PISUERGA|42.5985|-4.3167",
+    "14112":"ALAR DEL REY|42.6568|-4.3114", "14113":"MAVE|42.7237|-4.2762", "14114":"AGUILAR DE CAMPOO|42.7854|-4.2339", "14115":"QUINTANILLA DE LAS TORRES|42.819|-4.2028", "14117":"EL CARRIÓN|42.1166|-4.5007", "14200":"MATAPORQUERA|42.8709|-4.1654",
+    "14202":"REINOSA|42.9945|-4.1409", "14206":"BÁRCENA|43.1287|-4.0535", "14210":"LOS CORRALES DE BUELNA|43.2551|-4.0639", "14213":"TORRELAVEGA|43.3277|-4.0427", "14216":"RENEDO|43.3531|-3.9496", "14220":"MALIAÑO|43.4161|-3.8411",
+    "14223":"SANTANDER|43.4584|-3.811", "14230":"VALDECILLA|43.4541|-3.8278", "15001":"GRIJOTA|42.0492|-4.584", "15003":"BECERRIL|42.1047|-4.6471", "15004":"PAREDES DE NAVA|42.1507|-4.6976", "15006":"CISNEROS|42.1911|-4.8502",
+    "15007":"VILLADA|42.2452|-4.9706", "15008":"GRAJAL|42.3232|-5.0134", "15009":"SAHAGÚN|42.3693|-5.0227", "15012":"EL BURGO RANERO|42.4258|-5.2086", "15014":"SANTAS MARTAS|42.46|-5.3868", "15015":"PALANQUINOS|42.4607|-5.4976",
+    "15100":"LEÓN|42.596|-5.5824", "15106":"LA ROBLA|42.8045|-5.6263", "15108":"LA POLA DE GORDÓN|42.8541|-5.6745", "15109":"SANTA LUCÍA|42.8751|-5.6396", "15112":"VILLAMANÍN|42.9367|-5.6576", "15113":"BUSDONGO|42.9845|-5.7054",
+    "15116":"LINARES-CONGOSTINAS|43.1017|-5.7722", "15118":"PUENTE DE LOS FIERROS|43.0716|-5.7695", "15120":"CAMPOMANES|43.1101|-5.8164", "15122":"POLA DE LENA|43.1587|-5.831", "15200":"UJO|43.2047|-5.7926", "15203":"MIERES-PUENTE|43.25|-5.7823",
+    "15211":"OVIEDO|43.3664|-5.8548", "15217":"LA CORREDORIA|43.3881|-5.8273", "15218":"LLAMAQUIQUE|43.3588|-5.8573", "15401":"CALZADA DE ASTURIAS|43.5354|-5.6972", "15410":"GIJÓN-SANZ CRESPO|43.5377|-5.6758", "16403":"AVILÉS|43.5613|-5.9228",
+    "17000":"MADRID-CHAMARTÍN-CLARA CAMPOAMOR|40.4712|-3.683", "18000":"MADRID-ATOCHA CERCANÍAS|40.4066|-3.6894", "18001":"MADRID-RECOLETOS|40.4234|-3.6909", "18002":"MADRID-NUEVOS MINISTERIOS|40.4466|-3.6923", "20002":"QUINTANA-RANEROS|42.5501|-5.6378", "20005":"VEGUELLINA|42.4335|-5.8876",
+    "20006":"BARRIENTOS|42.4143|-5.964", "20007":"NISTAL|42.4245|-6.008", "20008":"VILLAVANTE|42.4646|-5.8389", "20100":"ASTORGA|42.4595|-6.0472", "20102":"VEGA-MAGAZ|42.5538|-6.0683", "20103":"PORQUEROS|42.5989|-6.1082",
+    "20104":"BRAÑUELAS|42.6326|-6.201", "20106":"LA GRANJA|42.6149|-6.2825", "20109":"TORRE DEL BIERZO|42.5956|-6.3291", "20111":"BEMBIBRE|42.6096|-6.422", "20113":"SAN MIGUEL DE LAS DUEÑAS|42.5864|-6.5238", "20200":"PONFERRADA|42.5454|-6.6024",
+    "20203":"VILLADEPALOS|42.5369|-6.7511", "20204":"TORAL DE LOS VADOS|42.5411|-6.7767", "20207":"COVAS|42.4753|-6.8309", "20208":"QUEREÑO|42.4207|-6.8295", "20210":"SOBRADELO|42.4149|-6.912", "20211":"O BARCO DE VALDEORRAS|42.4183|-6.985",
+    "20212":"VILAMARTÍN DE VALDEORRAS|42.4118|-7.0612", "20213":"A RÚA-PETÍN|42.3928|-7.1133", "20214":"MONTEFURADO|42.394|-7.1984", "20216":"SAN CLODIO-QUIROGA|42.4653|-7.2872", "20218":"A POBRA DO BROLLÓN|42.5337|-7.4001", "20300":"MONFORTE DE LEMOS|42.5297|-7.5036",
+    "20305":"SARRIA|42.784|-7.4188", "20306":"PEDRELO-CÉLTIGOS|42.8329|-7.3933", "20309":"LUGO|43.0152|-7.5522", "20310":"RÁBADE|43.1214|-7.6248", "20312":"BAAMONDE|43.1734|-7.7561", "20313":"PARGA|43.1636|-7.8374",
+    "20314":"GUITIRIZ|43.1791|-7.895", "20316":"TEIXEIRO|43.1414|-8.0377", "20317":"CURTIS|43.1272|-8.1432", "20318":"PIÑOI|43.1279|-8.1635", "20319":"CESURAS|43.1731|-8.2005", "20320":"OZA DOS RÍOS|43.2188|-8.1871",
+    "20400":"BETANZOS-INFESTA|43.2707|-8.2258", "20402":"CECEBRE|43.2879|-8.3078", "20403":"CAMBRE|43.2905|-8.3521", "20404":"O BURGO-SANTIAGO|43.3178|-8.3688", "20410":"ELVIÑA-UNIVERSIDADE|43.3352|-8.4131", "21001":"BETANZOS-CIDADE|43.2841|-8.2159",
+    "21002":"MIÑO|43.3494|-8.2073", "21003":"PERBES|43.3782|-8.2011", "21004":"PONTEDEUME|43.4118|-8.1804", "21005":"CABANAS|43.4156|-8.1688", "21007":"BARALLOBRE|43.4629|-8.1886", "21008":"PERLÍO|43.4723|-8.1748",
+    "21009":"NEDA|43.4954|-8.161", "21010":"FERROL|43.488|-8.2311", "21913":"POLIGON INDUSTRIAL DEL SEGRE|41.6157|0.627", "22001":"CANAVAL|42.4829|-7.5877", "22002":"AREAS|42.4578|-7.6288", "22003":"SANTO ESTEVO DO SIL|42.4269|-7.6617",
+    "22004":"SAN PEDRO DO SIL|42.4414|-7.7041", "22005":"OS PEARES|42.4514|-7.7355", "22006":"BARRA DE MIÑO|42.4011|-7.8026", "22100":"OURENSE|42.3504|-7.8728", "22101":"BARBANTES|42.3384|-8.0117", "22102":"RIBADAVIA|42.2931|-8.1393",
+    "22103":"FILGUEIRA|42.2199|-8.1848", "22104":"FRIEIRA|42.1549|-8.201", "22105":"POUSA-CRECENTE|42.1367|-8.2349", "22106":"ARBO|42.1071|-8.3002", "22107":"SELA|42.0921|-8.356", "22108":"AS NEVES|42.0755|-8.4201",
+    "22109":"SALVATERRA|42.0816|-8.4951", "22110":"CALDELAS|42.0558|-8.5663", "22200":"GUILLAREI|42.0657|-8.6225", "22201":"O PORRIÑO|42.1642|-8.622", "22300":"REDONDELA|42.286|-8.6194", "22308":"VIGO-GUIXAR|42.2393|-8.7146",
+    "22401":"TUI|42.0565|-8.6429", "22402":"VALENÇA DO MINHO|42.0247|-8.6397", "23000":"REDONDELA-PICOTA|42.2869|-8.6071", "23001":"CESANTES|42.3103|-8.6165", "23002":"ARCADE|42.3405|-8.6112", "23004":"PONTEVEDRA|42.422|-8.6355",
+    "23005":"PORTELA|42.5178|-8.6546", "23008":"VILAGARCÍA DE AROUSA|42.6022|-8.7625", "23009":"CATOIRA|42.6722|-8.7253", "23010":"PONTECESURES|42.723|-8.6521", "23011":"PADRÓN|42.739|-8.6526", "23013":"OSEBE|42.8253|-8.6158",
+    "23018":"PONTEVEDRA UNIVERSIDAD|42.4387|-8.6305", "23021":"PADRÓN BARBANZA|42.739|-8.6526", "30000":"MONFRAGÜE|39.9375|-6.1009", "30002":"PLASENCIA|40.0223|-6.0994", "30100":"SALAMANCA|40.9722|-5.649", "30110":"SALAMANCA-LA ALAMEDILLA|40.9668|-5.6564",
+    "30200":"ZAMORA|41.5159|-5.7397", "31002":"NAVA DEL REY|41.3347|-5.0768", "31006":"TORO|41.5122|-5.385", "31104":"CARBAJALES DE ALBA|41.6815|-5.9719", "31106":"FERRERUELA DE TÁBARA|41.7641|-6.0739", "31107":"ABEJERA|41.8094|-6.1419",
+    "31108":"SARRACÍN DE ALISTE|41.8485|-6.2051", "31109":"CABAÑAS DE ALISTE|41.8546|-6.2463", "31112":"LINAREJOS-PEDROSO|41.947|-6.4845", "31200":"PUEBLA DE SANABRIA|42.0458|-6.6268", "31303":"A FRIELA-MASIDE|42.4114|-8.029", "31304":"O CARBALLIÑO|42.4313|-8.0689",
+    "31306":"O IRIXO|42.5197|-8.1052", "31308":"LALÍN|42.6325|-8.1427", "31400":"SANTIAGO DE COMPOSTELA-DANIEL CASTELAO|42.8708|-8.5447", "31411":"UXES|43.2974|-8.4444", "31412":"A CORUÑA|43.3497|-8.4156", "31415":"ORDES|43.0375|-8.4484",
+    "31416":"CERCEDA-MEIRAMA|43.2079|-8.4468", "32001":"CAMPILLO|41.2595|-5.0178", "32002":"EL CARPIO|41.2155|-5.1145", "32003":"FRESNO EL VIEJO|41.1914|-5.1381", "32004":"CANTALAPIEDRA|41.1336|-5.183", "32006":"EL PEDROSO DE LA ARMUÑA|41.0799|-5.406",
+    "32007":"PITIEGUA|41.0637|-5.4742", "32008":"GOMECELLO|41.0419|-5.5416", "32009":"MORISCOS|41.0116|-5.5847", "34002":"CARDEÑOSA DE ÁVILA|40.7391|-4.7508", "34005":"SAN PEDRO DEL ARROYO|40.8038|-4.8714", "34007":"CRESPOS|40.8701|-4.968",
+    "34008":"NARROS DEL CASTILLO|40.8666|-5.0529", "34010":"PEÑARANDA DE BRACAMONTE|40.8981|-5.2064", "34011":"VILLAR DE GALLIMAZO|40.952|-5.2962", "34012":"BABILAFUENTE|40.9724|-5.4306", "34013":"SAN MORALES|40.9842|-5.493", "34014":"ALDEALENGUA|40.9799|-5.553",
+    "35001":"LEGANÉS|40.3286|-3.7713", "35002":"FUENLABRADA|40.2834|-3.7994", "35005":"ILLESCAS|40.1209|-3.8423", "35012":"HUMANES|40.2558|-3.8287", "35105":"TORRIJOS|39.979|-4.283", "35109":"MONTEARAGÓN|39.961|-4.6471",
+    "35200":"TALAVERA DE LA REINA|39.9707|-4.8265", "35203":"OROPESA DE TOLEDO|39.9217|-5.1861", "35206":"NAVALMORAL DE LA MATA|39.8949|-5.5456", "35207":"CASATEJADA|39.8919|-5.6777", "35301":"MIRABEL|39.8662|-6.229", "35302":"CASAS DE MILLÁN|39.8119|-6.326",
+    "35303":"CAÑAVERAL|39.7891|-6.375", "35400":"CÁCERES|39.4611|-6.3857", "35402":"ARROYO DE MALPARTIDA|39.4681|-6.5336", "35405":"SAN VICENTE DE ALCÁNTARA|39.3816|-7.1171", "35406":"VALENCIA DE ALCÁNTARA|39.4269|-7.2307", "37200":"CIUDAD REAL|38.9853|-3.9136",
+    "37300":"PUERTOLLANO|38.6913|-4.1117", "37302":"BRAZATORTAS-VEREDAS|38.6688|-4.3165", "37305":"ALMADENEJOS-ALMADÉN|38.7406|-4.7304", "37308":"GUADALMEZ-LOS PEDROCHES|38.6992|-4.9298", "37311":"CABEZA DEL BUEY|38.7239|-5.2271", "37400":"ALMORCHÓN|38.6966|-5.2905",
+    "37402":"CASTUERA|38.735|-5.5416", "37404":"CAMPANARIO|38.8534|-5.6414", "37406":"VILLANUEVA DE LA SERENA|38.9689|-5.7965", "37407":"DON BENITO|38.9669|-5.8629", "37409":"VALDETORRES|38.9133|-6.0694", "37410":"GUAREÑA|38.8967|-6.1288",
+    "37500":"MÉRIDA|38.9215|-6.3438", "37603":"MONTIJO|38.9135|-6.5986", "37604":"GUADIANA|38.9221|-6.69", "37606":"BADAJOZ|38.8907|-6.9818", "37608":"MONTIJO-EL MOLINO|38.914|-6.6183", "37611":"GARROVILLA-LAS VEGAS|38.9158|-6.4741",
+    "37704":"VILLANUEVA DE CÓRDOBA|38.2554|-4.571", "40002":"CALAMONTE|38.8869|-6.383", "40004":"ALMENDRALEJO|38.6847|-6.3998", "40005":"VILLAFRANCA DE LOS BARROS|38.5644|-6.352", "40006":"LOS SANTOS DE MAIMONA|38.4497|-6.3617", "40008":"ZAFRA FERIA|38.4244|-6.4101",
+    "40100":"ZAFRA|38.4136|-6.4051", "40105":"LLERENA|38.237|-6.009", "40107":"FUENTE DEL ARCO|38.1635|-5.9005", "40108":"GUADALCANAL|38.0902|-5.8034", "40113":"CAZALLA-CONSTANTINA|37.9329|-5.7044", "40115":"PEDROSO|37.8374|-5.7625",
+    "40119":"VILLANUEVA DEL RÍO-MINAS|37.6617|-5.7122", "40122":"TOCINA|37.6093|-5.7317", "42005":"FREGENAL DE LA SIERRA|38.1676|-6.6379", "42006":"CUMBRES MAYORES|38.0531|-6.6316", "42008":"JABUGO-GALAROZA|37.9282|-6.7739", "42009":"ALMONASTER-CORTEGANA|37.9012|-6.7974",
+    "42012":"VALDELAMUSA|37.7871|-6.8737", "42013":"EL TAMUJOSO|37.7203|-6.9006", "42015":"CALAÑAS|37.652|-6.8758", "42016":"LOS MILANOS|37.5862|-6.9199", "42018":"EL COBUJÓN|37.5165|-6.9534", "42019":"BELMONTE|37.4619|-6.9475",
+    "42020":"GIBRALEÓN|37.3685|-6.9621", "43005":"BENACAZÓN|37.3569|-6.2082", "43008":"CARRIÓN DE LOS CÉSPEDES|37.369|-6.3351", "43009":"ESCACENA|37.3978|-6.392", "43011":"LA PALMA DEL CONDADO|37.3907|-6.5544", "43012":"VILLARRASA|37.387|-6.5988",
+    "43015":"NIEBLA-PUERTA DEL BUEY|37.3588|-6.6813", "43019":"HUELVA|37.2526|-6.9448", "43021":"SAN JUAN DEL PUERTO|37.3119|-6.8411", "50002":"CINCO CASAS|39.1693|-3.2327", "50100":"MANZANARES|39.0058|-3.3705", "50102":"VALDEPEÑAS|38.7629|-3.3957",
+    "50200":"SANTA CRUZ DE MUDELA|38.6444|-3.4515", "50202":"ALMURADIEL-VISO DEL MARQUÉS|38.5143|-3.5019", "50207":"VILCHES|38.2157|-3.5176", "50300":"LINARES-BAEZA|38.0689|-3.5894", "50400":"ESPELÚY|38.0102|-3.8327", "50403":"ANDÚJAR|38.0282|-4.066",
+    "50407":"VILLA DEL RÍO|37.9813|-4.2838", "50413":"ALCOLEA DE CÓRDOBA|37.9223|-4.6948", "50417":"CAMPUS UNIVERSITARIO DE RABANALES|37.9126|-4.7209", "50500":"CÓRDOBA-JULIO ANGUITA|37.8883|-4.7895", "50501":"EL HIGUERÓN|37.8703|-4.8389", "50502":"VILLARRUBIA DE CÓRDOBA|37.8476|-4.9153",
+    "50504":"POSADAS|37.804|-5.1063", "50506":"PALMA DEL RÍO|37.7181|-5.2928", "50507":"PEÑAFLOR|37.7075|-5.3416", "50600":"LORA DEL RÍO|37.6613|-5.5296", "50700":"LOS ROSALES|37.59|-5.7261", "51003":"SEVILLA-SANTA JUSTA|37.3925|-5.9749",
+    "51100":"SAN BERNARDO|37.3778|-5.9796", "51103":"DOS HERMANAS|37.2872|-5.9235", "51110":"VIRGEN DEL ROCÍO|37.3628|-5.976", "51111":"BELLAVISTA|37.3215|-5.9642", "51200":"UTRERA|37.1848|-5.7908", "51202":"LAS CABEZAS DE SAN JUAN|37.0195|-5.9466",
+    "51203":"LEBRIJA|36.9116|-6.0948", "51205":"AEROPUERTO DE JEREZ|36.7516|-6.0659", "51300":"JEREZ DE LA FRONTERA|36.68|-6.1266", "51400":"PUERTO DE SANTA MARÍA|36.6041|-6.2179", "51401":"PUERTO REAL|36.5309|-6.1853", "51404":"SEGUNDA AGUADA|36.5135|-6.277",
+    "51405":"CÁDIZ|36.5289|-6.288", "51406":"SAN FERNANDO-BAHÍA SUR|36.4681|-6.2068", "51409":"CÁDIZ-ESTADIO|36.5029|-6.2721", "54400":"BOBADILLA|37.0371|-4.7279", "54403":"EL CHORRO-CAMINITO DEL REY|36.9073|-4.7593", "54404":"LAS MELLIZAS|36.8733|-4.7194",
+    "54405":"ÁLORA|36.8199|-4.6996", "54413":"MÁLAGA MARÍA ZAMBRANO|36.7113|-4.4314", "55001":"CAMPILLOS|37.0322|-4.8635", "55003":"ALMARGEN-CAÑETE LA REAL|37.001|-5.0201", "55005":"SETENIL|36.8634|-5.1214", "55007":"RONDA|36.7484|-5.162",
+    "55008":"ARRIATE|36.7906|-5.1408", "55010":"BENAOJÁN-MONTEJAQUE|36.7138|-5.2464", "55011":"JIMERA DE LÍBAR|36.6607|-5.2815", "55012":"CORTES DE LA FRONTERA|36.5974|-5.3328", "55013":"GAUCÍN|36.5404|-5.3868", "55014":"SAN PABLO|36.468|-5.4189",
+    "55015":"JIMENA DE LA FRONTERA|36.4242|-5.4341", "55017":"ALMORAIMA|36.2775|-5.4305", "55018":"SAN ROQUE-LA LÍNEA|36.2145|-5.4324", "55019":"LOS BARRIOS|36.174|-5.4608", "55020":"ALGECIRAS|36.1268|-5.4511", "56004":"JÓDAR-ÚBEDA|37.9133|-3.3489",
+    "56009":"CABRA DEL SANTO CRISTO Y ALICÚN|37.6567|-3.2626", "56100":"MOREDA|37.4312|-3.3105", "56103":"BENALÚA DE GUADIX|37.3453|-3.1632", "56200":"GUADIX|37.3169|-3.1272", "56301":"FIÑANA|37.1846|-2.8398", "56305":"GÉRGAL|37.1088|-2.5916",
+    "56308":"GÁDOR|36.9516|-2.4877", "56310":"HUERCAL-VIATOR|36.8852|-2.4367", "56312":"ALMERÍA|36.835|-2.4555", "57003":"IZNALLOZ|37.3959|-3.5279", "60000":"MADRID-PUERTA DE ATOCHA-ALMUDENA GRANDES|40.4064|-3.6909", "60200":"ARANJUEZ|40.035|-3.6183",
+    "60202":"CASTILLEJO-AÑOVER|39.9496|-3.7388", "60203":"VILLASEQUILLA|39.8795|-3.7285", "60206":"TEMBLEQUE|39.723|-3.4974", "60207":"EL ROMERAL|39.6945|-3.4305", "60300":"VILLACAÑAS|39.6227|-3.3305", "60301":"QUERO|39.5042|-3.2661",
+    "60400":"ALCÁZAR DE SAN JUAN|39.3956|-3.2057", "60402":"CAMPO DE CRIPTANA|39.3943|-3.1177", "60406":"SOCUÉLLAMOS|39.2788|-2.7756", "60500":"VILLARROBLEDO|39.2609|-2.5986", "60503":"MINAYA|39.2407|-2.3484", "60505":"LA RODA DE ALBACETE|39.1996|-2.1625",
+    "60507":"LA GINETA|39.1117|-2.0002", "60600":"ALBACETE-LOS LLANOS|38.9994|-1.8484", "60800":"ALMANSA|38.8678|-1.1054", "60900":"LA ENCINA|38.7653|-0.9542", "60901":"CAUDETE|38.7162|-0.9597", "60902":"VILLENA|38.6317|-0.8677",
+    "60904":"SAX|38.5443|-0.8137", "60905":"ELDA-PETRER|38.4849|-0.8011", "60907":"NOVELDA-ASPE|38.4071|-0.7777", "60911":"ALICANTE/ALACANT-TERMINAL|38.3447|-0.4955", "60913":"SANT VICENT CENTRE|38.3947|-0.5287", "60914":"UNIVERSIDAD DE ALICANTE|38.3842|-0.5284",
+    "61005":"HELLÍN|38.5088|-1.6884", "61012":"CIEZA|38.2466|-1.4217", "61015":"ARCHENA-FORTUNA|38.1313|-1.236", "61200":"MURCIA DEL CARMEN|37.9748|-1.1315", "61303":"BALSICAS-MAR MENOR|37.8188|-0.9509", "61304":"TORRE-PACHECO|37.7469|-0.9671",
+    "61307":"CARTAGENA|37.605|-0.9751", "62001":"BENIEL|38.0449|-0.9995", "62002":"ORIHUELA-MIGUEL HERNÁNDEZ|38.0779|-0.9446", "62003":"CALLOSA DE SEGURA|38.1228|-0.8746", "62100":"SAN ISIDRO-ALBATERA-CATRAL|38.167|-0.8381", "62101":"CREVILLENTE|38.2246|-0.7815",
+    "62102":"ELCHE/ELX-CARRÚS|38.269|-0.7064", "62103":"ELCHE/ELX-PARC|38.2718|-0.6952", "62104":"TORRELLANO|38.2896|-0.5825", "62109":"SANT GABRIEL|38.3291|-0.5087", "64007":"LENOVA-MANUEL|39.0501|-0.4776", "64100":"XÀTIVA|38.9921|-0.5245",
+    "64102":"LA POBLA LLARGA|39.0833|-0.4697", "64103":"CARCAIXENT|39.1205|-0.4544", "64104":"ALZIRA|39.1531|-0.4506", "64105":"ALGEMESÍ|39.1931|-0.4409", "64107":"BENIFAIÓ|39.2843|-0.43", "64200":"SILLA|39.362|-0.415",
+    "64201":"CATARROJA|39.4|-0.3992", "64202":"MASSANASSA|39.4092|-0.3953", "64203":"ALFAFAR-BENETÚSSER|39.4224|-0.3926", "65000":"VALÈNCIA-ESTACIÓ DEL NORD|39.4669|-0.3772", "65001":"ROCA-CÚPER|39.5262|-0.3238", "65002":"VALÈNCIA-LA FONT DE SANT LLUÍS|39.4416|-0.3714",
+    "65003":"VALÈNCIA-CABANYAL|39.4702|-0.3347", "65005":"ALBUIXECH|39.5435|-0.3206", "65006":"MASSALFASSAR|39.5558|-0.3183", "65007":"EL PUIG|39.5883|-0.3117", "65008":"PUÇOL|39.6205|-0.3031", "65200":"SAGUNT|39.6758|-0.2715",
+    "65201":"LES VALLS|39.7193|-0.2398", "65202":"ALMENARA|39.7488|-0.2184", "65203":"LA LLOSA|39.7678|-0.2029", "65204":"CHILCHES/XILXES|39.7827|-0.1903", "65205":"MONCOFA|39.8209|-0.1627", "65206":"NULES LA VILLAVELLA|39.8532|-0.1527",
+    "65207":"BURRIANA-ALQUERÍAS NIÑO PERDIDO|39.8965|-0.1039", "65208":"VILA-REAL|39.9331|-0.0968", "65209":"ALMASSORA|39.9549|-0.0768", "65300":"CASTELLÓ DE LA PLANA|39.9885|-0.0523", "65304":"ORPESA|40.0923|0.1399", "65306":"TORREBLANCA|40.2122|0.1988",
+    "65308":"ALCALÁ DE CHIVERT|40.3047|0.2287", "65311":"BENICARLÓ-PEÑÍSCOLA|40.4276|0.4152", "65312":"VINARÒS|40.4717|0.4557", "65314":"ULLDECONA-ALCANAR-LA SÉNIA|40.5959|0.4493", "65318":"BENICÀSSIM|40.0579|0.0578", "65400":"TORTOSA|40.8073|0.523",
+    "65401":"CAMP-REDÓ|40.7592|0.5558", "65402":"L'ALDEA-AMPOSTA-TORTOSA|40.7536|0.6143", "65403":"CAMARLES-DELTEBRE|40.7748|0.6718", "65404":"L'AMPOLLA-EL PERELLÓ-DELTEBRE|40.812|0.7083", "65405":"L'AMETLLA DE MAR|40.8862|0.8005", "65411":"SALOU-PORT AVENTURA|41.0885|1.1461",
+    "65420":"L'HOSPITALET DE L'INFANT|40.9994|0.9125", "65422":"CAMBRILS|41.0816|1.046", "67004":"MARÍA DE HUERVA|41.5398|-0.9981", "67007":"ARAÑALES DE MUEL|41.4689|-1.0864", "67009":"LONGARES|41.4048|-1.1588", "67010":"CARIÑENA|41.3356|-1.2284",
+    "67011":"ENCINACORBA|41.2886|-1.2785", "67013":"VILLARREAL DE HUERVA|41.1965|-1.2871", "67014":"VILLADOZ|41.1655|-1.2793", "67015":"BADULES|41.1395|-1.2516", "67016":"VILLAHERMOSA|41.1085|-1.2398", "67017":"FERRERUELA|41.0639|-1.2394",
+    "67018":"CUENCABUENA|41.0093|-1.2546", "67019":"LECHAGO|40.9577|-1.2691", "67020":"NAVARRETE|40.9367|-1.2617", "67021":"CALAMOCHA|40.9039|-1.2998", "67100":"CAMINREAL-FUENTES CLARAS|40.8511|-1.3377", "67101":"TORRIJO DEL CAMPO|40.826|-1.3405",
+    "67103":"VILLAFRANCA DEL CAMPO|40.6838|-1.3579", "67105":"SANTA EULALIA DEL CAMPO|40.5729|-1.313", "67107":"CELLA|40.4553|-1.2443", "67113":"MONREAL DEL CAMPO|40.7823|-1.3608", "67200":"TERUEL|40.341|-1.1103", "67203":"PUEBLA DE VALVERDE|40.2134|-0.9447",
+    "67205":"SARRIÓN|40.1463|-0.8236", "67206":"MORA DE RUBIELOS|40.1231|-0.7861", "67207":"RUBIELOS DE MORA|40.118|-0.7735", "67208":"BARRACAS|40.0117|-0.6962", "67215":"SEGORBE-CIUDAD|39.8472|-0.4824", "69001":"GENOVÉS|38.9877|-0.4799",
+    "69002":"BENIGÀNIM|38.9385|-0.4534", "69003":"LA POBLA DEL DUC|38.9076|-0.4534", "69004":"MONTABERNER|38.8841|-0.4916", "69005":"BUFALÍ|38.8674|-0.5105", "69006":"ALBAIDA|38.8456|-0.5181", "69007":"AGULLENT|38.8306|-0.5512",
+    "69008":"ONTINYENT|38.8097|-0.6025", "69009":"AGRES|38.7968|-0.5217", "69010":"COCENTAINA|38.7406|-0.4468", "69011":"ALCOI|38.7093|-0.4702", "70002":"ASAMBLEA DE MADRID-ENTREVÍAS|40.3819|-3.668", "70003":"EL POZO|40.376|-3.6561",
+    "70005":"VALLECAS|40.3824|-3.623", "70100":"VICÁLVARO|40.4013|-3.5959", "70101":"SAN FERNANDO DE HENARES|40.4428|-3.534", "70102":"TORREJÓN DE ARDOZ|40.4548|-3.4797", "70103":"ALCALÁ DE HENARES|40.4891|-3.3662", "70104":"MECO|40.5347|-3.2987",
+    "70105":"AZUQUECA|40.5611|-3.2654", "70107":"ALCALÁ DE HENARES-UNIVERSIDAD|40.5054|-3.3353", "70108":"COSLADA|40.4232|-3.5611", "70109":"SANTA EUGENIA|40.387|-3.609", "70111":"LA GARENA|40.4805|-3.393", "70112":"SOTO DEL HENARES|40.464|-3.4414",
+    "70200":"GUADALAJARA|40.6442|-3.1823", "70202":"YUNQUERA DE HENARES|40.747|-3.1632", "70204":"HUMANES DE MOHERNANDO|40.8313|-3.1389", "70207":"ESPINOSA DE HENARES|40.9097|-3.0732", "70208":"CARRASCOSA DE HENARES|40.906|-3.0144", "70209":"JADRAQUE|40.9302|-2.9359",
+    "70210":"MATILLAS|40.9538|-2.8433", "70300":"BAIDES|41.0049|-2.7856", "70302":"SIGÜENZA|41.0714|-2.6464", "70400":"TORRALBA|41.1366|-2.493", "70401":"MEDINACELI|41.1652|-2.4212", "70403":"ARCOS DE JALÓN|41.2159|-2.279",
+    "70404":"SANTA MARÍA DE HUERTA|41.2644|-2.1775", "70405":"MONREAL DE ARIZA|41.2988|-2.1104", "70500":"ARIZA|41.3098|-2.0594", "70501":"CETINA|41.296|-1.9618", "70502":"ALHAMA DE ARAGÓN|41.2944|-1.9045", "70503":"BUBIERCA|41.3172|-1.8552",
+    "70504":"ATECA|41.3247|-1.7853", "70505":"TERRER|41.3222|-1.7093", "70600":"CALATAYUD|41.3467|-1.6387", "70602":"EMBID DE JALÓN|41.4217|-1.5921", "70603":"PARACUELLOS-SABIÑÁN|41.4293|-1.5675", "70604":"SABIÑÁN|41.444|-1.5715",
+    "70605":"MORÉS|41.4787|-1.5662", "70606":"PURROY|41.4772|-1.5404", "70607":"MORATA DE JALÓN|41.4755|-1.4797", "70700":"RICLA-LA ALMUNIA|41.5014|-1.4035", "70701":"CALATORAO|41.5287|-1.3605", "70702":"SALILLAS DE JALÓN|41.5679|-1.3258",
+    "70703":"ÉPILA|41.6093|-1.301", "70704":"RUEDA DE JALÓN-LUMPIAQUE|41.6389|-1.2817", "70705":"PLASENCIA DE JALÓN|41.6893|-1.2342", "70706":"GRISÉN|41.7453|-1.1659", "70800":"CASETAS|41.7226|-1.0202", "70801":"UTEBO|41.7109|-0.9986",
+    "70806":"ZARAGOZA-PORTILLO|41.6527|-0.8959", "70807":"ZARAGOZA-GOYA|41.6439|-0.8913", "71100":"ZARAGOZA-MIRAFLORES|41.6334|-0.8682", "71103":"FUENTES DE EBRO|41.5151|-0.6186", "71105":"QUINTO|41.4195|-0.4907", "71108":"LA ZAIDA-SÁSTAGO|41.3205|-0.4271",
+    "71200":"LA PUEBLA DE HÍJAR|41.2244|-0.4386", "71201":"SAMPER|41.1822|-0.3688", "71204":"CASPE|41.2397|-0.0427", "71205":"VAL DE PILAS|41.2301|0.0701", "71206":"FABARA|41.2344|0.1433", "71207":"NONASPE|41.2138|0.2425",
+    "71208":"FAIÓ-LA POBLA DE MASSALUCA|41.2251|0.3511", "71209":"RIBA-ROJA D'EBRE|41.2486|0.481", "71210":"FLIX|41.2294|0.5401", "71211":"ASCÓ|41.1824|0.569", "71300":"MÓRA LA NOVA|41.1066|0.6532", "71302":"CAPÇANES|41.1021|0.7804",
+    "71303":"MARÇÀ-FALSET|41.1309|0.8104", "71304":"PRADELL|41.1334|0.8587", "71305":"DUESAIGÜES-L'ARGENTERA|41.1437|0.9209", "71306":"RIUDECANYES-BOTARELL|41.1401|0.9757", "71307":"LES BORGES DEL CAMP|41.1665|1.0221", "71400":"REUS|41.1605|1.1001",
+    "71401":"VILA-SECA|41.1128|1.1504", "71500":"TARRAGONA|41.1116|1.2532", "71502":"ALTAFULLA-TAMARIT|41.1366|1.3734", "71503":"TORREDEMBARRA|41.1428|1.4058", "71600":"SANT VICENÇ DE CALDERS|41.1862|1.5248", "71700":"VILANOVA I LA GELTRÚ|41.2203|1.7308",
+    "71801":"BARCELONA-SANTS|41.3799|2.141", "71802":"BARCELONA-PASSEIG DE GRÀCIA|41.3921|2.1653", "72101":"RODA DE MAR|41.1864|1.4552", "73001":"PUIGVERD DE LLEIDA-ARTESA|41.5537|0.7334", "73002":"JUNEDA|41.5439|0.8255", "73003":"LES BORGES BLANQUES|41.5214|0.8779",
+    "73004":"LA FLORESTA|41.5042|0.9244", "73005":"VINAIXA|41.4251|0.9704", "73006":"VIMBODÍ I POBLET|41.4027|1.046", "73007":"L'ESPLUGA DE FRANCOLÍ|41.4007|1.1034", "73008":"MONTBLANC|41.3766|1.1655", "73009":"VILAVERD|41.3377|1.1765",
+    "73010":"LA RIBA|41.3185|1.1813", "73100":"LA PLANA-PICAMOIXONS|41.3062|1.1949", "73101":"ALCOVER|41.2616|1.1742", "73102":"LA SELVA DEL CAMP|41.2112|1.144", "74200":"HUESCA|42.1336|-0.4097", "74204":"AYERBE|42.2756|-0.6826",
+    "74206":"RIGLOS|42.3448|-0.7316", "74207":"SANTA MARÍA Y LA PEÑA|42.3804|-0.6956", "74208":"ANZÁNIGO|42.4033|-0.6433", "74209":"CALDEARENAS-AQUILUÉ|42.398|-0.4993", "74211":"SABIÑÁNIGO|42.5204|-0.3731", "74213":"JACA|42.5783|-0.5392",
+    "74214":"CASTIELLO-PUEBLO|42.6281|-0.5463", "74216":"VILLANÚA|42.6887|-0.5235", "74217":"CANFRANC|42.7515|-0.5146", "75101":"ALCOLETGE|41.6543|0.6857", "75102":"VILANOVA DE LA BARCA|41.6874|0.7279", "75103":"TÉRMENS|41.7165|0.763",
+    "75104":"VALLFOGONA DE BALAGUER|41.7558|0.8056", "75105":"BALAGUER|41.7893|0.8147", "75106":"GERB|41.8233|0.812", "75107":"SANT LLORENÇ DE MONTGAI|41.8664|0.8324", "75108":"VILANOVA DE LA SAL|41.9121|0.8303", "75109":"SANTA LIÑA|41.9318|0.8524",
+    "75110":"AGER|42.0067|0.8516", "75111":"CELLERS-LLIMIANA|42.0587|0.8829", "75112":"GUARDIA DE TREMP|42.1014|0.888", "75113":"PALAU-PUIGCERCOS|42.147|0.8924", "75114":"TREMP|42.1674|0.8911", "75115":"SALAS DE PALLARS|42.2068|0.9404",
+    "75116":"LA POBLA DE SEGUR|42.2399|0.9661", "76001":"SALOMÓ|41.2234|1.3766", "76002":"VILABELLA|41.2395|1.3175", "76003":"NULLES-BRÀFIM|41.2503|1.2975", "76004":"VALLS|41.2896|1.2587", "78005":"VILLANUEVA DE GÁLLEGO|41.7655|-0.8222",
+    "78200":"TARDIENTA|41.9757|-0.5382", "78201":"GRAÑÉN|41.938|-0.3693", "78203":"SARIÑENA|41.8175|-0.1708", "78301":"MONZÓN-RÍO CINCA|41.9137|0.1969", "78302":"BINÉFAR|41.8498|0.2915", "78400":"LLEIDA-PIRINEUS|41.6201|0.6337",
+    "78402":"BELL-LLOC D'URGELL|41.6316|0.7815", "78403":"MOLLERUSSA|41.6318|0.8968", "78404":"GOLMÉS|41.6359|0.9309", "78405":"CASTELLNOU DE SEANA|41.6375|0.9677", "78406":"BELLPUIG|41.6325|1.013", "78407":"ANGLESOLA|41.6464|1.0792",
+    "78408":"TÀRREGA|41.6504|1.139", "78500":"CERVERA|41.6736|1.2748", "78501":"SANT GUIM DE FREIXENET|41.6559|1.4205", "78502":"SANT MARTÍ SESGUEIOLES|41.7012|1.4862", "78503":"CALAF|41.7303|1.5151", "78504":"SEGUERS-SANT PERE SALLAVINERA|41.748|1.5742",
+    "78505":"AGUILAR DE SEGARRA|41.7389|1.6237", "78506":"RAJADELL|41.7332|1.6963", "78600":"MANRESA|41.7204|1.8265", "78604":"SANT VICENÇ DE CASTELLET|41.6688|1.8626", "78700":"TERRASSA ESTACIÓ DEL NORD|41.5698|2.0144", "79004":"BARCELONA-SANT ANDREU|41.4361|2.1932",
+    "79009":"BARCELONA-EL CLOT|41.4093|2.1872", "79100":"GRANOLLERS-CENTRE|41.5997|2.2913", "79104":"SANT CELONI|41.6858|2.4907", "79105":"GUALBA|41.7182|2.5388", "79106":"RIELLS I VIABREA-BREDA|41.7264|2.5689", "79107":"HOSTALRIC|41.7478|2.6317",
+    "79200":"MAÇANET-MASSANES|41.7724|2.6739", "79202":"SILS|41.8076|2.745", "79203":"CALDES DE MALAVELLA|41.8411|2.8008", "79204":"RIUDELLOTS|41.8963|2.8116", "79205":"FORNELLS DE LA SELVA|41.935|2.8098", "79300":"GIRONA|41.9794|2.8169",
+    "79301":"CELRÀ|42.0272|2.8749", "79302":"BORDILS-JUIÀ|42.0371|2.9153", "79303":"FLAÇÀ|42.0475|2.9574", "79304":"SANT JORDI DESVALLS|42.0683|2.9645", "79305":"CAMALLERA|42.1223|2.9654", "79306":"SANT MIQUEL DE FLUVIÀ|42.1721|2.9896",
+    "79308":"VILAMALLA|42.2164|2.9778", "79309":"FIGUERES|42.2651|2.9688", "79311":"VILAJUÏGA|42.3257|3.0875", "79312":"LLANÇÀ|42.3666|3.149", "79314":"COLERA|42.4069|3.1543", "79315":"PORTBOU|42.4246|3.158",
+    "79316":"CERBÈRE|42.4417|3.1631", "79400":"BARCELONA ESTACIÓ DE FRANÇA|41.3845|2.1853", "80001":"ALTSASU-PUEBLO|42.8933|-2.1674", "80003":"ETXARRI-ARANATZ|42.9111|-2.0712", "80005":"UHARTE-ARAKIL|42.9206|-1.9748", "80100":"PAMPLONA/IRUÑA|42.8249|-1.6614",
+    "80108":"TAFALLA|42.5258|-1.6715", "80109":"OLITE-ERRIBERRI|42.485|-1.65", "80114":"MARCILLA DE NAVARRA|42.3349|-1.7174", "80115":"VILLAFRANCA DE NAVARRA|42.2807|-1.7457", "81002":"HARO|42.5836|-2.8494", "81100":"LOGROÑO|42.4575|-2.4422",
+    "81102":"AGONCILLO|42.4436|-2.2917", "81105":"ALCANADRE|42.4074|-2.1221", "81106":"FÉCULAS-NAVARRA|42.4111|-2.0982", "81108":"CALAHORRA|42.3105|-1.9578", "81109":"RINCÓN DE SOTO|42.23|-1.8475", "81110":"ALFARO|42.1865|-1.748",
+    "81200":"CASTEJÓN DE EBRO|42.1727|-1.6921", "81202":"TUDELA DE NAVARRA|42.0594|-1.5979", "81203":"RIBAFORADA|41.997|-1.5151", "81205":"CORTES DE NAVARRA|41.9151|-1.4204", "81206":"GALLUR|41.8672|-1.3213", "81207":"LUCENI|41.8261|-1.2435",
+    "81208":"PEDROLA|41.8052|-1.2017", "81209":"CABAÑAS DE EBRO|41.7881|-1.1675", "81210":"ALAGÓN|41.7714|-1.1128", "82100":"SORIA|41.7548|-2.4765", "84101":"ALMAZÁN-VILLA|41.489|-2.5254", "84103":"TARDELCUENDE|41.5935|-2.6393",
+    "84104":"QUINTANA REDONDA|41.6397|-2.6097", "87088":"NARBONNE|43.1903|3.0057", "87089":"MARSEILLE ST CHARLES|43.3035|5.3822", "87173":"MONTPELLIER SAINT-ROCH|43.6049|3.8805", "87302":"NIMES|43.8323|4.3658", "87303":"LYON PART DIEU|45.7603|4.8598",
+    "87374":"PERPIGNAN|42.6964|2.8804", "87810":"VALENCE TGV|44.9915|4.9787", "87814":"AVIGNON TGV|43.9219|4.7858", "87912":"AIX EN PROVENCE TGV|43.4553|5.3172", "92102":"TOLEDO|39.8623|-4.0112", "94002":"DAIMIEL|39.0616|-3.6042",
+    "94004":"ALMAGRO|38.8953|-3.7098", "94021":"NINE|41.4553|-8.5451", "94033":"VIANA DA CASTELO|41.6952|-8.8313", "94346":"PORTO CAMPANHA - O PORTO CAMPAÑA|41.1489|-8.5854", "96122":"BARCELOS|41.5367|-8.6091", "97004":"PORTAVE.FERRARI|41.0847|1.1493",
+    "97015":"PORTAVENTURA|41.0889|1.1398", "97017":"SANT SADURNÍ D'ANOIA|41.4198|1.7942", "97100":"PITIS|40.4954|-3.7262", "97200":"MIRASIERRA-PACO DE LUCÍA|40.4998|-3.7093", "97201":"MADRID-RAMÓN Y CAJAL|40.4881|-3.6948", "98000":"MADRID - ATOCHA CERCANÍAS|40.4065|-3.6894",
+    "98103":"ALCALÁ DE HENARES|40.489|-3.3658", "99117":"OURENSE-TURÍSTICO|42.3504|-7.8728", "99143":"A CORUÑA-TURÍSTICO|43.3528|-8.4098", "99159":"SANTIAGO-TURÍSTICO|42.8708|-8.5447", "99161":"PONTEVEDRA-TURÍSTICO|42.422|-8.6355", "99173":"OVIEDO-TUR|43.3668|-5.8543",
+    "99180":"SORIA ENLACE AVE|41.7548|-2.4765",
+    "99999":"EN RUTA"
   };
 
   /* ---------- Elementos ---------- */
   const $ = id => document.getElementById(id);
   const el = {
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
-    interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
+    interval: $("interval"), btnResetView: $("btnResetView"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
     thOrange: $("thOrange"), thSpeed: $("thSpeed"), thPersist: $("thPersist"),
+    enableAiAudit: $("enableAiAudit"), aiProvider: $("aiProvider"), aiKeyWrap: $("aiKeyWrap"), aiApiKey: $("aiApiKey"),
+    lblAiProvider: $("lblAiProvider"), aiStats: $("aiStats"), btnReauditAll: $("btnReauditAll"), llmDebugLog: $("llmDebugLog"),
     showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"), showOrmTiles: $("showOrmTiles"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
@@ -715,8 +1153,8 @@
     lblSource: $("lblSource"), lblBase: $("lblBase"), helpModal: $("helpModal")
   };
 
-  /* ---------- Mapa Base y Capa Oficial OpenRailwayMap (Única capa visual de vías) ---------- */
-  const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
+  /* ---------- Mapa Base y Capa Oficial OpenRailwayMap ---------- */
+  const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView(SPAIN_DEFAULT_CENTER, SPAIN_DEFAULT_ZOOM);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const BASES = {
     gris:   { url: ESRI + "Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 16, maxZoom: 18, attribution: "Tiles &copy; Esri" } },
@@ -746,7 +1184,7 @@
 
   const GRID_SIZE = 0.08;
 
-  const TRACKS = {
+const TRACKS = {
     av: {
       name: "AV", minKm: 0.015, key: "avTrack_v18",
       queries: [
@@ -755,7 +1193,7 @@
       loaded: false, osmLoaded: false, loading: false, n: 0, grid: new Map(), ways: []
     },
     md: {
-      name: "MD/Conv", minKm: 0.025, key: "mdTrack_v18",
+      name: "MD/Conv", minKm: 0.020, key: "mdTrack_v18",
       queries: [
         '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;'
       ],
@@ -764,12 +1202,13 @@
   };
 
   const OVERPASS = [
-    "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter"
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass-api.de/api/interpreter"
   ];
 
   const toNum = v => (v === null || v === undefined || v === "") ? NaN : parseFloat(String(v).replace(",", "."));
+  const isNum = v => typeof v === "number" && Number.isFinite(v);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const R = 6371.0088, rad = x => x * Math.PI / 180;
   function haversine(la1, lo1, la2, lo2) {
@@ -779,7 +1218,7 @@
   }
   const fmtKm = d => d < 1 ? Math.round(d * 1000) + " m" : d.toFixed(2) + " km";
   const fmtImpactTime = sec => {
-    if (!isFinite(sec) || sec <= 0) return "Vel. igualada";
+    if (!isNum(sec) || sec <= 0) return "Vel. igualada";
     const s = Math.round(sec);
     if (s < 60) return `${s} s`;
     const m = Math.floor(s / 60);
@@ -796,6 +1235,519 @@
     return remS > 0 ? `${m}m ${remS}s` : `${m}m`;
   };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
+
+  /* ---------- Gestión Estricta de Cola LLM 1 a 1 con Cancelación Automática (AbortController) ---------- */
+  // aiAuditCache: pairKey -> { status: 'queued'|'in_flight'|'done', verdict, confidence, reason, source, llmDone, llmVerified, llmTs }
+  const aiAuditCache = new Map();
+  const llmQueue = []; // Lista FIFO ordenada de { pairKey, pairObj, localEval }
+  let currentLlmTask = null; // { pairKey, controller }
+
+  try {
+    const savedProv = localStorage.getItem("aiProviderRenfe");
+    const savedKey  = localStorage.getItem("aiApiKeyRenfe");
+    if (savedProv && ["pollinations", "gemini", "groq", "local"].includes(savedProv)) el.aiProvider.value = savedProv;
+    if (savedKey) el.aiApiKey.value = savedKey;
+  } catch (e) {}
+
+  function syncAiProviderUi() {
+    const prov = el.aiProvider.value;
+    el.aiKeyWrap.style.display = (prov === "gemini" || prov === "groq") ? "block" : "none";
+    el.lblAiProvider.textContent = prov === "pollinations"
+      ? "IA: GPT-4o-mini (LLM)"
+      : (prov === "gemini" ? "IA: Gemini Flash" : (prov === "groq" ? "IA: Groq Llama 3.3" : "IA: Reglas CTC"));
+    try {
+      localStorage.setItem("aiProviderRenfe", prov);
+      localStorage.setItem("aiApiKeyRenfe", el.aiApiKey.value.trim());
+    } catch (e) {}
+  }
+  el.aiProvider.addEventListener("change", () => {
+    syncAiProviderUi();
+    if (currentLlmTask) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+    }
+    llmQueue.length = 0;
+    aiAuditCache.clear();
+    if (trains.length) {
+      computeProximity();
+      render();
+    }
+  });
+  el.aiApiKey.addEventListener("change", syncAiProviderUi);
+  syncAiProviderUi();
+
+  function getCommercialRank(tipoStr) {
+    const t = (tipoStr || "").toUpperCase();
+    if (t === "AVE" || t === "AVLO" || t === "EUROMED") return 4;
+    if (t === "ALVIA" || t === "AVANT" || t === "INTERCITY" || t === "ALTARIA" || t === "TALGO") return 3;
+    if (t === "MD" || t === "REG.EXP" || t === "REGIONAL") return 2;
+    return 1;
+  }
+
+  function evaluateAlertWithCtcBrain(trailing, leading, distKm, geomSeverity, minSpeedKmh) {
+    const infoT = trailing._info || trainInfo(trailing);
+    const infoL = leading._info || trainInfo(leading);
+    const vT = isNum(trailing.calcSpeed) ? trailing.calcSpeed : 0;
+    const vL = isNum(leading.calcSpeed) ? leading.calcSpeed : 0;
+    const dv = vT - vL;
+
+    if (distKm <= 0.25 && Math.abs(dv) <= 5 && ((infoT.dest && infoT.dest === infoL.dest) || (infoT.sig && infoT.sig === infoL.sig))) {
+      return {
+        verdict: "COUPLED",
+        confidence: 99,
+        reason: `Doble composición acoplada en mando múltiple (${Math.round(distKm * 1000)}m · Δv=${Math.abs(dv)} km/h)`
+      };
+    }
+
+    if (infoT.orig && infoT.dest && infoL.orig && infoL.dest) {
+      if (infoT.orig === infoL.dest || infoT.dest === infoL.orig) {
+        return { verdict: "DOWNGRADED_ORANGE", confidence: 99, reason: `Sentido comercial opuesto (${infoT.orig}→${infoT.dest} vs ${infoL.orig}→${infoL.dest})` };
+      }
+      if (infoT.sig && infoL.ant && infoT.sig === infoL.ant) {
+        return { verdict: "DOWNGRADED_ORANGE", confidence: 98, reason: `Se cruzan entre ${infoL.ant} y ${infoT.sig} en vías contrarias` };
+      }
+    }
+
+    const destCoordT = findStationCoords(infoT.dest) || findStationCoords(infoT.sig);
+    const destCoordL = findStationCoords(infoL.dest) || findStationCoords(infoL.sig);
+    if (destCoordT && destCoordL && haversine(destCoordT[0], destCoordT[1], destCoordL[0], destCoordL[1]) > 40) {
+      const kLon = Math.cos(((trailing.lat + leading.lat) / 2) * Math.PI / 180);
+      const vTx = (destCoordT[1] - trailing.lon) * kLon, vTy = destCoordT[0] - trailing.lat;
+      const vLx = (destCoordL[1] - leading.lon) * kLon, vLy = destCoordL[0] - leading.lat;
+      const mT = Math.hypot(vTx, vTy), mL = Math.hypot(vLx, vLy);
+      if (mT > 0.1 && mL > 0.1 && ((vTx * vLx + vTy * vLy) / (mT * mL)) < -0.25) {
+        return { verdict: "DOWNGRADED_ORANGE", confidence: 95, reason: `Progresión opuesta hacia destinos contrarios (${infoT.dest} vs ${infoL.dest})` };
+      }
+    }
+
+    const rawT = trailing.raw || {}, rawL = leading.raw || {};
+    const nucT = String(rawT.nucleo ?? rawT.idNucleo ?? "").trim();
+    const nucL = String(rawL.nucleo ?? rawL.idNucleo ?? "").trim();
+    if (nucT && nucL && nucT !== nucL) {
+      return { verdict: "DOWNGRADED_ORANGE", confidence: 99, reason: `Núcleos de Cercanías distintos (${nucT} vs ${nucL})` };
+    }
+
+    const rankT = getCommercialRank(trailing.tipo);
+    const rankL = getCommercialRank(leading.tipo);
+    if (vL <= 3 && isNearAnyKnownStation(leading.lat, leading.lon, 0.7)) {
+      const stName = infoL.sig || infoL.ant || "estación intermedia";
+      if (rankT > rankL) {
+        return {
+          verdict: "DOWNGRADED_ORANGE",
+          confidence: 92,
+          reason: `Rebase programado: ${leading.tipo} apartado en ${stName} para paso de ${trailing.tipo}`
+        };
+      }
+      if (distKm > 2.2) {
+        return {
+          verdict: "DOWNGRADED_ORANGE",
+          confidence: 85,
+          reason: `Delantero realizando parada comercial (0 km/h) en ${stName} a ${fmtKm(distKm)}`
+        };
+      }
+    }
+
+    const linT = String(rawT.linea ?? rawT.lineaComercial ?? rawT.Línea ?? "").trim().toUpperCase();
+    const linL = String(rawL.linea ?? rawL.lineaComercial ?? rawL.Línea ?? "").trim().toUpperCase();
+
+    if (infoT.dest && infoL.dest && infoT.dest !== infoL.dest && infoT.sig && infoL.sig && infoT.sig !== infoL.sig) {
+      return {
+        verdict: "DOWNGRADED_ORANGE",
+        confidence: 82,
+        reason: `Próximas paradas distintas (${infoT.sig} vs ${infoL.sig}); probable bifurcación de vía`
+      };
+    }
+
+    const ttiSec = dv > 0 ? (distKm / dv) * 3600 : Infinity;
+    const sameCorridor = (infoT.sig && infoT.sig === infoL.sig) || (infoT.dest && infoT.dest === infoL.dest) || (linT && linT === linL);
+
+    if (geomSeverity !== "red" && sameCorridor) {
+      if (trailing.speedMeasures === 1 && vT > minSpeedKmh && dv >= 15 && distKm <= 3.5) {
+        return {
+          verdict: "PROMOTED_FROM_GREEN",
+          confidence: 91,
+          reason: `Era 🟢 Verde (1 sola lectura GPS tras túnel/salida) pero alcanza a +${dv} km/h hacia ${infoT.sig || infoT.dest}`
+        };
+      }
+      if (vT >= 45 && dv >= 25 && ttiSec <= 120 && distKm <= 2.8 && !isNearAnyKnownStation(leading.lat, leading.lon, 0.6)) {
+        return {
+          verdict: "PROMOTED_FROM_ORANGE",
+          confidence: 94,
+          reason: `Era 🟠 Naranja (${vT} km/h) pero impacta en ${fmtImpactTime(ttiSec)} con tren a ${vL} km/h hacia ${infoT.sig || infoT.dest}`
+        };
+      }
+    }
+
+    if (infoT.sig && infoL.sig && infoT.sig === infoL.sig) {
+      return {
+        verdict: "REAL",
+        confidence: 96,
+        reason: `Misma vía y próxima parada (${infoT.sig}); recorta a +${dv} km/h`
+      };
+    }
+    if (infoT.dest && infoL.dest && infoT.dest === infoL.dest) {
+      return {
+        verdict: "REAL",
+        confidence: 94,
+        reason: `Mismo destino final (${infoT.dest})${linT ? " en línea " + linT : ""}; recorta a +${dv} km/h`
+      };
+    }
+    if (linT && linL && linT === linL) {
+      return {
+        verdict: "REAL",
+        confidence: 92,
+        reason: `Comparten línea ${linT} en el mismo sentido; diferencia de +${dv} km/h`
+      };
+    }
+
+    const routeDesc = infoT.dest ? `hacia ${infoT.dest}` : `en vía ${trailing.trackGroup}`;
+    return {
+      verdict: "REAL",
+      confidence: 88,
+      reason: `Mismo sentido sobre raíl ${routeDesc}; recorta a +${dv} km/h`
+    };
+  }
+
+  function buildLlmPromptForPair(p, localEval) {
+    const tr = p.trailing, ld = p.leading;
+    const infoT = tr._info || trainInfo(tr);
+    const infoL = ld._info || trainInfo(ld);
+    const vT = isNum(tr.calcSpeed) ? tr.calcSpeed : 0;
+    const vL = isNum(ld.calcSpeed) ? ld.calcSpeed : 0;
+
+    return `Audita esta alerta del panel de Alertas Rojas ferroviarias en España y determina si existe riesgo real de alcance en la misma vía o si debe rebajarse a precaución naranja:
+
+[TREN TRASERO]
+- Tren: ${infoT.tipo} ${infoT.numero} (Vía: ${tr.trackGroup})
+- Ruta: Origen "${infoT.orig || "N/D"}" -> Destino "${infoT.dest || "N/D"}"
+- Tramo: Anterior "${infoT.ant || "N/D"}" -> Próxima "${infoT.sig || "N/D"}"
+- Velocidad: ${vT} km/h | Rumbo: ${Math.round(tr.bearing ?? 0)}° | Pos: [${tr.lat.toFixed(4)}, ${tr.lon.toFixed(4)}]
+
+[TREN DELANTERO]
+- Tren: ${infoL.tipo} ${infoL.numero} (Vía: ${ld.trackGroup})
+- Ruta: Origen "${infoL.orig || "N/D"}" -> Destino "${infoL.dest || "N/D"}"
+- Tramo: Anterior "${infoL.ant || "N/D"}" -> Próxima "${infoL.sig || "N/D"}"
+- Velocidad: ${vL} km/h | Rumbo: ${Math.round(ld.bearing ?? 0)}° | Pos: [${ld.lat.toFixed(4)}, ${ld.lon.toFixed(4)}]
+
+[ENCUENTRO]
+- Distancia por vía: ${fmtKm(p.d)} | Cierre: +${vT - vL} km/h | Impacto: ${fmtImpactTime(p.impactSec)}
+- Estado geométrico inicial: ${p.geomSeverity.toUpperCase()}
+- Pre-diagnóstico CTC local: ${localEval.verdict} (${localEval.reason})
+
+Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
+{"verdict":"REAL"|"DOWNGRADED_ORANGE"|"PROMOTED_RED","confidence":90,"reason":"Explicación técnica del LLM en español (máx 16 palabras) citando estaciones o vía"}`;
+  }
+
+let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 429
+
+  async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
+    const prov = el.aiProvider.value;
+    const apiKey = el.aiApiKey.value.trim();
+    const sysMsg = "Eres un Ingeniero Jefe del CTC de Adif en España. Analizas telemetría ferroviaria y respondes exclusivamente en JSON válido con las claves verdict, confidence y reason.";
+
+    // 1. GOOGLE GEMINI 2.5 FLASH-LITE (Con API Key gratuita: hasta 1.500 peticiones/día gratis)
+    if (prov === "gemini") {
+      if (!apiKey) throw new Error("Falta tu API Key de Gemini (créala gratis en aistudio.google.com)");
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal,
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: sysMsg + "\n\n" + promptText }] }],
+          generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+        })
+      });
+      if (!r.ok) {
+        const errTxt = await r.text().catch(() => "");
+        throw new Error(`Gemini HTTP ${r.status}: ${errTxt.slice(0, 80)}`);
+      }
+      const j = await r.json();
+      return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "☁️ LLM: Gemini 2.5 Flash-Lite", isCloud: true };
+    }
+
+    // 2. GROQ LLAMA 3.3 70B (Con API Key gratuita: hasta 14.400 peticiones/día gratis)
+    if (prov === "groq") {
+      if (!apiKey) throw new Error("Falta tu API Key de Groq (créala gratis en console.groq.com)");
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        signal,
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          temperature: 0.1,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: sysMsg },
+            { role: "user", content: promptText }
+          ]
+        })
+      });
+      if (!r.ok) throw new Error("Groq HTTP " + r.status);
+      const j = await r.json();
+      return { text: j.choices?.[0]?.message?.content || "", modelName: "☁️ LLM: Llama 3.3 70B", isCloud: true };
+    }
+
+    // 3. MODO GRATUITO SIN API KEY: Pollinations text API (no requiere registro)
+    if (Date.now() >= freeCloudCooldownUntil) {
+      try {
+        const stepCtl = new AbortController();
+        const tId = setTimeout(() => stepCtl.abort(), 12000);
+        const onAbort = () => stepCtl.abort();
+        signal?.addEventListener("abort", onAbort, { once: true });
+
+        const fullPrompt = encodeURIComponent(sysMsg + "\n\n" + promptText);
+        const rFree = await fetch(`https://text.pollinations.ai/${fullPrompt}?model=openai&json=true&seed=${Math.floor(Math.random()*99999)}`, {
+          method: "GET",
+          signal: stepCtl.signal
+        });
+        clearTimeout(tId);
+        signal?.removeEventListener("abort", onAbort);
+
+        if (rFree.ok) {
+          const textFree = await rFree.text();
+          if (textFree && textFree.includes("{")) {
+            return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
+          }
+        } else if (rFree.status === 429 || rFree.status === 503) {
+          freeCloudCooldownUntil = Date.now() + 120000; // 2 min de cooldown
+        }
+      } catch (e) {
+        if (signal?.aborted) throw e;
+      }
+    }
+
+    // Respaldo instantáneo por Reglas CTC Locales mientras la pasarela está en enfriamiento
+    const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
+    return {
+      text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
+      modelName: "⚡ CTC Local (Enfriando cuota nube)",
+      isCloud: false
+    };
+  }
+  function parseLlmJsonVerdict(rawText, fallbackEval) {
+    const cleaned = String(rawText || "").replace(/```json|```/gi, "").trim();
+    let obj = null;
+
+    try {
+      obj = JSON.parse(cleaned);
+    } catch (_) {
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { obj = JSON.parse(match[0]); } catch (_2) {}
+      }
+    }
+
+    if (obj && obj.choices?.[0]?.message?.content) {
+      return parseLlmJsonVerdict(obj.choices[0].message.content, fallbackEval);
+    }
+
+    if (!obj || typeof obj !== "object") {
+      throw new Error("Respuesta sin JSON válido: " + cleaned.slice(0, 90));
+    }
+
+    const vRaw = String(obj.verdict || obj.estado || obj.status || fallbackEval.verdict).toUpperCase();
+    let verdict = fallbackEval.verdict;
+    if (vRaw.includes("DOWN") || vRaw.includes("DESCART") || vRaw.includes("ORANGE") || vRaw.includes("NARANJA") || vRaw.includes("DUD")) {
+      verdict = "DOWNGRADED_ORANGE";
+    } else if (vRaw.includes("PROMO")) {
+      verdict = fallbackEval.verdict.startsWith("PROMOTED") ? fallbackEval.verdict : "PROMOTED_FROM_ORANGE";
+    } else if (vRaw.includes("REAL") || vRaw.includes("ROJ") || vRaw.includes("RED") || vRaw.includes("PELIGRO")) {
+      verdict = "REAL";
+    }
+
+    const conf = Math.min(99, Math.max(55, parseInt(obj.confidence ?? obj.confianza, 10) || fallbackEval.confidence));
+    const reason = String(obj.reason || obj.motivo || obj.explicacion || fallbackEval.reason).trim();
+
+    return { verdict, confidence: conf, reason };
+  }
+
+  function updateQueuePositionLabels() {
+    llmQueue.forEach((qItem, index) => {
+      const entry = aiAuditCache.get(qItem.pairKey);
+      if (entry && !entry.llmDone) {
+        entry.status = "queued";
+        entry.source = `⏳ En cola LLM (#${index + 1})`;
+      }
+    });
+  }
+
+  function syncLlmQueueWithActivePairs(activeLlmKeys) {
+    for (let i = llmQueue.length - 1; i >= 0; i--) {
+      const k = llmQueue[i].pairKey;
+      if (!activeLlmKeys.has(k)) {
+        llmQueue.splice(i, 1);
+        aiAuditCache.delete(k);
+      }
+    }
+
+    if (currentLlmTask && !activeLlmKeys.has(currentLlmTask.pairKey)) {
+      el.llmDebugLog.textContent = `[CANCELADA CONSULTA LLM para ${currentLlmTask.pairKey} por salir del panel rojo superior]\nPasando inmediatamente al siguiente par en cola…`;
+      currentLlmTask.controller.abort();
+      aiAuditCache.delete(currentLlmTask.pairKey);
+      currentLlmTask = null;
+    }
+
+    updateQueuePositionLabels();
+  }
+
+  function enqueueLlmAudit(pairObj, localEval) {
+    if (el.aiProvider.value === "local") return;
+    const key = pairObj.pairKey;
+    const cached = aiAuditCache.get(key);
+
+    // Si ya fue verificado por el LLM en nube, mantenemos su veredicto 10 minutos (600.000 ms) para no gastar cuota;
+    // si se resolvió en local por enfriamiento 429, reintentamos nube a los 35 segundos.
+    if (cached && cached.llmDone) {
+      const ttl = cached.llmVerified ? 600000 : 90000;
+      if (Date.now() - cached.llmTs < ttl) return;
+      cached.llmDone = false;
+      cached.status = "queued";
+    }
+    if (currentLlmTask && currentLlmTask.pairKey === key) return;
+
+    const existingIdx = llmQueue.findIndex(item => item.pairKey === key);
+    if (existingIdx !== -1) {
+      llmQueue[existingIdx].pairObj = pairObj;
+      llmQueue[existingIdx].localEval = localEval;
+      updateQueuePositionLabels();
+      processNextLlmInQueue();
+      return;
+    }
+
+    llmQueue.push({ pairKey: key, pairObj, localEval });
+    llmQueue.sort((x, y) => {
+      const xDown = x.pairObj.downgradedByAi ? 1 : 0;
+      const yDown = y.pairObj.downgradedByAi ? 1 : 0;
+      if (xDown !== yDown) return xDown - yDown;
+      return (x.pairObj.impactSec ?? Infinity) - (y.pairObj.impactSec ?? Infinity);
+    });
+    updateQueuePositionLabels();
+    processNextLlmInQueue();
+  }
+
+  let nextQueueAllowedAt = 0;
+
+  async function processNextLlmInQueue() {
+    if (currentLlmTask !== null || !llmQueue.length || el.aiProvider.value === "local") return;
+
+    const waitMs = nextQueueAllowedAt - Date.now();
+    if (waitMs > 0) {
+      setTimeout(processNextLlmInQueue, waitMs);
+      return;
+    }
+
+    const item = llmQueue.shift();
+    updateQueuePositionLabels();
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    currentLlmTask = { pairKey: item.pairKey, controller };
+
+    const entry = aiAuditCache.get(item.pairKey);
+    if (entry) {
+      entry.status = "in_flight";
+      entry.source = "🧠 Consultando LLM…";
+    }
+    renderRedOverlayList();
+
+    const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
+    el.llmDebugLog.textContent = `[CONSULTANDO LLM (1 a 1) · ${item.pairKey} · En cola: ${llmQueue.length}]\n${prompt}`;
+
+    try {
+      const { text, modelName, isCloud } = await callRealLlmEndpoint(prompt, controller.signal, item.localEval);
+      clearTimeout(timeoutId);
+
+      const parsed = parseLlmJsonVerdict(text, item.localEval);
+
+      aiAuditCache.set(item.pairKey, {
+        status: "done",
+        verdict: parsed.verdict,
+        confidence: parsed.confidence,
+        reason: parsed.reason,
+        source: modelName,
+        llmDone: true,
+        llmVerified: !!isCloud,
+        llmTs: Date.now()
+      });
+
+      const headerLog = isCloud
+        ? `✅ [RESPUESTA NUBE (${modelName}) · ${new Date().toLocaleTimeString("es-ES")}]`
+        : `⏳ [PAUSA ANTI-429 EN SERVIDOR GRATUITO -> USANDO REGLAS CTC LOCALES (Reintento nube en 35s)]`;
+
+      el.llmDebugLog.textContent = `${headerLog}\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
+      el.llmDebugLog.scrollTop = 0;
+
+      currentLlmTask = null;
+      // Si usamos el proveedor sin API Key, dejamos 5.5 segundos entre cada consulta de la cola para no disparar 429
+      const cadenceMs = el.aiProvider.value === "pollinations" ? 5500 : 1200;
+      nextQueueAllowedAt = Date.now() + cadenceMs;
+
+      computeProximity();
+      render();
+
+      setTimeout(processNextLlmInQueue, cadenceMs + 50);
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const wasAborted = controller.signal.aborted;
+      currentLlmTask = null;
+
+      if (!wasAborted) {
+        const existing = aiAuditCache.get(item.pairKey);
+        if (existing) {
+          existing.status = "done";
+          existing.llmDone = true;
+          existing.llmVerified = false;
+          existing.llmTs = Date.now();
+          existing.source = "⚠️ Error API (reintento en 35s)";
+        }
+        el.llmDebugLog.textContent = `[AVISO LLM en ${item.pairKey}: ${err.message || err}]\nSe mantiene pre-diagnóstico CTC Local y se reintentará en 35s.`;
+        renderRedOverlayList();
+      }
+      setTimeout(processNextLlmInQueue, wasAborted ? 50 : 2500);
+    }
+  }
+  window.__analyzeAlert = function(btn) {
+    const pkey = btn.dataset.pkey;
+    const pairObj = pairs.find(p => p.pairKey === pkey);
+    if (!pairObj) return;
+    // Forzar análisis inmediato saltando la cola
+    const localEval = evaluateAlertWithCtcBrain(
+      pairObj.trailing, pairObj.leading, pairObj.d,
+      pairObj.geomSeverity, toNum(el.thSpeed.value) || 100
+    );
+    // Marcar como en vuelo para que el botón muestre "Analizando…"
+    aiAuditCache.set(pkey, {
+      status: "queued", verdict: localEval.verdict,
+      confidence: localEval.confidence, reason: localEval.reason,
+      source: "⏳ En cola LLM", llmDone: false, llmVerified: false, llmTs: 0
+    });
+    // Poner primero en la cola (máxima prioridad)
+    llmQueue.unshift({ pairKey: pkey, pairObj, localEval });
+    renderRedOverlayList();
+    processNextLlmInQueue();
+  };
+  el.btnReauditAll.addEventListener("click", () => {
+    if (currentLlmTask) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+    }
+    llmQueue.length = 0;
+    aiAuditCache.clear();
+    freeCloudCooldownUntil = 0;
+    nextQueueAllowedAt = 0;
+    computeProximity();
+    render();
+  });
+  el.enableAiAudit.addEventListener("change", () => {
+    if (!el.enableAiAudit.checked && currentLlmTask) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+      llmQueue.length = 0;
+    }
+    computeProximity();
+    render();
+  });
 
   /* ---------- Indexación Espacial en Memoria para Cálculo por Vía ---------- */
   function indexTrackWays(st, lines) {
@@ -875,7 +1827,6 @@
     if (tipo === "MD") return 160;
     if (tipo === "CERCANÍAS" || tipo === "REGIONAL" || tipo === "REG.EXP") return 140;
 
-    // ALVIA y trenes de ancho variable: 250 km/h en vía AVE y 220 km/h en vía convencional
     const sAV = TRACKS.av.loaded ? snapToTrackLayer(TRACKS.av, lat, lon) : null;
     const sMD = TRACKS.md.loaded ? snapToTrackLayer(TRACKS.md, lat, lon) : null;
     const dAV = sAV ? sAV.distToTrack : Infinity;
@@ -886,7 +1837,7 @@
     return 250;
   }
 
-  function computeLocalTrackRoute(a, b, maxAllowedKm) {
+function computeLocalTrackRoute(a, b, maxAllowedKm) {
     const preferAV = (a.trackGroup === "AV" || b.trackGroup === "AV");
     const layersToTry = preferAV ? [TRACKS.av, TRACKS.md] : [TRACKS.md, TRACKS.av];
 
@@ -1094,6 +2045,11 @@
     throw lastErr || new Error("sin datos");
   }
 
+  function proxify(url) {
+    const p = el.proxy.value.trim();
+    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
+  }
+
   async function fetchRenfeOfficialLines() {
     const base = SOURCES.ld.replace("flotaLD.json", "");
     for (const file of ["lineas.geojson", "lineasLD.geojson"]) {
@@ -1182,55 +2138,62 @@
     updateTrackStatus();
   });
 
-  /* ---------- Estado de Trenes y Memoria de Persistencia de Alertas Rojas ---------- */
+  /* ---------- Estado de Trenes y Descarga Automática del Dataset Oficial GTFS/Adif ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
-  // Mapa pairKey -> timestamp (ms) en que comenzó ininterrumpidamente la alerta roja para ese par
   const redAlertStart = new Map();
+  let selectedPairKey = null;
+  let selectedTrainIds = new Set();
 
-  const stations = new Map();
-  function registerStation(code, name) {
+const stations = new Map();
+  function registerStation(code, name, lat, lon) {
     if (code === undefined || code === null || !name) return;
-    const c = String(code).trim(), n = String(name).trim();
-    if (!c || !n || /^\d+$/.test(n)) return;
-    stations.set(c, n); stations.set(c.replace(/^0+/, ""), n); stations.set(c.padStart(5, "0"), n);
+    let c = String(code).trim();
+    let rawName = String(name).trim();
+    if (!c || !rawName) return;
+
+    // Si viene del diccionario de estaciones.xlsx con formato "DESCRIPCION|LATITUD|LONGITUD", lo desglosamos
+    if (rawName.includes("|")) {
+      const parts = rawName.split("|");
+      rawName = parts[0].trim();
+      if (!isNum(lat) && parts[1]) lat = parseFloat(parts[1]);
+      if (!isNum(lon) && parts[2]) lon = parseFloat(parts[2]);
+    }
+    if (!rawName || /^\d+$/.test(rawName)) return;
+
+    if (/^71\d{5}$/.test(c)) {
+      const short5 = c.slice(2);
+      stations.set(short5, rawName);
+      stations.set(short5.replace(/^0+/, ""), rawName);
+    }
+    stations.set(c, rawName);
+    stations.set(c.replace(/^0+/, ""), rawName);
+    stations.set(c.padStart(5, "0"), rawName);
+
+    if (isNum(lat) && isNum(lon)) {
+      dynamicStationCoords.set(rawName.toLowerCase(), [lat, lon]);
+      allStationCoordsList.push([lat, lon]);
+    }
   }
   Object.entries(DEFAULT_STATIONS).forEach(([k, v]) => registerStation(k, v));
+
+  async function loadOfficialAdifStations() {
+    // Las 1.033 estaciones oficiales de estaciones.xlsx ya están cargadas en memoria desde el inicio
+    el.aiStats.textContent = `${Object.keys(DEFAULT_STATIONS).length - 1} estaciones Adif activas`;
+    if (trains.length) { computeProximity(); render(); }
+  }
 
   function resolveStation(val) {
     if (val === undefined || val === null || val === "") return "";
     const s = String(val).trim();
     if (!s || s === "0" || s === "-") return "";
-    const found = stations.get(s) || stations.get(s.replace(/^0+/, "")) || stations.get(s.padStart(5, "0"));
+    const found = stations.get(s)
+      || stations.get(s.replace(/^0+/, ""))
+      || stations.get(s.padStart(5, "0"))
+      || (/^71\d{5}$/.test(s) ? stations.get(s.slice(2)) : "");
     if (found) return found;
-    if (/^\d+$/.test(s)) return "";
+    if (/^\d+$/.test(s)) return `Est. #${s.padStart(5, "0")}`;
     return s;
-  }
-
-  let stationsTried = false;
-  function proxify(url) {
-    const p = el.proxy.value.trim();
-    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
-  }
-  async function loadStations() {
-    if (stationsTried || el.source.value !== "ld") return;
-    stationsTried = true;
-    const base = SOURCES.ld.replace("flotaLD.json", "");
-    for (const file of ["estacionesEstatico.geojson", "estaciones.geojson"]) {
-      try {
-        const r = await fetch(proxify(base + file));
-        if (!r.ok) continue;
-        const g = await r.json();
-        (g.features || []).forEach(f => {
-          const pr = f.properties || {};
-          const keys = Object.keys(pr);
-          const kc = keys.find(k => /(cod|id|estacion|clave)/i.test(k) && (typeof pr[k] === "number" || /^\d+$/.test(String(pr[k]).trim())));
-          const kn = keys.find(k => /(nom|name|desc|titulo|label)/i.test(k) && typeof pr[k] === "string" && !/^\d+$/.test(pr[k].trim()));
-          if (kc && kn) registerStation(pr[kc], pr[kn]);
-        });
-        break;
-      } catch (e) {}
-    }
   }
 
   function extractList(data) {
@@ -1328,7 +2291,7 @@
     }
 
     const rawVel = toNum(trainObj.raw && (trainObj.raw.velocidad ?? trainObj.raw.vel ?? trainObj.raw.speed ?? trainObj.raw["Velocidad (km/h)"]));
-    if (h.calcSpeed === null && isFinite(rawVel) && rawVel >= 0) {
+    if (h.calcSpeed === null && isNum(rawVel) && rawVel >= 0) {
       h.calcSpeed = Math.min(maxSpeed, Math.round(rawVel));
       h.measures = 2;
     }
@@ -1347,7 +2310,7 @@
     const findKey = (o, re) => { for (const k of Object.keys(o)) if (re.test(k) && o[k] !== null && o[k] !== "" && typeof o[k] !== "object") return o[k]; };
     const lat = toNum(pos.latitud ?? pos.lat ?? pos.latitude ?? pos.Latitud ?? findKey(pos, /^lat/i));
     const lon = toNum(pos.longitud ?? pos.lon ?? pos.lng ?? pos.long ?? pos.longitude ?? pos.Longitud ?? findKey(pos, /^(lon|lng)/i));
-    if (!isFinite(lat) || !isFinite(lon)) return null;
+    if (!isNum(lat) || !isNum(lon)) return null;
     if (lat < SPAIN_BOUNDS.latMin || lat > SPAIN_BOUNDS.latMax || lon < SPAIN_BOUNDS.lonMin || lon > SPAIN_BOUNDS.lonMax) return null;
 
     let id, label, raw = {};
@@ -1361,6 +2324,13 @@
       id = codTren ?? codCom ?? ("t" + idx);
       label = codCom ?? codTren ?? id;
       raw = item;
+    }
+
+    if (raw && typeof raw === "object") {
+      if (raw.codOrigen && raw.desOrigen && !/^\d+$/.test(String(raw.desOrigen))) registerStation(raw.codOrigen, raw.desOrigen);
+      if (raw.codDestino && raw.desDestino && !/^\d+$/.test(String(raw.desDestino))) registerStation(raw.codDestino, raw.desDestino);
+      if (raw.codEstSig && raw.desEstSig && !/^\d+$/.test(String(raw.desEstSig))) registerStation(raw.codEstSig, raw.desEstSig);
+      if (raw.codEstAnt && raw.desEstAnt && !/^\d+$/.test(String(raw.desEstAnt))) registerStation(raw.codEstAnt, raw.desEstAnt);
     }
 
     const isCercSource = el.source.value === "visor" || el.source.value === "gtfsrt";
@@ -1392,13 +2362,13 @@
     const orig = resolveStation(origRaw), dest = resolveStation(destRaw), sig = resolveStation(sigRaw), ant = resolveStation(antRaw);
     const horaSal = r.horaSalida ?? r.salida ?? get(/hora.*sal/i) ?? "", horaLleg = r.horaLlegada ?? r.llegada ?? get(/hora.*lleg/i) ?? "";
     const maxSpd = t.maxAllowedSpeed || getMaxSpeedForTrain(t.tipo, t.lat, t.lon);
-    const rawVel = t.calcSpeed !== null && t.calcSpeed !== undefined ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
-    const vel = isFinite(rawVel) && rawVel >= 0 ? Math.min(maxSpd, Math.round(rawVel)) : null;
+    const rawVel = isNum(t.calcSpeed) ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
+    const vel = isNum(rawVel) && rawVel >= 0 ? Math.min(maxSpd, Math.round(rawVel)) : null;
     const ret = toNum(r.retraso ?? r.demora ?? r.delay ?? get(/retraso|demora/i));
     const mat = r.mat ?? r.material ?? r.composicion ?? "", corredor = r.corredor ?? r.linea ?? r.nucleo ?? r.Línea ?? "";
 
     let retHtml = "";
-    if (isFinite(ret)) {
+    if (isNum(ret)) {
       retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
     }
 
@@ -1439,7 +2409,7 @@
       } else if (dMD <= 1.2 && dMD < dAV * 0.85) {
         group = "CONV";
         bestSnap = sMD;
-      } else if (isFinite(t.calcSpeed) && t.calcSpeed > 220) {
+      } else if (isNum(t.calcSpeed) && t.calcSpeed > 220) {
         group = "AV";
         bestSnap = sAV;
       } else {
@@ -1452,13 +2422,14 @@
       ? (group === "CONV" ? 220 : 250)
       : getMaxSpeedForTrain(tipo, t.lat, t.lon);
     t.maxAllowedSpeed = maxSpeed;
-    if (t.calcSpeed !== null && t.calcSpeed > maxSpeed) {
+    if (isNum(t.calcSpeed) && t.calcSpeed > maxSpeed) {
       t.calcSpeed = maxSpeed;
     }
     if (t.speedsList && t.speedsList.length) {
       t.speedsList = t.speedsList.map(v => Math.min(v, maxSpeed));
     }
 
+    t.bestSnapSeg = bestSnap ? bestSnap.seg : null;
     if (bestSnap && bestSnap.distToTrack <= 0.8) {
       t.drawLat = bestSnap.snapLat;
       t.drawLon = bestSnap.snapLon;
@@ -1481,13 +2452,13 @@
     const cSig  = findStationCoords(x.sig);
     const cAnt  = findStationCoords(x.ant);
 
-    if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 3.0) {
+    if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 0.8) {
       return [cSig[0] - t.lat, cSig[1] - t.lon];
     }
     if (cAnt && cSig && (cAnt[0] !== cSig[0] || cAnt[1] !== cSig[1])) {
       return [cSig[0] - cAnt[0], cSig[1] - cAnt[1]];
     }
-    if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 5.0) {
+    if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 1.2) {
       return [cDest[0] - t.lat, cDest[1] - t.lon];
     }
     if (cOrig && cDest && (cOrig[0] !== cDest[0] || cOrig[1] !== cDest[1])) {
@@ -1496,73 +2467,129 @@
     return null;
   }
 
-  function cosBetweenVectors(v1Lat, v1Lon, v2Lat, v2Lon, refLat) {
-    const kLon = Math.cos((refLat || 40) * Math.PI / 180);
-    const x1 = v1Lon * kLon, y1 = v1Lat;
-    const x2 = v2Lon * kLon, y2 = v2Lat;
-    const m1 = Math.hypot(x1, y1), m2 = Math.hypot(x2, y2);
-    if (m1 < 1e-8 || m2 < 1e-8) return null;
-    return (x1 * x2 + y1 * y2) / (m1 * m2);
-  }
-
-  function areMovingSameDirection(a, b) {
-    const infoA = a._info, infoB = b._info;
-    const refLat = (a.lat + b.lat) / 2;
-
-    if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
-      if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return false;
-      if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return false;
-      if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return false;
-    }
-
-    const rA = a.routeVec, rB = b.routeVec;
-    if (rA && rB) {
-      const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
-      if (cosRoute !== null && cosRoute < 0.5) return false;
-    }
-
-    if (a.hasVector && b.hasVector) {
-      const cosGps = cosBetweenVectors(a.dLat, a.dLon, b.dLat, b.dLon, refLat);
-      if (cosGps !== null && cosGps < 0.5) return false;
-      return true;
-    }
-
-    if (a.hasVector && rB) {
-      const cosMix = cosBetweenVectors(a.dLat, a.dLon, rB[0], rB[1], refLat);
-      if (cosMix !== null && cosMix < 0.5) return false;
-    }
-    if (b.hasVector && rA) {
-      const cosMix = cosBetweenVectors(rA[0], rA[1], b.dLat, b.dLon, refLat);
-      if (cosMix !== null && cosMix < 0.5) return false;
-    }
-
-    if (rA && rB) {
-      const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
-      return cosRoute !== null && cosRoute > 0.65;
-    }
-
-    return false;
-  }
-
-  function getTrailingAndLeading(a, b) {
+  function getTrainMotionVector(t) {
     let vLat = 0, vLon = 0;
-    if (a.hasVector) { vLat += a.dLat; vLon += a.dLon; }
-    if (b.hasVector) { vLat += b.dLat; vLon += b.dLon; }
-    if (vLat === 0 && vLon === 0) {
-      if (a.routeVec) { vLat += a.routeVec[0]; vLon += a.routeVec[1]; }
-      if (b.routeVec) { vLat += b.routeVec[0]; vLon += b.routeVec[1]; }
+    if (t.hasVector && (Math.abs(t.dLat) > 1e-7 || Math.abs(t.dLon) > 1e-7)) {
+      vLat = t.dLat;
+      vLon = t.dLon;
+    } else if (t.routeVec) {
+      vLat = t.routeVec[0];
+      vLon = t.routeVec[1];
+    } else {
+      return null;
     }
-    if (vLat === 0 && vLon === 0) return null;
+    const kLon = Math.cos((t.lat || 40) * Math.PI / 180);
+    const vx = vLon * kLon, vy = vLat;
+    const m = Math.hypot(vx, vy);
+    if (m < 1e-8) return null;
+    return { vx: vx / m, vy: vy / m, vLat, vLon };
+  }
 
-    const kLon = Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
-    const abLat = b.lat - a.lat;
-    const abLon = (b.lon - a.lon) * kLon;
-    const proj = (abLat * vLat) + (abLon * vLon * kLon);
-    if (Math.abs(proj) < 1e-9) return null;
+  function computeTrainBearing(t) {
+    const mv = getTrainMotionVector(t);
+    if (!mv) return null;
 
-    return proj > 0
-      ? { trailing: a, leading: b }
-      : { trailing: b, leading: a };
+    if (t.bestSnapSeg) {
+      const s = t.bestSnapSeg;
+      const kLon = Math.cos((t.lat || 40) * Math.PI / 180);
+      const sx = (s.lo2 - s.lo1) * kLon, sy = s.la2 - s.la1;
+      const sm = Math.hypot(sx, sy);
+      if (sm > 1e-8) {
+        const dot = (mv.vx * sx + mv.vy * sy) / sm;
+        if (Math.abs(dot) > 0.15) {
+          const dirX = dot >= 0 ? sx : -sx;
+          const dirY = dot >= 0 ? sy : -sy;
+          return (Math.atan2(dirX, dirY) * 180 / Math.PI + 360) % 360;
+        }
+      }
+    }
+
+    return (Math.atan2(mv.vx, mv.vy) * 180 / Math.PI + 360) % 360;
+  }
+
+  function getPathEndTangents(pathCoords, refLat) {
+    if (!pathCoords || pathCoords.length < 2) return null;
+    const kLon = Math.cos((refLat || 40) * Math.PI / 180);
+
+    let p0 = pathCoords[0], pA = pathCoords[1];
+    for (let i = 1; i < pathCoords.length; i++) {
+      if (haversine(p0[0], p0[1], pathCoords[i][0], pathCoords[i][1]) >= 0.04) {
+        pA = pathCoords[i];
+        break;
+      }
+    }
+    const ax = (pA[1] - p0[1]) * kLon, ay = pA[0] - p0[0];
+    const am = Math.hypot(ax, ay);
+
+    const n = pathCoords.length;
+    let pN = pathCoords[n - 1], pB = pathCoords[n - 2];
+    for (let i = n - 2; i >= 0; i--) {
+      if (haversine(pathCoords[i][0], pathCoords[i][1], pN[0], pN[1]) >= 0.04) {
+        pB = pathCoords[i];
+        break;
+      }
+    }
+    const bx = (pN[1] - pB[1]) * kLon, by = pN[0] - pB[0];
+    const bm = Math.hypot(bx, by);
+
+    if (am < 1e-8 || bm < 1e-8) return null;
+    return {
+      tAx: ax / am, tAy: ay / am,
+      tBx: bx / bm, tBy: by / bm
+    };
+  }
+
+  /* ---------- Verificación Estricta de Sentido sobre la Vía y entre Rumbo de Trenes ---------- */
+  function analyzeMovementAlongPath(a, b, pathCoords) {
+    const infoA = a._info, infoB = b._info;
+    if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
+      if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return null;
+      if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return null;
+      if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return null;
+    }
+
+    if (a.routeVec && b.routeVec) {
+      const refLat = (a.lat + b.lat) / 2;
+      const kLon = Math.cos(refLat * Math.PI / 180);
+      const rAx = a.routeVec[1] * kLon, rAy = a.routeVec[0];
+      const rBx = b.routeVec[1] * kLon, rBy = b.routeVec[0];
+      const mA = Math.hypot(rAx, rAy), mB = Math.hypot(rBx, rBy);
+      if (mA > 1e-8 && mB > 1e-8) {
+        const cosRoute = (rAx * rBx + rAy * rBy) / (mA * mB);
+        if (cosRoute < 0.15) return null;
+      }
+    }
+
+    const mvA = getTrainMotionVector(a);
+    const mvB = getTrainMotionVector(b);
+    if (!mvA || !mvB) return null;
+
+    const cosArrows = mvA.vx * mvB.vx + mvA.vy * mvB.vy;
+    if (cosArrows < 0.25) return null;
+
+    const refLat = (a.lat + b.lat) / 2;
+    const tangents = getPathEndTangents(pathCoords, refLat);
+
+    if (tangents) {
+      const projA = mvA.vx * tangents.tAx + mvA.vy * tangents.tAy;
+      const projB = mvB.vx * tangents.tBx + mvB.vy * tangents.tBy;
+
+      if (Math.abs(projA) < 0.35 || Math.abs(projB) < 0.35) return null;
+
+      if ((projA > 0 && projB < 0) || (projA < 0 && projB > 0)) {
+        return null;
+      }
+
+      return projA > 0
+        ? { trailing: a, leading: b }
+        : { trailing: b, leading: a };
+    }
+
+    const kLon = Math.cos(refLat * Math.PI / 180);
+    const abX = (b.lon - a.lon) * kLon, abY = b.lat - a.lat;
+    const proj = abX * (mvA.vx + mvB.vx) + abY * (mvA.vy + mvB.vy);
+    if (Math.abs(proj) < 1e-8) return null;
+    return proj > 0 ? { trailing: a, leading: b } : { trailing: b, leading: a };
   }
 
   function buildUrl() {
@@ -1590,7 +2617,7 @@
       const avg = (t.speedsList[0] + t.speedsList[1]) / 2;
       return avg > minSpeedKmh && t.speedsList[1] > minSpeedKmh * 0.85;
     }
-    if (t.speedMeasures >= 2 && isFinite(t.calcSpeed)) {
+    if (t.speedMeasures >= 2 && isNum(t.calcSpeed)) {
       return t.calcSpeed > minSpeedKmh;
     }
     return false;
@@ -1605,18 +2632,23 @@
     const minSpeed = Math.max(10, toNum(el.thSpeed.value) || 100);
     const now = Date.now();
     const activeRedKeys = new Set();
+    const activeLlmCandidateKeys = new Set();
+    const toEnqueueList = [];
 
     trains.forEach(t => {
       t.d = Infinity;
+      t.redD = Infinity;
       t.nearTrain = null;
       t.hasRedPair = false;
       t.roleInfo = "";
       t.impactSec = null;
-      t.inStation = isInStationArea(t.lat, t.lon, 2.2);
+      t.aiNote = "";
+      t.inStation = isInStationArea(t.lat, t.lon, 1.6);
       assignTrainTrackAndSnap(t);
       t.isFast = isConfirmedHighSpeed(t, minSpeed);
       t._info = trainInfo(t);
       t.routeVec = getRouteVector(t);
+      t.bearing = computeTrainBearing(t);
     });
 
     const activeTrains = trains.filter(t => !t.inStation);
@@ -1630,16 +2662,11 @@
         const b = sorted[j];
         if (b.lat - a.lat > maxDLat) break;
 
-        // 1. FILTRO DE TIPO DE VÍA
         if (!isSameTrackGroup(a, b)) continue;
 
         const straightD = haversine(a.lat, a.lon, b.lat, b.lon);
         if (straightD >= tO) continue;
 
-        // 2. FILTRO ESTRICTO DE SENTIDO DE LA MARCHA
-        if (!areMovingSameDirection(a, b)) continue;
-
-        // 3. CÁLCULO DE DISTANCIA Y TRAZADO REAL SOBRE LA VÍA
         const anyLayerLoaded = TRACKS.av.loaded || TRACKS.md.loaded;
         let d = straightD;
         let pathCoords = null;
@@ -1649,67 +2676,175 @@
           if (!trackRoute || trackRoute.distKm >= tO) continue;
           d = trackRoute.distKm;
           pathCoords = trackRoute.pathCoords;
-        } else {
+       } else {
           pathCoords = [[a.drawLat, a.drawLon], [b.drawLat, b.drawLon]];
         }
 
-        const order = getTrailingAndLeading(a, b);
-        let pairSeverity = "orange";
-        let trailing = a, leading = b;
-        let impactSec = null;
+        const order = analyzeMovementAlongPath(a, b, pathCoords);
+        if (!order) continue;
 
-        if (order) {
-          trailing = order.trailing;
-          leading = order.leading;
-          const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
-          const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
-          const closingSpeed = vTrail - vLead;
+        const trailing = order.trailing;
+        const leading = order.leading;
+        const vTrail = isNum(trailing.calcSpeed) ? trailing.calcSpeed : 0;
+        const vLead  = isNum(leading.calcSpeed)  ? leading.calcSpeed  : 0;
+        const closingSpeed = vTrail - vLead;
 
-          if (trailing.isFast && closingSpeed >= 0) {
-            pairSeverity = "red";
-            impactSec = closingSpeed > 0 ? (d / closingSpeed) * 3600 : Infinity;
-          } else {
-            pairSeverity = "orange";
+        const geomSeverity = (trailing.isFast && closingSpeed >= 0) ? "red" : "orange";
+        let pairSeverity = geomSeverity;
+        let inRedPanel = (geomSeverity === "red");
+        let impactSec = closingSpeed > 0 ? (d / closingSpeed) * 3600 : Infinity;
+
+        const pairKey = makePairKey(a.id, b.id);
+        let downgradedByAi = false;
+        let promotedFrom = null;
+        let localEval = null;
+
+        if (el.enableAiAudit.checked) {
+          localEval = evaluateAlertWithCtcBrain(trailing, leading, d, geomSeverity, minSpeed);
+          if (localEval.verdict === "COUPLED") {
+            continue;
+          }
+
+          // Determinar si pertenece al panel superior (#redOverlay) o si es una naranja normal del panel izquierdo
+          const belongsToRedPanel = (geomSeverity === "red")
+            || (geomSeverity === "orange" && (
+              localEval.verdict === "PROMOTED_FROM_GREEN" ||
+              localEval.verdict === "PROMOTED_FROM_ORANGE" ||
+              localEval.verdict === "PROMOTED_RED"
+            ));
+
+          if (belongsToRedPanel) {
+            let activeEval = aiAuditCache.get(pairKey);
+
+            // Si no existe en caché, la creamos para que entre en la cola del LLM
+            if (!activeEval) {
+              activeEval = {
+                status: el.aiProvider.value === "local" ? "done" : "queued",
+                verdict: localEval.verdict,
+                confidence: localEval.confidence,
+                reason: localEval.reason,
+                source: el.aiProvider.value === "local" ? "⚡ CTC Local" : "⏳ En cola LLM",
+                llmDone: el.aiProvider.value === "local",
+                llmVerified: false,
+                llmTs: 0
+              };
+              aiAuditCache.set(pairKey, activeEval);
+            } else if (!activeEval.llmDone) {
+              // Mientras espera turno en la cola, actualizamos el pre-diagnóstico sin perder su sitio en la cola
+              activeEval.verdict = localEval.verdict;
+              activeEval.confidence = localEval.confidence;
+              activeEval.reason = localEval.reason;
+            }
+
+            if (activeEval.verdict === "COUPLED") {
+              continue;
+            }
+
+            if (geomSeverity === "red" && activeEval.verdict === "DOWNGRADED_ORANGE") {
+              pairSeverity = "orange";
+              inRedPanel = true;
+              downgradedByAi = true;
+            } else if (geomSeverity === "orange" && activeEval.verdict === "PROMOTED_FROM_GREEN") {
+              pairSeverity = "red";
+              inRedPanel = true;
+              promotedFrom = "green";
+            } else if (geomSeverity === "orange" && (activeEval.verdict === "PROMOTED_FROM_ORANGE" || activeEval.verdict === "PROMOTED_RED")) {
+              pairSeverity = "red";
+              inRedPanel = true;
+              promotedFrom = "orange";
+            } else if (geomSeverity === "red") {
+              pairSeverity = "red";
+              inRedPanel = true;
+            }
           }
         }
 
-        const pairKey = makePairKey(a.id, b.id);
+        const aiAudit = (el.enableAiAudit.checked && inRedPanel) ? aiAuditCache.get(pairKey) : null;
         let redStartMs = null;
 
-        if (pairSeverity === "red") {
+        if (pairSeverity === "red" && !downgradedByAi) {
           activeRedKeys.add(pairKey);
           if (!redAlertStart.has(pairKey)) {
             redAlertStart.set(pairKey, now);
           }
           redStartMs = redAlertStart.get(pairKey);
-        }
 
-        if (d < a.d) { a.d = d; a.nearTrain = b; }
-        if (d < b.d) { b.d = d; b.nearTrain = a; }
-        if (pairSeverity === "red") {
+          if (!a.hasRedPair || d < a.redD) {
+            a.redD = d;
+            a.d = d;
+            a.nearTrain = b;
+            a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (aiAudit?.reason) a.aiNote = aiAudit.reason;
+          }
+          if (!b.hasRedPair || d < b.redD) {
+            b.redD = d;
+            b.d = d;
+            b.nearTrain = a;
+            b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (aiAudit?.reason) b.aiNote = aiAudit.reason;
+          }
           a.hasRedPair = true;
           b.hasRedPair = true;
           if (impactSec !== null) {
             if (a.impactSec === null || impactSec < a.impactSec) a.impactSec = impactSec;
             if (b.impactSec === null || impactSec < b.impactSec) b.impactSec = impactSec;
           }
-        }
-        if (order) {
-          trailing.roleInfo = `Detrás de ${leading.tipo} ${leading.label}`;
-          leading.roleInfo  = `Delante de ${trailing.tipo} ${trailing.label}`;
+        } else {
+          if (!a.hasRedPair && d < a.d) {
+            a.d = d;
+            a.nearTrain = b;
+            a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (aiAudit?.reason) a.aiNote = aiAudit.reason;
+          }
+          if (!b.hasRedPair && d < b.d) {
+            b.d = d;
+            b.nearTrain = a;
+            b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
+            if (aiAudit?.reason) b.aiNote = aiAudit.reason;
+          }
         }
 
-        pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, pathCoords, severity: pairSeverity, impactSec, pairKey, redStartMs });
+        const pairObj = {
+          a, b, trailing, leading, hasOrder: true, d, pathCoords,
+          geomSeverity, severity: pairSeverity, inRedPanel,
+          impactSec, pairKey, redStartMs, downgradedByAi, promotedFrom
+        };
+        pairs.push(pairObj);
+
+        // TODAS las alertas del panel rojo superior (inRedPanel === true), incluidas las rebajadas a naranja en ese panel,
+        // se analizan con la cola del LLM. Las naranjas normales del panel izquierdo (!inRedPanel) NO entran jamás.
+       if (inRedPanel && el.enableAiAudit.checked && el.aiProvider.value !== "local") {
+          activeLlmCandidateKeys.add(pairKey);
+          // Solo auto-encolar si ya tiene un veredicto LLM previo (para mantener refresco)
+          // Las alertas nuevas esperan al botón "Analizar con IA" del usuario
+          const existingCache = aiAuditCache.get(pairKey);
+          if (existingCache && existingCache.llmVerified) {
+            toEnqueueList.push({ pairObj, localEval });
+          }
+        }
       }
     }
 
-    // Limpiar del historial de persistencia cualquier par que haya dejado de estar en alerta roja
     for (const k of redAlertStart.keys()) {
       if (!activeRedKeys.has(k)) redAlertStart.delete(k);
     }
 
+    // Cancelar de inmediato cualquier consulta en cola o en vuelo cuyo par haya salido del panel superior
+    syncLlmQueueWithActivePairs(activeLlmCandidateKeys);
+
+    // Encolar dando prioridad a las rojas activas más urgentes y después a las rebajadas a naranja del panel superior
+    toEnqueueList.sort((x, y) => {
+      const xDown = x.pairObj.downgradedByAi ? 1 : 0;
+      const yDown = y.pairObj.downgradedByAi ? 1 : 0;
+      if (xDown !== yDown) return xDown - yDown;
+      return (x.pairObj.impactSec ?? Infinity) - (y.pairObj.impactSec ?? Infinity);
+    });
+    for (const item of toEnqueueList) {
+      enqueueLlmAudit(item.pairObj, item.localEval);
+    }
+
     trains.forEach(t => {
-      if (t.inStation || !isFinite(t.d) || t.d >= tO) {
+      if (t.inStation || !isNum(t.d) || t.d >= tO) {
         t.color = "green";
       } else {
         t.color = t.hasRedPair ? "red" : "orange";
@@ -1722,11 +2857,20 @@
 
   function badgeColor(tipo) { return BADGE_COLORS[tipo] || "#475569"; }
 
+  function formatRouteDisplay(x) {
+    if (x.orig && x.dest) return `📍 ${esc(x.orig)} → ${esc(x.dest)}`;
+    if (x.dest) return `📍 Hacia ${esc(x.dest)}`;
+    if (x.orig) return `📍 Desde ${esc(x.orig)}`;
+    if (x.sig)  return `📍 Próxima: ${esc(x.sig)}`;
+    return "";
+  }
+
   function tipHtml(t) {
     const x = t._info || trainInfo(t);
     const vGrp = t.trackGroup === "AV" ? "Vía AV" : (t.trackGroup === "CONV" ? "Vía Conv." : "Vía Híbrida");
     const head = `<div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Nº ${esc(x.numero)}</span><span style="margin-left:auto;font-size:10.5px;color:#667085">${esc(vGrp)}</span></div>`;
-    const ruta = (x.orig || x.dest) ? `<div class="t-route">📍 ${esc(x.orig || "?")} → ${esc(x.dest || "?")}</div>` : "";
+    const rTxt = formatRouteDisplay(x);
+    const ruta = rTxt ? `<div class="t-route">${rTxt}</div>` : "";
     const paradas = [];
     if (x.sig) paradas.push(`Próxima: <b>${esc(x.sig)}</b>`);
     if (x.vel !== null) {
@@ -1741,12 +2885,15 @@
     const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "otro tren";
     const roleTxt = t.roleInfo ? ` (${t.roleInfo})` : "";
     let near = "";
-    if (!t.inStation && isFinite(t.d)) {
+    if (!t.inStation && isNum(t.d)) {
       if (t.color === "red") {
         const ttiTxt = t.impactSec !== null ? ` · ⏱ Impacto: ${fmtImpactTime(t.impactSec)}` : "";
         near = `<div style="color:#e53935;font-weight:700;margin-top:3px">🚨 PELIGRO ALCANCE: A ${fmtKm(t.d)} por vía${esc(roleTxt)}${esc(ttiTxt)}</div>`;
       } else {
         near = `<div style="color:#d97706;font-weight:700;margin-top:3px">⚠ Precaución: A ${fmtKm(t.d)} por vía de ${esc(nearName)}${esc(roleTxt)}</div>`;
+      }
+      if (t.aiNote) {
+        near += `<div style="color:#7c3aed;font-weight:600;font-size:11px;margin-top:2px">🤖 IA: ${esc(t.aiNote)}</div>`;
       }
     }
     return head + ruta + meta + ret + statNote + near;
@@ -1759,8 +2906,8 @@
       ["Tipo de servicio", `${x.tipo} (Límite: ${x.maxSpd} km/h)`],
       ["Infraestructura", vGrp],
       ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
-      ["Origen", x.orig || "—"],
-      ["Destino", x.dest || "—"]
+      ["Origen", x.orig || "En ruta"],
+      ["Destino", x.dest || "En ruta"]
     ];
     if (x.ant) mainRows.push(["Estación anterior", x.ant]);
     if (x.sig) mainRows.push(["Próxima estación", x.sig]);
@@ -1773,49 +2920,100 @@
     }
     if (x.retHtml) mainRows.push(["Puntualidad", x.retHtml, true]);
     if (t.roleInfo) mainRows.push(["Posición en vía", t.roleInfo]);
-    mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.color === "red" ? "ROJO (Alcance a >100 km/h)" : (t.color === "orange" ? "AMARILLO/NARANJA (<5 km sin alcance)" : "Normal en ruta"))]);
-    if (!t.inStation && isFinite(t.d)) mainRows.push(["Distancia por vía", `${fmtKm(t.d)}`]);
+    mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.color === "red" ? "ROJO (Peligro por alcance)" : (t.color === "orange" ? "AMARILLO/NARANJA (<5 km sin alcance)" : "Normal en ruta"))]);
+    if (!t.inStation && isNum(t.d)) mainRows.push(["Distancia por vía", `${fmtKm(t.d)}`]);
     if (t.color === "red" && t.impactSec !== null) {
       mainRows.push(["Tiempo hasta impacto", `<b style="color:#e53935">⏱ ${esc(fmtImpactTime(t.impactSec))}</b>`, true]);
+    }
+    if (t.aiNote) {
+      mainRows.push(["Dictamen Auditor IA", `<b style="color:#7c3aed">🤖 ${esc(t.aiNote)}</b>`, true]);
     }
 
     const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
     const rawRows = Object.entries(t.raw || {}).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
+    const rTxt = formatRouteDisplay(x);
 
     return `<div class="pop-wrap"><div class="t-head"><span class="t-badge" style="background:${badgeColor(x.tipo)}">${esc(x.tipo)}</span><span class="t-num">Tren Nº ${esc(x.numero)}</span></div>` +
-      (x.orig || x.dest ? `<div class="t-route">📍 ${esc(x.orig || "?")} → ${esc(x.dest || "?")}</div>` : "") +
+      (rTxt ? `<div class="t-route">${rTxt}</div>` : "") +
       `<table class="pop-table">${tableHtml}</table>` +
       (rawRows ? `<details class="pop-raw"><summary>Ver datos técnicos JSON</summary><table style="margin-top:4px">${rawRows}</table></details>` : "") + `</div>`;
   }
 
   const TRAIN_SVG = '<svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>';
-  function makeIcon(color) {
-    return L.divIcon({ className: "tm " + color, html: '<div class="b">' + TRAIN_SVG + '</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
+
+  function makeIcon(color, bearing, tagText, isSelected) {
+    let arrowHtml = "";
+    if ((color === "red" || color === "orange") && isNum(bearing)) {
+      const fillCol = color === "red" ? "#e53935" : "#f59e0b";
+      arrowHtml = `<div class="dir-arrow" style="transform:rotate(${Math.round(bearing)}deg)">` +
+        `<svg viewBox="0 0 24 24"><path d="M12 1L21 19L12 14.5L3 19Z" fill="${fillCol}" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/></svg>` +
+        `</div>`;
+    }
+    const tagHtml = tagText ? `<div class="tm-tag">${esc(tagText)}</div>` : "";
+    return L.divIcon({
+      className: "tm " + color + (isSelected ? " selected-pair" : ""),
+      html: `<div class="tm-wrap">${arrowHtml}<div class="b">${TRAIN_SVG}</div>${tagHtml}</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
   }
 
   function formatPairText(p) {
     if (p.hasOrder) {
       const tr = `${p.trailing.tipo ? p.trailing.tipo + " " : ""}${p.trailing.label}`;
       const ld = `${p.leading.tipo ? p.leading.tipo + " " : ""}${p.leading.label}`;
-      const vT = isFinite(p.trailing.calcSpeed) ? `${p.trailing.calcSpeed}` : "?";
-      const vL = isFinite(p.leading.calcSpeed) ? `${p.leading.calcSpeed}` : "?";
-      return `${esc(tr)} (${vT}) ➔ ${esc(ld)} (${vL} km/h)`;
+      const vT = isNum(p.trailing.calcSpeed) ? `${p.trailing.calcSpeed}` : "0";
+      const vL = isNum(p.leading.calcSpeed) ? `${p.leading.calcSpeed}` : "0";
+      return `${esc(tr)} (${vT} km/h) ➔ ${esc(ld)} (${vL} km/h)`;
     }
     const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label;
     const lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
     return `${esc(la)} ↔ ${esc(lb)}`;
   }
 
-  // Actualiza únicamente el panel superior de alertas rojas (se llama tanto en render() como cada segundo para activar el parpadeo en tiempo real)
+  function formatAiRowHtml(p, showBtn) {
+    if (!el.enableAiAudit.checked) return "";
+    const audit = aiAuditCache.get(p.pairKey);
+
+    // Si no hay audit todavía o está en cola esperando, mostrar botón bajo demanda
+    if (showBtn && (!audit || (audit.status === "queued" && !audit.llmVerified))) {
+      const isLoading = audit && audit.status === "in_flight";
+      const btnTxt = isLoading ? "🧠 Analizando…" : "🤖 Analizar con IA";
+      return `<div class="ai-row"><button class="ro-btn-ai${isLoading ? " loading" : ""}" ${isLoading ? "disabled" : ""} data-pkey="${esc(p.pairKey)}" onclick="window.__analyzeAlert(this)">${btnTxt}</button><span class="ai-reason" style="color:var(--muted);font-size:10.5px">Pulsa para auditar esta alerta con el LLM neuronal</span></div>`;
+    }
+
+    if (!audit) return "";
+
+    const stCls = audit.status === "in_flight"
+      ? " consulting"
+      : (audit.status === "queued" ? " queued" : (audit.llmVerified ? " llm-ok" : ""));
+    const srcTag = audit.source ? `<span class="ai-source-tag${stCls}">${esc(audit.source)}</span>` : "";
+    const actor = audit.llmVerified ? "LLM" : "Pre-IA";
+
+    if (p.downgradedByAi) {
+      return `<div class="ai-row"><span class="ai-badge downgraded">🟠 Rebajada de 🔴 Roja a Naranja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+    }
+    if (p.promotedFrom === "green") {
+      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟢 Verde a 🔴 Roja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+    }
+    if (p.promotedFrom === "orange") {
+      return `<div class="ai-row"><span class="ai-badge promoted">⚡ Subida de 🟠 Naranja a 🔴 Roja · ${actor} (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+    }
+    return `<div class="ai-row"><span class="ai-badge real">✅ ${actor}: Riesgo Confirmado (${audit.confidence}%)</span><span class="ai-reason">${esc(audit.reason)}</span>${srcTag}</div>`;
+  }
+
   function renderRedOverlayList() {
-    const redPairs = [];
+    const redPanelPairs = [];
     pairs.forEach((p, idx) => {
-      if (p.severity === "red") redPairs.push({ p, idx });
+      if (p.inRedPanel) redPanelPairs.push({ p, idx });
     });
 
-    redPairs.sort((a, b) => {
-      const tA = (a.p.impactSec !== null && isFinite(a.p.impactSec)) ? a.p.impactSec : Infinity;
-      const tB = (b.p.impactSec !== null && isFinite(b.p.impactSec)) ? b.p.impactSec : Infinity;
+    redPanelPairs.sort((a, b) => {
+      const aDown = a.p.downgradedByAi ? 1 : 0;
+      const bDown = b.p.downgradedByAi ? 1 : 0;
+      if (aDown !== bDown) return aDown - bDown;
+      const tA = isNum(a.p.impactSec) ? a.p.impactSec : Infinity;
+      const tB = isNum(b.p.impactSec) ? b.p.impactSec : Infinity;
       if (tA !== tB) return tA - tB;
       return a.p.d - b.p.d;
     });
@@ -1824,28 +3022,34 @@
     const now = Date.now();
     let anyPersistent = false;
 
-    el.roCount.textContent = redPairs.length;
-    if (!redPairs.length) {
+    el.roCount.textContent = redPanelPairs.length;
+    if (!redPanelPairs.length) {
       el.redOverlay.classList.add("empty");
       el.redOverlay.classList.remove("has-persistent");
       el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
     } else {
       el.redOverlay.classList.remove("empty");
-      el.redList.innerHTML = redPairs.map(({ p, idx }) => {
-        const elapsedSec = p.redStartMs ? (now - p.redStartMs) / 1000 : 0;
-        const isPersistent = elapsedSec >= persistThresholdSec;
+      el.redList.innerHTML = redPanelPairs.map(({ p, idx }) => {
+        const isDowngraded = !!p.downgradedByAi;
+        const isPromoted = !!p.promotedFrom;
+        const elapsedSec = (!isDowngraded && p.redStartMs) ? (now - p.redStartMs) / 1000 : 0;
+        const isPersistent = !isDowngraded && elapsedSec >= persistThresholdSec;
         if (isPersistent) anyPersistent = true;
+        const isSel = selectedPairKey && p.pairKey === selectedPairKey;
 
         const ttiBadge = p.impactSec !== null
-          ? `<span class="ro-tti" title="Tiempo estimado hasta el impacto manteniendo velocidades actuales">⏱ Impacto: ${esc(fmtImpactTime(p.impactSec))}</span>`
+          ? `<span class="ro-tti" title="Tiempo estimado manteniendo velocidades actuales">⏱ ${isDowngraded ? "Alcance nominal" : "Impacto"}: ${esc(fmtImpactTime(p.impactSec))}</span>`
           : "";
         const persBadge = isPersistent
           ? `<span class="ro-pers" title="Esta alerta roja lleva más de ${persistThresholdSec} s activa de forma continua">🔥 ${esc(fmtDuration(elapsedSec))}</span>`
           : "";
 
-        return `<div class="ro-item${isPersistent ? " persistent-blink" : ""}" data-i="${idx}">` +
-          `<span>🔴 ${formatPairText(p)}</span>` +
-          `<span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span>` +
+        const dotIcon = isDowngraded ? "🟠" : "🔴";
+        const extraCls = (isDowngraded ? " ai-downgraded" : "") + (isPromoted ? " ai-promoted" : "") + (isPersistent ? " persistent-blink" : "") + (isSel ? " active-pair" : "");
+
+        return `<div class="ro-item${extraCls}" data-i="${idx}">` +
+          `<div class="ro-top"><span>${dotIcon} ${formatPairText(p)}</span><span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span></div>` +
+          formatAiRowHtml(p, true) +
           `</div>`;
       }).join("");
       el.redOverlay.classList.toggle("has-persistent", anyPersistent);
@@ -1871,34 +3075,56 @@
       visible++;
       alive.add(t.id);
       let m = markers.get(t.id);
-      const z = t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0;
+      const isSelected = selectedTrainIds.has(t.id);
+      const z = (isSelected ? 2500 : 0) + (t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0);
       const pos = [t.drawLat ?? t.lat, t.drawLon ?? t.lon];
+      const arrowDeg = (t.color === "red" || t.color === "orange") && isNum(t.bearing)
+        ? Math.round(t.bearing)
+        : null;
+
+      let tagText = "";
+      if (t.color === "red" || t.color === "orange" || isSelected) {
+        const vStr = isNum(t.calcSpeed) ? ` · ${t.calcSpeed} km/h` : "";
+        tagText = `${t.tipo ? t.tipo + " " : ""}${t.label}${vStr}`;
+      }
+
+      const iconKey = `${t.color}|${arrowDeg ?? ""}|${tagText}|${isSelected ? 1 : 0}`;
+
       if (!m) {
-        m = L.marker(pos, { icon: makeIcon(t.color), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
+        m = L.marker(pos, { icon: makeIcon(t.color, arrowDeg, tagText, isSelected), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
         m.bindTooltip(() => tipHtml(m._train), { direction: "top", offset: [0, -16], className: "trtip" });
         m.bindPopup(() => popupHtml(m._train), { maxWidth: 340 });
-        m._color = t.color;
+        m._iconKey = iconKey;
         markers.set(t.id, m);
       } else {
         m.setLatLng(pos);
-        if (m._color !== t.color) { m.setIcon(makeIcon(t.color)); m.setZIndexOffset(z); m._color = t.color; }
+        if (m._iconKey !== iconKey) {
+          m.setIcon(makeIcon(t.color, arrowDeg, tagText, isSelected));
+          m.setZIndexOffset(z);
+          m._iconKey = iconKey;
+        }
       }
       m._train = t;
     });
     for (const [id, m] of markers) if (!alive.has(id)) { map.removeLayer(m); markers.delete(id); }
 
-    // Dibujar unión gruesa y destacada siguiendo los vértices de la vía entre ambos trenes
     linesLayer.clearLayers();
     if (el.showLines.checked) {
-      pairs.forEach(p => {
+      const drawList = [...pairs].sort((x, y) => {
+        const score = p => (p.severity === "red" ? 10 : 0) + (selectedPairKey && p.pairKey === selectedPairKey ? 5 : 0);
+        return score(x) - score(y);
+      });
+
+      drawList.forEach(p => {
         if (!p.a.visible || !p.b.visible || !p.pathCoords || p.pathCoords.length < 2) return;
         const isRed = p.severity === "red";
+        const isSel = selectedPairKey && p.pairKey === selectedPairKey;
         const col = isRed ? "#ff1744" : "#ff9100";
-        const coreCol = isRed ? "#ffebee" : "#fff8e1";
+        const coreCol = isSel ? "#2563eb" : (isRed ? "#ffebee" : "#fff8e1");
 
         L.polyline(p.pathCoords, {
           pane: "alertTrackPane", renderer: alertCanvas,
-          color: "#ffffff", weight: isRed ? 16 : 14, opacity: 0.95,
+          color: isSel ? "#2563eb" : "#ffffff", weight: (isRed ? 16 : 14) + (isSel ? 4 : 0), opacity: 0.95,
           lineCap: "round", lineJoin: "round", interactive: false
         }).addTo(linesLayer);
 
@@ -1910,7 +3136,7 @@
 
         L.polyline(p.pathCoords, {
           pane: "alertTrackPane", renderer: alertCanvas,
-          color: coreCol, weight: 3, opacity: 0.95, dashArray: "6, 8",
+          color: coreCol, weight: isSel ? 4 : 3, opacity: 0.98, dashArray: "6, 8",
           lineCap: "round", lineJoin: "round", interactive: false
         }).addTo(linesLayer);
       });
@@ -1919,25 +3145,25 @@
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
     el.nTotal.textContent = visible + " / " + trains.length;
 
-    // 1. Actualizar el recuadro superior izquierdo del mapa (Alertas Rojas + Persistencia)
     renderRedOverlayList();
 
-    // 2. Banda lateral izquierda (Solo Amarillos/Naranjas en precaución o alejándose)
-    const orangePairs = [];
+    const orangeOnlyPairs = [];
     pairs.forEach((p, idx) => {
-      if (p.severity !== "red") orangePairs.push({ p, idx });
+      if (!p.inRedPanel) orangeOnlyPairs.push({ p, idx });
     });
 
-    if (!orangePairs.length) {
+    if (!orangeOnlyPairs.length) {
       el.pairs.innerHTML = '<div class="sub">Ningún par en precaución (amarillo/naranja).</div>';
     } else {
-      el.pairs.innerHTML = orangePairs.slice(0, 100).map(({ p, idx }) => {
-        return `<div class="pair" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
+      el.pairs.innerHTML = orangeOnlyPairs.slice(0, 100).map(({ p, idx }) => {
+        const isSel = selectedPairKey && p.pairKey === selectedPairKey;
+        return `<div class="pair${isSel ? " active-pair" : ""}" data-i="${idx}">` +
+          `<div class="pair-main"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>` +
+          `</div>`;
       }).join("");
     }
   }
 
-  // Reloj ligero de 1 segundo para activar el parpadeo de persistencia en cuanto se cumple el umbral
   setInterval(() => {
     if (!paused && redAlertStart.size > 0) {
       renderRedOverlayList();
@@ -1972,7 +3198,6 @@
     el.btnRefresh.disabled = true;
     el.btnRefresh.classList.add("spinning");
     try {
-      await loadStations();
       allTrains = await fetchTrains();
       updateTypes();
       trains = allTrains.filter(inTypes);
@@ -1995,10 +3220,38 @@
   function flyToPairIndex(idx) {
     const p = pairs[idx];
     if (!p) return;
-    map.flyTo([(p.a.lat + p.b.lat) / 2, (p.a.lon + p.b.lon) / 2], Math.max(map.getZoom(), 12), { duration: 0.8 });
+    selectedPairKey = p.pairKey;
+    selectedTrainIds = new Set([p.a.id, p.b.id]);
+    render();
+
+    const pts = (p.pathCoords && p.pathCoords.length >= 2)
+      ? p.pathCoords
+      : [[p.a.drawLat ?? p.a.lat, p.a.drawLon ?? p.a.lon], [p.b.drawLat ?? p.b.lat, p.b.drawLon ?? p.b.lon]];
+    const bounds = L.latLngBounds(pts);
+    map.flyToBounds(bounds.pad(0.35), {
+      paddingTopLeft: [70, 130],
+      paddingBottomRight: [70, 80],
+      maxZoom: 15,
+      duration: 0.85
+    });
   }
 
   /* ---------- Eventos de Interfaz y Controles Flotantes ---------- */
+  map.on("click", () => {
+    if (selectedPairKey !== null) {
+      selectedPairKey = null;
+      selectedTrainIds.clear();
+      render();
+    }
+  });
+
+  el.btnResetView.addEventListener("click", () => {
+    selectedPairKey = null;
+    selectedTrainIds.clear();
+    render();
+    map.flyTo(SPAIN_DEFAULT_CENTER, SPAIN_DEFAULT_ZOOM, { duration: 0.8 });
+  });
+
   $("btnHelp").addEventListener("click", () => el.helpModal.classList.add("open"));
   $("btnCloseHelp").addEventListener("click", () => el.helpModal.classList.remove("open"));
   el.helpModal.addEventListener("click", e => { if (e.target === el.helpModal) el.helpModal.classList.remove("open"); });
@@ -2035,7 +3288,14 @@
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     trainHistory.clear();
     redAlertStart.clear();
-    stationsTried = false;
+    if (currentLlmTask) {
+      currentLlmTask.controller.abort();
+      currentLlmTask = null;
+    }
+    llmQueue.length = 0;
+    aiAuditCache.clear();
+    selectedPairKey = null;
+    selectedTrainIds.clear();
     refresh();
   });
 
@@ -2079,7 +3339,7 @@
     el.proxy.value = "/api?url={url}";
   }
 
-  // Cargar geometría en segundo plano (sin pintarla) para cálculo de distancias y trazado de alertas sobre raíl
+  loadOfficialAdifStations();
   loadTrackLayer("av");
   loadTrackLayer("md");
   updateTrackStatus();
