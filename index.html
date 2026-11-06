@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v1.33</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
+<title>Trenes Renfe en tiempo real · v1.19</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -17,31 +16,28 @@
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
   #app{display:grid;grid-template-columns:340px 1fr;height:100%}
-  #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden;padding:14px 12px 18px;display:flex;flex-direction:column;gap:14px}
+  #side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:14px 14px 24px;display:flex;flex-direction:column;gap:14px}
   #mapWrap{position:relative;height:100%;width:100%}
   #map{height:100%;width:100%;background:#cfd8e3}
-  h1{font-size:18px;margin:0;display:flex;align-items:center;gap:8px;flex:1;min-width:0}
-  .emerg-title{
-    color:var(--red);
-    font-family:"Impact","Arial Black","Franklin Gothic Heavy",system-ui,sans-serif;
-    font-weight:900;
-    text-transform:uppercase;
-    letter-spacing:.06em;
-    font-size:18.5px;
-    line-height:1.1;
-    text-shadow:0 1px 2px rgba(229,57,53,.18);
-  }
+  h1{font-size:16px;margin:0;display:flex;align-items:center;gap:8px;flex:1}
   .side-top{display:flex;align-items:center;gap:8px}
-  .ver{font-size:11px;font-family:system-ui,sans-serif;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line);margin-left:auto;letter-spacing:normal;flex-shrink:0}
+  .help-btn{
+    width:26px;height:26px;border-radius:50%;border:1.5px solid var(--accent);
+    background:var(--accent);color:#fff;font-weight:800;font-size:14px;
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+    flex-shrink:0;padding:0;box-shadow:0 2px 5px rgba(29,78,216,.3);
+  }
+  .help-btn:hover{filter:brightness(1.08);transform:scale(1.05)}
+  .ver{font-size:11px;font-weight:500;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:5px;border:1px solid var(--line);margin-left:auto}
   .sub{font-size:12px;color:var(--muted)}
-  fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin:0;min-width:0;width:100%;max-width:100%}
+  fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
   legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.04em}
-  label{display:block;font-size:11.5px;margin:6px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  label{display:block;font-size:12px;margin:6px 0 3px}
   input[type=text],input[type=number],select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px}
   .row{display:flex;gap:8px}
-  .row>*{flex:1;min-width:0}
-  .chk{display:flex;align-items:center;gap:7px;font-size:12.5px;margin:6px 0;cursor:pointer;white-space:normal;line-height:1.3}
-  .dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25);flex-shrink:0}
+  .row>*{flex:1}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0;cursor:pointer}
+  .dot{width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25)}
   .chk .n{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
   button{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;cursor:pointer}
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -49,30 +45,15 @@
   button:hover{filter:brightness(.96)}
   #status{font-size:12px;color:var(--muted);line-height:1.4;margin-top:4px}
   #status.err{color:var(--red)}
-  #pairs{max-height:240px;overflow-y:auto;font-size:12px}
-  .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:5px}
+  #pairs{max-height:280px;overflow-y:auto;font-size:12px}
+  .pair{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 4px;border-bottom:1px solid var(--line);cursor:pointer}
   .pair:hover{background:var(--bg)}
-  .pair.active-pair{background:rgba(29,78,216,.12);outline:1.5px solid var(--accent)}
   .pair .d{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
   .help{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
 
-  /* Aviso legal inferior en el faldón izquierdo */
-  .disclaimer{
-    margin-top:auto;
-    padding:9px 10px;
-    border-radius:8px;
-    background:var(--bg);
-    border:1px solid var(--line);
-    border-left:3.5px solid var(--orange);
-    font-size:11px;
-    color:var(--muted);
-    line-height:1.4;
-  }
-  .disclaimer b{color:var(--text)}
-
   /* Contadores resumen compactos en el faldón */
-  .stat-pills{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px;width:100%}
-  .stat-pill{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:5px 6px;border-radius:7px;background:var(--bg);border:1px solid var(--line);font-size:11.5px;font-weight:600;min-width:0;white-space:nowrap}
+  .stat-pills{display:flex;gap:6px;margin-top:8px}
+  .stat-pill{flex:1;display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:7px;background:var(--bg);border:1px solid var(--line);font-size:12px;font-weight:600}
 
   /* Panel flotante superior izquierdo en el mapa para Alertas Rojas */
   #redOverlay{
@@ -84,9 +65,9 @@
     border:2px solid var(--red);
     border-radius:10px;
     box-shadow:0 4px 16px rgba(0,0,0,.28);
-    min-width:340px;
-    max-width:560px;
-    max-height:270px;
+    min-width:290px;
+    max-width:410px;
+    max-height:260px;
     display:flex;
     flex-direction:column;
     overflow:hidden;
@@ -95,9 +76,6 @@
   #redOverlay.empty{
     border-color:var(--line);
     opacity:0.9;
-  }
-  #redOverlay.has-persistent{
-    box-shadow:0 0 0 3px rgba(229,57,53,.45), 0 6px 22px rgba(229,57,53,.5);
   }
   .ro-head{
     background:var(--red);
@@ -119,109 +97,41 @@
     padding:6px 8px;
     overflow-y:auto;
     font-size:12px;
-    display:flex;
-    flex-direction:column;
-    gap:3px;
   }
   .ro-item{
     display:flex;
     justify-content:space-between;
     align-items:center;
     gap:8px;
-    padding:6px 7px;
-    border-radius:6px;
-    border:1px solid var(--line);
+    padding:5px 4px;
+    border-bottom:1px solid var(--line);
     cursor:pointer;
     font-weight:600;
-    transition:background .15s;
   }
+  .ro-item:last-child{border-bottom:0}
   .ro-item:hover{background:var(--bg)}
-  .ro-item.active-pair{outline:2px solid var(--accent);background:rgba(29,78,216,.1)}
-  .ro-item .ro-right{display:flex;align-items:center;gap:6px;white-space:nowrap}
-  .ro-item .ro-d{color:var(--red);font-variant-numeric:tabular-nums}
-  .ro-item .ro-tti{
-    background:var(--red);
-    color:#fff;
-    font-size:11px;
-    font-weight:700;
-    padding:2px 6px;
-    border-radius:5px;
-    font-variant-numeric:tabular-nums;
-  }
-  .ro-item .ro-pers{
-    background:#7f1d1d;
-    color:#fff;
-    font-size:10.5px;
-    font-weight:700;
-    padding:2px 5px;
-    border-radius:4px;
-    font-variant-numeric:tabular-nums;
-  }
+  .ro-item .ro-d{color:var(--red);font-variant-numeric:tabular-nums;white-space:nowrap}
 
-  /* Parpadeo intenso en el mapa para alertas rojas que superan el tiempo de persistencia */
-  @keyframes blinkPersistentAlert{
-    0%, 100%{
-      background:#dc2626;
-      color:#ffffff;
-      border-color:#991b1b;
-      box-shadow:0 0 12px rgba(220,38,38,.85);
-    }
-    50%{
-      background:#fff1f2;
-      color:#991b1b;
-      border-color:#dc2626;
-      box-shadow:0 0 2px rgba(220,38,38,.2);
-    }
-  }
-  .ro-item.persistent-blink{
-    animation:blinkPersistentAlert 0.75s infinite ease-in-out;
-  }
-  .ro-item.persistent-blink .ro-d{
-    color:inherit;
-    font-weight:800;
-  }
-  .ro-item.persistent-blink .ro-tti{
-    background:rgba(0,0,0,.28);
-    color:inherit;
-    border:1px solid currentColor;
-  }
-
-  /* Botones flotantes superior derecha */
+  /* Botones flotantes superior derecha (Actualizar / Pausar) */
   #topRightControls{
     position:absolute;
     top:12px;
     right:12px;
     z-index:1000;
     display:flex;
-    flex-direction:column;
-    align-items:flex-end;
     gap:8px;
-  }
-  .tr-row{
-    display:flex;
-    gap:8px;
-    align-items:center;
   }
   .fab-btn{
     width:40px;height:40px;border-radius:10px;background:var(--panel);
     border:1px solid var(--line);color:var(--text);display:flex;
     align-items:center;justify-content:center;cursor:pointer;
     box-shadow:0 3px 12px rgba(0,0,0,.22);padding:0;
-    font-size:17px;font-weight:800;
   }
   .fab-btn:hover{background:var(--bg);border-color:var(--accent)}
   .fab-btn svg{width:20px;height:20px;fill:currentColor}
   @keyframes giroRefresh{to{transform:rotate(360deg)}}
   .fab-btn.spinning svg{animation:giroRefresh .8s linear infinite}
   .fab-btn.paused{border-color:var(--orange);color:var(--orange)}
-  .fab-btn.help-fab{
-    background:var(--accent);
-    color:#fff;
-    border-color:var(--accent);
-  }
-  .fab-btn.help-fab:hover{
-    filter:brightness(1.08);
-  }
 
   /* Barra flotante inferior izquierda */
   #bottomLeftControls{
@@ -295,94 +205,13 @@
     display:flex;align-items:center;justify-content:space-between;gap:6px;
   }
 
-  /* Marcadores de trenes: sin position:relative en .tm para no interferir con Leaflet */
   .tm{background:none;border:0}
-  .tm-wrap{position:relative;width:28px;height:28px}
-  .tm .b{width:28px;height:28px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.45);transition:transform .15s;position:relative;z-index:2}
+  .tm .b{width:28px;height:28px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.45);transition:transform .15s}
   .tm:hover .b{transform:scale(1.25)}
   .tm.red .b{background:#e53935;width:34px;height:34px;margin:-3px;animation:pulsoRojo 0.9s infinite}
   .tm.orange .b{background:#f59e0b;width:30px;height:30px;margin:-1px}
   .tm.green .b{background:#43a047}
-  .tm .b svg{width:17px;height:17px;fill:#fff}
-
-  /* Anillo de foco cuando el usuario hace clic sobre una alerta para distinguir esos 2 trenes del resto */
-  @keyframes pulsoSeleccion{
-    0%,100%{transform:scale(1);opacity:1}
-    50%{transform:scale(1.22);opacity:0.75}
-  }
-  .tm.selected-pair .tm-wrap::before{
-    content:"";
-    position:absolute;
-    inset:-9px;
-    border-radius:50%;
-    border:3.5px solid #2563eb;
-    box-shadow:0 0 14px rgba(37,99,235,.95), inset 0 0 8px rgba(37,99,235,.6);
-    animation:pulsoSeleccion 0.9s infinite ease-in-out;
-    z-index:1;
-    pointer-events:none;
-  }
-
-  /* Etiqueta identificativa permanente bajo los trenes en alerta (naranja/rojo) o seleccionados */
-  .tm-tag{
-    position:absolute;
-    top:31px;
-    left:50%;
-    transform:translateX(-50%);
-    background:rgba(20,23,27,.92);
-    color:#fff;
-    font-size:10.5px;
-    font-weight:700;
-    padding:1.5px 6px;
-    border-radius:4px;
-    white-space:nowrap;
-    pointer-events:none;
-    z-index:4;
-    border:1.5px solid #fff;
-    box-shadow:0 2px 5px rgba(0,0,0,.45);
-    letter-spacing:.01em;
-  }
-  .tm.red .tm-tag{
-    top:34px;
-    background:#b91c1c;
-    border-color:#fecaca;
-  }
-  .tm.orange .tm-tag{
-    top:32px;
-    background:#b45309;
-    border-color:#fde68a;
-  }
-  .tm.selected-pair .tm-tag{
-    background:#1d4ed8 !important;
-    border-color:#ffffff !important;
-    font-size:11.5px;
-    padding:2px 7px;
-    box-shadow:0 0 12px rgba(29,78,216,.95);
-  }
-
-  /* Contenedor rotatorio de la flecha delante del tren */
-  .tm .dir-arrow{
-    position:absolute;
-    inset:0;
-    pointer-events:none;
-    z-index:3;
-    transform-origin:14px 14px;
-  }
-  .tm .dir-arrow svg{
-    position:absolute;
-    left:50%;
-    top:-14px;
-    width:18px;
-    height:18px;
-    margin-left:-9px;
-    filter:drop-shadow(0 1px 3px rgba(0,0,0,.55));
-  }
-  .tm.red .dir-arrow svg{
-    top:-17px;
-    width:20px;
-    height:20px;
-    margin-left:-10px;
-  }
-
+  .tm svg{width:17px;height:17px;fill:#fff}
   @keyframes pulsoRojo{
     0%{box-shadow:0 0 0 0 rgba(229,57,53,.9);transform:scale(1)}
     50%{box-shadow:0 0 0 14px rgba(229,57,53,0);transform:scale(1.12)}
@@ -406,7 +235,7 @@
   @media (max-width:760px){
     #app{grid-template-columns:1fr;grid-template-rows:46% 54%}
     #side{order:2;border-right:0;border-top:1px solid var(--line)}
-    #redOverlay{left:48px;right:150px;max-width:none}
+    #redOverlay{left:48px;right:60px;max-width:none}
     .fl-btn span.lbl{display:none}
   }
 </style>
@@ -416,11 +245,8 @@
   <aside id="side">
     <div>
       <div class="side-top">
-        <h1>
-          <span>🚆</span>
-          <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v1.33</span>
-        </h1>
+        <button class="help-btn" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
+        <h1><span>🚆 Trenes Renfe</span><span class="ver">v1.19</span></h1>
       </div>
       <div id="status">Iniciando…</div>
     </div>
@@ -428,23 +254,13 @@
     <fieldset>
       <legend>Reglas de alerta (por trazado de vía)</legend>
       <div class="row">
-        <div>
-          <label for="thOrange" title="Distancia de seguridad medida siguiendo las curvas reales de la vía">Distancia &lt; (km)</label>
-          <input type="number" id="thOrange" value="5" min="0.5" step="0.5">
-        </div>
-        <div>
-          <label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label>
-          <input type="number" id="thSpeed" value="100" min="20" step="10">
-        </div>
-        <div>
-          <label for="thPersist" title="Segundos seguidos en alerta roja a partir de los cuales la alerta parpadea intensamente en el mapa">Persistencia (s)</label>
-          <input type="number" id="thPersist" value="30" min="5" step="5">
-        </div>
+        <div><label for="thOrange" title="Distancia de seguridad medida siguiendo las curvas reales de la vía">Distancia &lt; (km)</label><input type="number" id="thOrange" value="5" min="0.5" step="0.5"></div>
+        <div><label for="thSpeed" title="Velocidad a partir de la cual salta alerta roja si el tren de atrás alcanza al de delante">Rojo si &gt; (km/h)</label><input type="number" id="thSpeed" value="100" min="20" step="10"></div>
       </div>
       <div class="help">
-        • <b>Sentido sobre la vía:</b> verifica la tangente real del raíl y evita rebotes en doble vía o cruces en sentido contrario.<br>
-        • <b>Velocidad limitada por tipo:</b> AVE 320, ALVIA 250/220, AVANT 250, MD 160, Cercanías/Reg. 140 km/h.<br>
-        • <b>Prioridad roja:</b> la alerta roja siempre prevalece sobre la naranja.
+        • <b>Distancia por vía:</b> medida sobre los raíles entre ambos trenes.<br>
+        • <b>Unión sobre vía:</b> el trazo naranja/rojo dibuja la vía que los separa.<br>
+        • <b>Rojo:</b> el tren trasero va a &gt; 100 km/h y más rápido que el delantero.
       </div>
     </fieldset>
 
@@ -466,10 +282,6 @@
       <div id="pairs"><div class="sub">Sin datos todavía.</div></div>
     </fieldset>
 
-    <div class="disclaimer">
-      ⚠️ <b>Aviso importante:</b> Esta aplicación no es oficial. Los datos mostrados provienen de las fuentes públicas de Renfe (sujetas a posibles retrasos o imprecisiones de GPS) y <b>no debe utilizarse como sistema infalible ni oficial de alertas o seguridad ferroviaria</b>.
-    </div>
-
     <!-- Controles internos ocultos -->
     <div style="display:none">
       <div id="customWrap"><input type="text" id="customUrl"></div>
@@ -478,9 +290,6 @@
       <input type="checkbox" id="showRed" checked>
       <input type="checkbox" id="showOrange" checked>
       <input type="checkbox" id="showGreen" checked>
-      <input type="checkbox" id="showTrackAV" checked>
-      <input type="checkbox" id="showTrackMD" checked>
-      <button id="btnReloadTrack"></button>
     </div>
   </aside>
 
@@ -496,20 +305,14 @@
       </div>
     </div>
 
-    <!-- Controles flotantes superior derecha: Restablecer vista, Actualizar, Pausar y debajo (?) -->
+    <!-- Controles flotantes superior derecha: Actualizar (fijo 10s) y Pausar -->
     <div id="topRightControls">
-      <div class="tr-row">
-        <button class="fab-btn" id="btnResetView" title="Restablecer vista a toda España">
-          <svg viewBox="0 0 24 24"><path d="M5 5h5V3H3v7h2V5zm14 0v5h2V3h-7v2h5zm0 14h-5v2h7v-7h-2v5zM5 14H3v7h7v-2H5v-5zm7-5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
-        </button>
-        <button class="fab-btn" id="btnRefresh" title="Actualizar ahora (automático cada 10 s)">
-          <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-        </button>
-        <button class="fab-btn" id="btnPause" title="Pausar / Reanudar actualización automática">
-          <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-        </button>
-      </div>
-      <button class="fab-btn help-fab" id="btnHelp" title="Explicación de cómo funciona la aplicación">?</button>
+      <button class="fab-btn" id="btnRefresh" title="Actualizar ahora (automático cada 10 s)">
+        <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      </button>
+      <button class="fab-btn" id="btnPause" title="Pausar / Reanudar actualización automática">
+        <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      </button>
     </div>
 
     <!-- Barra flotante inferior izquierda -->
@@ -554,16 +357,21 @@
         </div>
       </div>
 
-      <!-- 3. Capas de vías (Solo Detalle Adif / OpenRailwayMap) -->
+      <!-- 3. Capas de vías -->
       <div class="fl-wrap">
         <button class="fl-btn" data-pop="popTracks" title="Capas de vías ferroviarias">
           <svg viewBox="0 0 24 24"><path d="M5 3v18h2v-6.5l7 6.5h3l-8-7.5V3H5zm12 0v8.5l-3.5 3.2 1.4 1.5L19 12.4V3h-2z"/></svg>
           <span class="lbl">Capas de vías</span>
         </button>
-        <div class="fl-pop" id="popTracks" style="min-width:255px">
-          <div class="fl-title">Capa de infraestructura</div>
+        <div class="fl-pop" id="popTracks" style="min-width:265px">
+          <div class="fl-title">Trazado ferroviario real</div>
+          <label class="chk"><input type="checkbox" id="showTrackAV" checked>Vía Alta Velocidad<span class="n" style="color:#7b1fa2;font-weight:700">▬▬</span></label>
+          <label class="chk"><input type="checkbox" id="showTrackMD" checked>Vía Convencional / MD<span class="n" style="color:#0066cc;font-weight:700">▬▬</span></label>
           <label class="chk"><input type="checkbox" id="showOrmTiles" checked>Detalle Adif / OpenRailwayMap<span class="n" style="color:#d97706;font-weight:700">┼┼</span></label>
-          <div class="help" id="trackStatus" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--line)">Cargando geometría para cálculo…</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding-top:6px;border-top:1px solid var(--line)">
+            <div class="help" id="trackStatus" style="margin:0">Cargando vías…</div>
+            <button class="sm" id="btnReloadTrack" title="Volver a descargar las vías reales">Recargar</button>
+          </div>
         </div>
       </div>
 
@@ -593,56 +401,57 @@
     </div>
     <div class="hm-body">
       <p style="margin:0">
-        Esta aplicación es un <b>sistema inteligente de alertas de proximidad de trenes en España</b>. Cada 10 segundos mira dónde está cada tren por GPS, lo coloca exactamente sobre su vía real y mide la distancia y el sentido de avance siguiendo todas las curvas del trazado ferroviario.
+        Esta aplicación es un <b>sistema inteligente de alertas de proximidad de trenes en España</b>. Cada 10 segundos mira dónde está cada tren por GPS, lo coloca exactamente sobre su vía real y mide la distancia siguiendo todas las curvas del trazado ferroviario.
       </p>
 
       <div class="hm-box" style="border-left:5px solid #43a047">
-        <div class="hm-box-title"><span class="dot" style="background:#43a047;width:14px;height:14px"></span> 1. Trenes en VERDE (Todo tranquilo · sin flecha)</div>
+        <div class="hm-box-title"><span class="dot" style="background:#43a047;width:14px;height:14px"></span> 1. Trenes en VERDE (Todo tranquilo)</div>
         <div>
           El tren viaja con total normalidad:
           <ul style="margin:4px 0 0;padding-left:18px">
-            <li>No tiene ningún otro tren cerca (a menos de <b>5 km medidos por la vía</b>) avanzando en su mismo sentido sobre el raíl.</li>
-            <li>Si dos trenes se cruzan en sentido contrario o se alejan en una curva, <b>se mantienen en verde</b>.</li>
+            <li>No tiene ningún otro tren cerca (a menos de <b>5 km medidos por la vía</b>) en su misma vía y dirección.</li>
+            <li>Si se cruza de frente con otro tren en sentido contrario, <b>sigue en verde</b> porque cada uno va por su vía paralela.</li>
             <li>Si llega a una estación grande (como Atocha, Sants o Málaga), también se pone en verde porque allí los trenes van muy despacio para aparcar en su andén.</li>
           </ul>
         </div>
         <div class="hm-diagram">
-          <span>🚆 Tren A</span>
+          <span>🚆 Tren A ➔</span>
           <span style="color:#43a047;font-weight:700">─── Más de 5 km por vía (Seguro) ───</span>
-          <span>🚆 Tren B</span>
+          <span>🚆 Tren B ➔</span>
         </div>
       </div>
 
       <div class="hm-box" style="border-left:5px solid #f59e0b">
-        <div class="hm-box-title"><span class="dot" style="background:#f59e0b;width:14px;height:14px"></span> 2. Trenes en NARANJA con flecha y etiqueta (Precaución)</div>
+        <div class="hm-box-title"><span class="dot" style="background:#f59e0b;width:14px;height:14px"></span> 2. Trenes en NARANJA (Precaución, sin peligro de choque)</div>
         <div>
-          Dos trenes avanzan por la <b>misma vía y en el mismo sentido de recorrido del raíl</b> a <b>menos de 5 km</b> (uno detrás del otro), pero <b>NO hay peligro inminente</b> porque:
+          Dos trenes van por la <b>misma vía y en el mismo sentido</b> a <b>menos de 5 km sobre el raíl</b>, pero <b>NO hay peligro inminente</b> porque:
           <ul style="margin:4px 0 0;padding-left:18px">
             <li>Ambos van despacito (a menos de 100 km/h) o están parados esperando señal.</li>
             <li>O bien <b>el tren que va delante corre más que el que va detrás</b>, así que cada vez se alejan más el uno del otro.</li>
           </ul>
         </div>
         <div class="hm-diagram">
-          <span>🚆🟠➤ Detrás (90 km/h)</span>
+          <span>🚆 Detrás (90 km/h) ➔</span>
           <span style="color:#d97706;font-weight:700">── 3 km por vía (Se aleja) ──</span>
-          <span>🚆🟠➤ Delante (130 km/h)</span>
+          <span>🚆 Delante (130 km/h) ➔➔</span>
         </div>
       </div>
 
       <div class="hm-box" style="border-left:5px solid #e53935">
-        <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO con flecha roja y Parpadeo por Persistencia</div>
+        <div class="hm-box-title"><span class="dot" style="background:#e53935;width:14px;height:14px"></span> 3. Trenes en ROJO PARPADEANTE (¡Peligro por alcance!)</div>
         <div>
-          Salta la <b>Alerta Roja</b> arriba en el mapa (ordenadas de menor a mayor tiempo de impacto) y prevalece siempre en pantalla sobre cualquier alerta naranja cuando:
+          Salta la <b>Alerta Roja</b> arriba en el mapa cuando se cumplen estas 4 cosas a la vez:
           <ol style="margin:4px 0 0;padding-left:18px">
-            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> y avanzan en el <b>mismo sentido sobre el raíl</b> a <b>menos de 5 km</b>.</li>
-            <li>El tren que viene por <b>detrás supera los 100 km/h</b> y va <b>más rápido (o igual) que el de delante</b>.</li>
-            <li><b>Al pulsar sobre cualquier alerta:</b> el mapa encuadra automáticamente a los dos trenes implicados y los rodea con un <b>halo azul brillante</b> para distinguirlos de cualquier otro tren cercano.</li>
+            <li>Los dos trenes están conectados por el <b>mismo trazado de vía</b> (un AVE nunca puede chocar con un Media Distancia convencional aunque sus vías pasen juntas).</li>
+            <li>Van en el <b>mismo sentido de la marcha</b> a <b>menos de 5 km medidos siguiendo las curvas de la vía</b>.</li>
+            <li>El tren que viene por <b>detrás va lanzado a más de 100 km/h</b>.</li>
+            <li>El tren de <b>atrás va más rápido (o igual) que el de delante</b>, por lo que le está recortando distancia rápidamente.</li>
           </ol>
         </div>
         <div class="hm-diagram" style="border-color:#e53935">
-          <span style="color:#e53935;font-weight:700">🚆🔴➤ Detrás (180 km/h)</span>
-          <span style="color:#e53935;font-weight:700">── 3 km · ⏱ Impacto: 1m 48s ──</span>
-          <span>🚆🔴➤ Delante (80 km/h)</span>
+          <span style="color:#e53935;font-weight:700">🚆 Detrás (180 km/h) ➔➔</span>
+          <span style="color:#e53935;font-weight:700">── ¡3 km por vía y acercándose! ──</span>
+          <span>🚆 Delante (80 km/h) ➔</span>
         </div>
       </div>
     </div>
@@ -655,9 +464,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "1.33";
-  const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
-  const SPAIN_DEFAULT_ZOOM = 6;
+  const VERSION = "1.19";
   const SOURCES = {
     ld:     "https://tiempo-real.largorecorrido.renfe.com/renfe-visor/flotaLD.json",
     visor:  "https://tiempo-real.renfe.com/renfe-visor/flota.json",
@@ -671,26 +478,6 @@
     ALTARIA: "#00695c", "CERCANÍAS": "#ea580c", TREN: "#475569"
   };
   const SPAIN_BOUNDS = { latMin: 26, latMax: 44.5, lonMin: -19, lonMax: 5.5 };
-
-  /* ---------- Bloqueo de Suspensión y Protector de Pantalla (Screen Wake Lock API) ---------- */
-  let wakeLockSentinel = null;
-  async function requestWakeLock() {
-    if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
-    if (wakeLockSentinel && !wakeLockSentinel.released) return;
-    try {
-      wakeLockSentinel = await navigator.wakeLock.request("screen");
-      wakeLockSentinel.addEventListener("release", () => { wakeLockSentinel = null; });
-    } catch (e) {}
-  }
-  requestWakeLock();
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") requestWakeLock();
-  });
-  ["click", "keydown", "touchstart"].forEach(ev => {
-    document.addEventListener(ev, () => {
-      if (!wakeLockSentinel) requestWakeLock();
-    }, { passive: true });
-  });
 
   /* ---------- Traductor Oficial de Códigos Numéricos de Producto de Renfe ---------- */
   const PRODUCT_CODES = {
@@ -717,25 +504,13 @@
     return "AVE";
   }
 
-  /* ---------- Coordenadas Geográficas Desglosadas por Estación Exacta ---------- */
+  /* ---------- Coordenadas Geográficas de Estaciones/Ciudades ---------- */
   const CITY_GEO = [
-    // Madrid desglosado
-    { keys: ["principe pio", "príncipe pío"], lat: 40.4213, lon: -3.7205, main: true },
-    { keys: ["atocha", "madrid-puerta", "madrid atocha", "almudena grandes"], lat: 40.4065, lon: -3.6896, main: true },
-    { keys: ["chamartin", "chamartín", "madrid-chamartin", "clara campoamor", "madrid"], lat: 40.4722, lon: -3.6822, main: true },
-    // Barcelona desglosado
-    { keys: ["frança", "franca", "estació de frança", "estacio de franca"], lat: 41.3840, lon: 2.1856, main: true },
-    { keys: ["passeig de gracia", "passeig de gràcia"], lat: 41.3920, lon: 2.1653, main: true },
-    { keys: ["clot", "sagrera", "sant andreu"], lat: 41.4116, lon: 2.1873, main: true },
-    { keys: ["sants", "barcelona-sants", "barcelona"], lat: 41.3791, lon: 2.1401, main: true },
-    // Valencia desglosado
-    { keys: ["cabanyal"], lat: 39.4705, lon: -0.3340, main: false },
-    { keys: ["estacio del nord", "estació del nord"], lat: 39.4668, lon: -0.3772, main: true },
-    { keys: ["sorolla", "valencia", "valència"], lat: 39.4601, lon: -0.3816, main: true },
-    // Sevilla desglosado
-    { keys: ["san bernardo"], lat: 37.3788, lon: -5.9793, main: true },
-    { keys: ["santa justa", "sevilla"], lat: 37.3919, lon: -5.9753, main: true },
-    // Resto de España
+    { keys: ["atocha", "madrid-puerta", "madrid atocha", "principe pio", "príncipe pío"], lat: 40.4065, lon: -3.6896, main: true },
+    { keys: ["chamartin", "chamartín", "madrid-chamartin", "madrid"], lat: 40.4722, lon: -3.6822, main: true },
+    { keys: ["barcelona", "sants", "passeig de gracia", "frança"], lat: 41.3791, lon: 2.1401, main: true },
+    { keys: ["valencia", "valència", "sorolla", "estacio del nord"], lat: 39.4601, lon: -0.3816, main: true },
+    { keys: ["sevilla", "santa justa", "san bernardo"], lat: 37.3919, lon: -5.9753, main: true },
     { keys: ["malaga", "málaga", "zambrano"], lat: 36.7115, lon: -4.4316, main: true },
     { keys: ["zaragoza", "delicias", "portillo"], lat: 41.6587, lon: -0.9114, main: true },
     { keys: ["bilbao", "abando", "concordia"], lat: 43.2614, lon: -2.9277, main: true },
@@ -747,8 +522,7 @@
     { keys: ["cuenca", "zobel", "zóbel"], lat: 40.0442, lon: -2.1380, main: true },
     { keys: ["albacete", "los llanos"], lat: 38.9997, lon: -1.8490, main: true },
     { keys: ["castellon", "castelló"], lat: 39.9870, lon: -0.0528, main: true },
-    { keys: ["camp de tarragona"], lat: 41.1992, lon: 1.2690, main: true },
-    { keys: ["tarragona"], lat: 41.1120, lon: 1.2550, main: true },
+    { keys: ["tarragona", "camp de tarragona"], lat: 41.1992, lon: 1.2690, main: true },
     { keys: ["ourense"], lat: 42.3411, lon: -7.8647, main: true },
     { keys: ["santiago"], lat: 42.8705, lon: -8.5446, main: true },
     { keys: ["coruña", "coruna"], lat: 43.3526, lon: -8.4098, main: true },
@@ -756,7 +530,7 @@
     { keys: ["oviedo"], lat: 43.3662, lon: -5.8536, main: true },
     { keys: ["gijon", "gijón"], lat: 43.5390, lon: -5.6760, main: true },
     { keys: ["murcia"], lat: 37.9746, lon: -1.1301, main: true },
-    { keys: ["lleida", "lerida", "pirineus"], lat: 41.6208, lon: 0.6327, main: true },
+    { keys: ["lleida", "lerida"], lat: 41.6208, lon: 0.6327, main: true },
     { keys: ["girona", "gerona"], lat: 41.9793, lon: 2.8169, main: false },
     { keys: ["figueres", "vilafant"], lat: 42.2654, lon: 2.9436, main: true },
     { keys: ["calatayud"], lat: 41.3410, lon: -1.6440, main: false },
@@ -810,9 +584,7 @@
     { keys: ["aranjuez"], lat: 40.0320, lon: -3.6060, main: false },
     { keys: ["teruel"], lat: 40.3420, lon: -1.1120, main: false },
     { keys: ["vinaros", "vinaròs", "benicarlo", "benicarló"], lat: 40.4700, lon: 0.4730, main: false },
-    { keys: ["tortosa"], lat: 40.8120, lon: 0.5210, main: false },
-    { keys: ["reus"], lat: 41.1558, lon: 1.1086, main: false },
-    { keys: ["portbou"], lat: 42.4247, lon: 3.1585, main: false }
+    { keys: ["tortosa"], lat: 40.8120, lon: 0.5210, main: false }
   ];
 
   function findStationCoords(name) {
@@ -826,7 +598,7 @@
     return null;
   }
 
-  function isInStationArea(lat, lon, thresholdKm = 1.6) {
+  function isInStationArea(lat, lon, thresholdKm = 2.2) {
     for (const c of CITY_GEO) {
       if (c.main && haversine(lat, lon, c.lat, c.lon) <= thresholdKm) return true;
     }
@@ -872,8 +644,8 @@
   const $ = id => document.getElementById(id);
   const el = {
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
-    interval: $("interval"), btnResetView: $("btnResetView"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
-    thOrange: $("thOrange"), thSpeed: $("thSpeed"), thPersist: $("thPersist"),
+    interval: $("interval"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
+    thOrange: $("thOrange"), thSpeed: $("thSpeed"),
     showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"), showOrmTiles: $("showOrmTiles"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
     showRed: $("showRed"), showOrange: $("showOrange"), showGreen: $("showGreen"), showLines: $("showLines"),
@@ -883,7 +655,7 @@
   };
 
   /* ---------- Mapa Base y Capa Oficial OpenRailwayMap ---------- */
-  const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView(SPAIN_DEFAULT_CENTER, SPAIN_DEFAULT_ZOOM);
+  const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([40.2, -3.7], 6);
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
   const BASES = {
     gris:   { url: ESRI + "Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", o: { maxNativeZoom: 16, maxZoom: 18, attribution: "Tiles &copy; Esri" } },
@@ -901,10 +673,14 @@
   const ormTileLayer = L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png", {
     subdomains: ["a", "b", "c"],
     maxZoom: 19,
-    opacity: 0.85,
+    opacity: 0.78,
     attribution: "&copy; OpenRailwayMap"
   }).addTo(map);
 
+  const trackCanvas = L.canvas({ padding: 0.5 });
+  const trackLayer = L.layerGroup().addTo(map);
+
+  // Pane exclusivo superior para las líneas de alerta sobre la vía (por encima de todas las vías y teselas, y justo debajo de los iconos de los trenes)
   const alertPane = map.createPane("alertTrackPane");
   alertPane.style.zIndex = 460;
   alertPane.style.pointerEvents = "none";
@@ -915,18 +691,18 @@
 
   const TRACKS = {
     av: {
-      name: "AV", minKm: 0.015, key: "avTrack_v18",
+      name: "AV", color: "#7b1fa2", weight: 3.0, opacity: 0.85, minKm: 0.015, key: "avTrack_v18",
       queries: [
         '[out:json][timeout:40][bbox:35.8,-9.5,43.8,3.4];(way["railway"="rail"]["highspeed"="yes"][!"service"];way["railway"="rail"]["gauge"~"1435"][!"service"];);out skel geom qt;'
       ],
-      loaded: false, osmLoaded: false, loading: false, n: 0, grid: new Map(), ways: []
+      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map(), ways: []
     },
     md: {
-      name: "MD/Conv", minKm: 0.025, key: "mdTrack_v18",
+      name: "MD/Conv", color: "#0066cc", weight: 2.2, opacity: 0.8, minKm: 0.025, key: "mdTrack_v18",
       queries: [
         '[out:json][timeout:45][bbox:35.8,-9.5,43.8,3.4];way["railway"="rail"]["highspeed"!="yes"]["usage"~"^(main|branch)$"][!"service"];out skel geom qt;'
       ],
-      loaded: false, osmLoaded: false, loading: false, n: 0, grid: new Map(), ways: []
+      loaded: false, osmLoaded: false, loading: false, n: 0, poly: null, grid: new Map(), ways: []
     }
   };
 
@@ -937,7 +713,6 @@
   ];
 
   const toNum = v => (v === null || v === undefined || v === "") ? NaN : parseFloat(String(v).replace(",", "."));
-  const isNum = v => typeof v === "number" && Number.isFinite(v);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const R = 6371.0088, rad = x => x * Math.PI / 180;
   function haversine(la1, lo1, la2, lo2) {
@@ -946,26 +721,9 @@
     return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
   }
   const fmtKm = d => d < 1 ? Math.round(d * 1000) + " m" : d.toFixed(2) + " km";
-  const fmtImpactTime = sec => {
-    if (!isNum(sec) || sec <= 0) return "Vel. igualada";
-    const s = Math.round(sec);
-    if (s < 60) return `${s} s`;
-    const m = Math.floor(s / 60);
-    const remS = s % 60;
-    if (m < 60) return remS > 0 ? `${m}m ${remS}s` : `${m} min`;
-    const h = Math.floor(m / 60);
-    const remM = m % 60;
-    return `${h}h ${remM}m`;
-  };
-  const fmtDuration = sec => {
-    const s = Math.max(0, Math.round(sec));
-    if (s < 60) return `${s}s`;
-    const m = Math.floor(s / 60), remS = s % 60;
-    return remS > 0 ? `${m}m ${remS}s` : `${m}m`;
-  };
   function setStatus(msg, isErr) { el.status.textContent = msg; el.status.className = isErr ? "err" : ""; }
 
-  /* ---------- Indexación Espacial en Memoria para Cálculo por Vía ---------- */
+  /* ---------- Indexación Espacial de Sub-segmentos y Enrutamiento Local Exacto sobre la Vía ---------- */
   function indexTrackWays(st, lines) {
     st.grid.clear();
     st.ways = lines;
@@ -1035,24 +793,6 @@
     return best;
   }
 
-  /* ---------- Límite de Velocidad Máxima por Tipo de Tren e Infraestructura ---------- */
-  function getMaxSpeedForTrain(tipoStr, lat, lon) {
-    const tipo = (tipoStr || "").toUpperCase();
-    if (tipo === "AVE" || tipo === "AVLO") return 320;
-    if (tipo === "AVANT") return 250;
-    if (tipo === "MD") return 160;
-    if (tipo === "CERCANÍAS" || tipo === "REGIONAL" || tipo === "REG.EXP") return 140;
-
-    const sAV = TRACKS.av.loaded ? snapToTrackLayer(TRACKS.av, lat, lon) : null;
-    const sMD = TRACKS.md.loaded ? snapToTrackLayer(TRACKS.md, lat, lon) : null;
-    const dAV = sAV ? sAV.distToTrack : Infinity;
-    const dMD = sMD ? sMD.distToTrack : Infinity;
-
-    if (dAV <= 1.2 && dAV <= dMD) return 250;
-    if (dMD <= 1.2 && dMD < dAV) return 220;
-    return 250;
-  }
-
   function computeLocalTrackRoute(a, b, maxAllowedKm) {
     const preferAV = (a.trackGroup === "AV" || b.trackGroup === "AV");
     const layersToTry = preferAV ? [TRACKS.av, TRACKS.md] : [TRACKS.md, TRACKS.av];
@@ -1064,18 +804,20 @@
       if (!snapA || !snapB || snapA.distToTrack > 1.2 || snapB.distToTrack > 1.2) continue;
 
       const sA = snapA.seg, sB = snapB.seg;
-      const directSnapD = haversine(snapA.snapLat, snapA.snapLon, snapB.snapLat, snapB.snapLon);
 
-      if (sA.id === sB.id || directSnapD <= 0.35) {
-        if (directSnapD <= maxAllowedKm) {
+      // Caso 1: Mismo sub-segmento
+      if (sA.id === sB.id) {
+        const d = haversine(snapA.snapLat, snapA.snapLon, snapB.snapLat, snapB.snapLon);
+        if (d <= maxAllowedKm) {
           return {
-            distKm: directSnapD,
+            distKm: d,
             pathCoords: [[snapA.snapLat, snapA.snapLon], [snapB.snapLat, snapB.snapLon]],
             snapA, snapB
           };
         }
       }
 
+      // Caso 2: Mismo way de OSM -> recorrer vértices intermedios
       if (sA.wayIdx === sB.wayIdx) {
         const wLine = st.ways[sA.wayIdx];
         const posA = sA.segIdx + snapA.t;
@@ -1096,6 +838,7 @@
         }
       }
 
+      // Caso 3: Grafo fino local sobre los sub-segmentos de la zona
       const minLat = Math.min(snapA.snapLat, snapB.snapLat) - 0.08;
       const maxLat = Math.max(snapA.snapLat, snapB.snapLat) + 0.08;
       const minLon = Math.min(snapA.snapLon, snapB.snapLon) - 0.10;
@@ -1210,13 +953,6 @@
       }
 
       if (found && dist[targetNode] <= maxAllowedKm) {
-        if (directSnapD > 0.05 && dist[targetNode] > directSnapD * 1.65 && directSnapD <= 1.2) {
-          return {
-            distKm: directSnapD,
-            pathCoords: [[snapA.snapLat, snapA.snapLon], [snapB.snapLat, snapB.snapLon]],
-            snapA, snapB
-          };
-        }
         const pathCoords = [];
         let curr = targetNode;
         while (curr !== -1) {
@@ -1232,13 +968,15 @@
   }
 
   function updateTrackStatus() {
-    if (!el.showOrmTiles.checked) {
-      el.trackStatus.textContent = "Capa Adif oculta";
-    } else if (TRACKS.av.loading || TRACKS.md.loading) {
-      el.trackStatus.textContent = "Capa Adif activa · indexando geometría…";
-    } else {
-      el.trackStatus.textContent = "Capa Adif activa y geometría lista";
-    }
+    const part = st => {
+      if (st.loading) return `${st.name}: descargando trazado real…`;
+      if (st.osmLoaded) return `${st.name}: ${st.n} tramos reales`;
+      return `${st.name}: pendiente`;
+    };
+    const parts = [];
+    if (el.showTrackAV.checked) parts.push(part(TRACKS.av));
+    if (el.showTrackMD.checked) parts.push(part(TRACKS.md));
+    el.trackStatus.textContent = parts.length ? parts.join(" · ") : "Vías vectoriales ocultas";
   }
 
   function idb() { return new Promise((res, rej) => { const r = indexedDB.open("trenesRenfe", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
@@ -1268,6 +1006,31 @@
     throw lastErr || new Error("sin datos");
   }
 
+  async function fetchRenfeOfficialLines() {
+    const base = SOURCES.ld.replace("flotaLD.json", "");
+    for (const file of ["lineas.geojson", "lineasLD.geojson"]) {
+      try {
+        const r = await fetch(proxify(base + file));
+        if (!r.ok) continue;
+        const g = await r.json();
+        const ways = [];
+        for (const f of (g.features || [])) {
+          const geom = f.geometry;
+          if (!geom) continue;
+          if (geom.type === "LineString" && geom.coordinates.length > 1) {
+            ways.push(geom.coordinates.map(c => [+c[1].toFixed(5), +c[0].toFixed(5)]));
+          } else if (geom.type === "MultiLineString") {
+            for (const line of geom.coordinates) {
+              if (line.length > 1) ways.push(line.map(c => [+c[1].toFixed(5), +c[0].toFixed(5)]));
+            }
+          }
+        }
+        if (ways.length) return ways;
+      } catch (e) {}
+    }
+    return null;
+  }
+
   function decimate(pts, minKm) {
     const out = [pts[0]]; let last = pts[0];
     for (let i = 1; i < pts.length - 1; i++) {
@@ -1279,11 +1042,19 @@
     return out;
   }
 
+  function syncTrackVisibility() {
+    trackLayer.clearLayers();
+    if (el.showTrackMD.checked && TRACKS.md.poly) TRACKS.md.poly.addTo(trackLayer);
+    if (el.showTrackAV.checked && TRACKS.av.poly) TRACKS.av.poly.addTo(trackLayer);
+  }
+
   function applyTrackWays(st, ways) {
     indexTrackWays(st, ways);
+    st.poly = L.polyline(ways, { renderer: trackCanvas, color: st.color, weight: st.weight, opacity: st.opacity, interactive: false });
     st.n = ways.length;
     st.loaded = true;
     st.osmLoaded = true;
+    syncTrackVisibility();
     updateTrackStatus();
     if (trains.length) { computeProximity(); render(); }
   }
@@ -1309,6 +1080,10 @@
             allWays.push(...dec);
           } catch (e) {}
         }
+        if (!allWays.length && kind === "av") {
+          const renfeWays = await fetchRenfeOfficialLines();
+          if (renfeWays) allWays.push(...renfeWays);
+        }
         if (!allWays.length) throw new Error("sin respuesta OSM");
         ways = allWays;
         idbSet(st.key, { t: Date.now(), ways });
@@ -1321,18 +1096,25 @@
     }
   }
 
+  function onTrackToggle(kind, chk) {
+    if (chk.checked && !TRACKS[kind].osmLoaded) loadTrackLayer(kind);
+    syncTrackVisibility();
+    updateTrackStatus();
+  }
+  el.showTrackAV.addEventListener("change", () => onTrackToggle("av", el.showTrackAV));
+  el.showTrackMD.addEventListener("change", () => onTrackToggle("md", el.showTrackMD));
   el.showOrmTiles.addEventListener("change", () => {
     if (el.showOrmTiles.checked) ormTileLayer.addTo(map);
     else map.removeLayer(ormTileLayer);
-    updateTrackStatus();
+  });
+  el.btnReloadTrack.addEventListener("click", () => {
+    if (el.showTrackAV.checked) loadTrackLayer("av", true);
+    if (el.showTrackMD.checked) loadTrackLayer("md", true);
   });
 
-  /* ---------- Estado de Trenes, Persistencia y Par Seleccionado ---------- */
+  /* ---------- Estado de Trenes ---------- */
   let allTrains = [], trains = [], typeSel = {}, typesKey = "", markers = new Map(), pairs = [], timer = null, paused = false, loading = false;
   const trainHistory = new Map();
-  const redAlertStart = new Map();
-  let selectedPairKey = null;
-  let selectedTrainIds = new Set();
 
   const stations = new Map();
   function registerStation(code, name) {
@@ -1351,6 +1133,32 @@
     if (found) return found;
     if (/^\d+$/.test(s)) return "";
     return s;
+  }
+
+  let stationsTried = false;
+  function proxify(url) {
+    const p = el.proxy.value.trim();
+    return p ? (p.includes("{url}") ? p.replace("{url}", encodeURIComponent(url)) : p + encodeURIComponent(url)) : url;
+  }
+  async function loadStations() {
+    if (stationsTried || el.source.value !== "ld") return;
+    stationsTried = true;
+    const base = SOURCES.ld.replace("flotaLD.json", "");
+    for (const file of ["estacionesEstatico.geojson", "estaciones.geojson"]) {
+      try {
+        const r = await fetch(proxify(base + file));
+        if (!r.ok) continue;
+        const g = await r.json();
+        (g.features || []).forEach(f => {
+          const pr = f.properties || {};
+          const keys = Object.keys(pr);
+          const kc = keys.find(k => /(cod|id|estacion|clave)/i.test(k) && (typeof pr[k] === "number" || /^\d+$/.test(String(pr[k]).trim())));
+          const kn = keys.find(k => /(nom|name|desc|titulo|label)/i.test(k) && typeof pr[k] === "string" && !/^\d+$/.test(pr[k].trim()));
+          if (kc && kn) registerStation(pr[kc], pr[kn]);
+        });
+        break;
+      } catch (e) {}
+    }
   }
 
   function extractList(data) {
@@ -1405,9 +1213,6 @@
   function updateTrainKinematics(trainObj) {
     const now = Date.now();
     const id = trainObj.id;
-    const maxSpeed = getMaxSpeedForTrain(trainObj.tipo, trainObj.lat, trainObj.lon);
-    trainObj.maxAllowedSpeed = maxSpeed;
-
     let h = trainHistory.get(id);
     if (!h) {
       h = { pts: [{ lat: trainObj.lat, lon: trainObj.lon, t: now }], speeds: [], dLat: 0, dLon: 0, hasVector: false, calcSpeed: null, measures: 0 };
@@ -1418,15 +1223,14 @@
       const distKm = haversine(lastPt.lat, lastPt.lon, trainObj.lat, trainObj.lon);
 
       if (distKm >= 0.015 && dtSec >= 1.5) {
-        const rawV = (distKm / dtSec) * 3600;
-        if (rawV <= 600) {
-          const cappedV = Math.min(rawV, maxSpeed);
+        const vKmh = (distKm / dtSec) * 3600;
+        if (vKmh <= 380) {
           h.dLat = trainObj.lat - lastPt.lat;
           h.dLon = trainObj.lon - lastPt.lon;
           h.hasVector = true;
           h.pts.push({ lat: trainObj.lat, lon: trainObj.lon, t: now });
           if (h.pts.length > 4) h.pts.shift();
-          h.speeds.push(cappedV);
+          h.speeds.push(vKmh);
           if (h.speeds.length > 2) h.speeds.shift();
         }
       } else if (dtSec > 95) {
@@ -1435,21 +1239,17 @@
         h.pts[h.pts.length - 1].t = now;
       }
 
-      for (let i = 0; i < h.speeds.length; i++) {
-        if (h.speeds[i] > maxSpeed) h.speeds[i] = maxSpeed;
-      }
-
       h.measures = h.speeds.length;
       if (h.speeds.length === 2) {
-        h.calcSpeed = Math.min(maxSpeed, Math.round((h.speeds[0] + h.speeds[1]) / 2));
+        h.calcSpeed = Math.round((h.speeds[0] + h.speeds[1]) / 2);
       } else if (h.speeds.length === 1) {
-        h.calcSpeed = Math.min(maxSpeed, Math.round(h.speeds[0]));
+        h.calcSpeed = Math.round(h.speeds[0]);
       }
     }
 
     const rawVel = toNum(trainObj.raw && (trainObj.raw.velocidad ?? trainObj.raw.vel ?? trainObj.raw.speed ?? trainObj.raw["Velocidad (km/h)"]));
-    if (h.calcSpeed === null && isNum(rawVel) && rawVel >= 0) {
-      h.calcSpeed = Math.min(maxSpeed, Math.round(rawVel));
+    if (h.calcSpeed === null && isFinite(rawVel) && rawVel >= 0) {
+      h.calcSpeed = Math.round(rawVel);
       h.measures = 2;
     }
 
@@ -1467,7 +1267,7 @@
     const findKey = (o, re) => { for (const k of Object.keys(o)) if (re.test(k) && o[k] !== null && o[k] !== "" && typeof o[k] !== "object") return o[k]; };
     const lat = toNum(pos.latitud ?? pos.lat ?? pos.latitude ?? pos.Latitud ?? findKey(pos, /^lat/i));
     const lon = toNum(pos.longitud ?? pos.lon ?? pos.lng ?? pos.long ?? pos.longitude ?? pos.Longitud ?? findKey(pos, /^(lon|lng)/i));
-    if (!isNum(lat) || !isNum(lon)) return null;
+    if (!isFinite(lat) || !isFinite(lon)) return null;
     if (lat < SPAIN_BOUNDS.latMin || lat > SPAIN_BOUNDS.latMax || lon < SPAIN_BOUNDS.lonMin || lon > SPAIN_BOUNDS.lonMax) return null;
 
     let id, label, raw = {};
@@ -1511,14 +1311,12 @@
 
     const orig = resolveStation(origRaw), dest = resolveStation(destRaw), sig = resolveStation(sigRaw), ant = resolveStation(antRaw);
     const horaSal = r.horaSalida ?? r.salida ?? get(/hora.*sal/i) ?? "", horaLleg = r.horaLlegada ?? r.llegada ?? get(/hora.*lleg/i) ?? "";
-    const maxSpd = t.maxAllowedSpeed || getMaxSpeedForTrain(t.tipo, t.lat, t.lon);
-    const rawVel = isNum(t.calcSpeed) ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
-    const vel = isNum(rawVel) && rawVel >= 0 ? Math.min(maxSpd, Math.round(rawVel)) : null;
+    const vel = t.calcSpeed !== null && t.calcSpeed !== undefined ? t.calcSpeed : toNum(r.velocidad ?? r.vel ?? r.speed ?? get(/vel|speed/i));
     const ret = toNum(r.retraso ?? r.demora ?? r.delay ?? get(/retraso|demora/i));
     const mat = r.mat ?? r.material ?? r.composicion ?? "", corredor = r.corredor ?? r.linea ?? r.nucleo ?? r.Línea ?? "";
 
     let retHtml = "";
-    if (isNum(ret)) {
+    if (isFinite(ret)) {
       retHtml = ret > 0 ? `<b style="color:#e53935">Retraso: +${ret} min</b>` : ret < 0 ? `<span style="color:#2e7d32">Adelantado ${-ret} min</span>` : `<span style="color:#2e7d32;font-weight:600">En hora</span>`;
     }
 
@@ -1527,8 +1325,7 @@
       numTecnico: (numTecnico && String(numTecnico) !== numero) ? String(numTecnico) : "",
       orig, dest, sig, ant,
       horaSal: String(horaSal || "").trim(), horaLleg: String(horaLleg || "").trim(),
-      vel,
-      maxSpd,
+      vel: isFinite(vel) && vel >= 0 ? Math.round(vel) : null,
       measures: t.speedMeasures || 0,
       speedsList: t.speedsList || [],
       ret, retHtml, mat: String(mat || "").trim(), corredor: String(corredor || "").trim()
@@ -1553,33 +1350,21 @@
       group = "CONV";
       bestSnap = sMD;
     } else {
-      if (dAV <= 1.2 && dAV < dMD * 0.85) {
+      if (isFinite(t.calcSpeed) && t.calcSpeed > 205) {
+        group = "AV";
+        bestSnap = sAV;
+      } else if (dAV <= 1.2 && dAV < dMD * 0.85) {
         group = "AV";
         bestSnap = sAV;
       } else if (dMD <= 1.2 && dMD < dAV * 0.85) {
         group = "CONV";
         bestSnap = sMD;
-      } else if (isNum(t.calcSpeed) && t.calcSpeed > 220) {
-        group = "AV";
-        bestSnap = sAV;
       } else {
         bestSnap = dAV <= dMD ? sAV : sMD;
       }
     }
 
     t.trackGroup = group;
-    const maxSpeed = (tipo === "ALVIA" || group === "HYB")
-      ? (group === "CONV" ? 220 : 250)
-      : getMaxSpeedForTrain(tipo, t.lat, t.lon);
-    t.maxAllowedSpeed = maxSpeed;
-    if (isNum(t.calcSpeed) && t.calcSpeed > maxSpeed) {
-      t.calcSpeed = maxSpeed;
-    }
-    if (t.speedsList && t.speedsList.length) {
-      t.speedsList = t.speedsList.map(v => Math.min(v, maxSpeed));
-    }
-
-    t.bestSnapSeg = bestSnap ? bestSnap.seg : null;
     if (bestSnap && bestSnap.distToTrack <= 0.8) {
       t.drawLat = bestSnap.snapLat;
       t.drawLon = bestSnap.snapLon;
@@ -1602,13 +1387,13 @@
     const cSig  = findStationCoords(x.sig);
     const cAnt  = findStationCoords(x.ant);
 
-    if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 0.8) {
+    if (cSig && haversine(t.lat, t.lon, cSig[0], cSig[1]) > 3.0) {
       return [cSig[0] - t.lat, cSig[1] - t.lon];
     }
     if (cAnt && cSig && (cAnt[0] !== cSig[0] || cAnt[1] !== cSig[1])) {
       return [cSig[0] - cAnt[0], cSig[1] - cAnt[1]];
     }
-    if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 1.2) {
+    if (cDest && haversine(t.lat, t.lon, cDest[0], cDest[1]) > 5.0) {
       return [cDest[0] - t.lat, cDest[1] - t.lon];
     }
     if (cOrig && cDest && (cOrig[0] !== cDest[0] || cOrig[1] !== cDest[1])) {
@@ -1617,129 +1402,73 @@
     return null;
   }
 
-  function getTrainMotionVector(t) {
-    let vLat = 0, vLon = 0;
-    if (t.hasVector && (Math.abs(t.dLat) > 1e-7 || Math.abs(t.dLon) > 1e-7)) {
-      vLat = t.dLat;
-      vLon = t.dLon;
-    } else if (t.routeVec) {
-      vLat = t.routeVec[0];
-      vLon = t.routeVec[1];
-    } else {
-      return null;
-    }
-    const kLon = Math.cos((t.lat || 40) * Math.PI / 180);
-    const vx = vLon * kLon, vy = vLat;
-    const m = Math.hypot(vx, vy);
-    if (m < 1e-8) return null;
-    return { vx: vx / m, vy: vy / m, vLat, vLon };
-  }
-
-  function computeTrainBearing(t) {
-    const mv = getTrainMotionVector(t);
-    if (!mv) return null;
-
-    if (t.bestSnapSeg) {
-      const s = t.bestSnapSeg;
-      const kLon = Math.cos((t.lat || 40) * Math.PI / 180);
-      const sx = (s.lo2 - s.lo1) * kLon, sy = s.la2 - s.la1;
-      const sm = Math.hypot(sx, sy);
-      if (sm > 1e-8) {
-        const dot = (mv.vx * sx + mv.vy * sy) / sm;
-        if (Math.abs(dot) > 0.15) {
-          const dirX = dot >= 0 ? sx : -sx;
-          const dirY = dot >= 0 ? sy : -sy;
-          return (Math.atan2(dirX, dirY) * 180 / Math.PI + 360) % 360;
-        }
-      }
-    }
-
-    return (Math.atan2(mv.vx, mv.vy) * 180 / Math.PI + 360) % 360;
-  }
-
-  function getPathEndTangents(pathCoords, refLat) {
-    if (!pathCoords || pathCoords.length < 2) return null;
+  function cosBetweenVectors(v1Lat, v1Lon, v2Lat, v2Lon, refLat) {
     const kLon = Math.cos((refLat || 40) * Math.PI / 180);
-
-    let p0 = pathCoords[0], pA = pathCoords[1];
-    for (let i = 1; i < pathCoords.length; i++) {
-      if (haversine(p0[0], p0[1], pathCoords[i][0], pathCoords[i][1]) >= 0.04) {
-        pA = pathCoords[i];
-        break;
-      }
-    }
-    const ax = (pA[1] - p0[1]) * kLon, ay = pA[0] - p0[0];
-    const am = Math.hypot(ax, ay);
-
-    const n = pathCoords.length;
-    let pN = pathCoords[n - 1], pB = pathCoords[n - 2];
-    for (let i = n - 2; i >= 0; i--) {
-      if (haversine(pathCoords[i][0], pathCoords[i][1], pN[0], pN[1]) >= 0.04) {
-        pB = pathCoords[i];
-        break;
-      }
-    }
-    const bx = (pN[1] - pB[1]) * kLon, by = pN[0] - pB[0];
-    const bm = Math.hypot(bx, by);
-
-    if (am < 1e-8 || bm < 1e-8) return null;
-    return {
-      tAx: ax / am, tAy: ay / am,
-      tBx: bx / bm, tBy: by / bm
-    };
+    const x1 = v1Lon * kLon, y1 = v1Lat;
+    const x2 = v2Lon * kLon, y2 = v2Lat;
+    const m1 = Math.hypot(x1, y1), m2 = Math.hypot(x2, y2);
+    if (m1 < 1e-8 || m2 < 1e-8) return null;
+    return (x1 * x2 + y1 * y2) / (m1 * m2);
   }
 
-  /* ---------- Verificación Estricta de Sentido sobre la Vía y entre Rumbo de Trenes ---------- */
-  function analyzeMovementAlongPath(a, b, pathCoords) {
+  function areMovingSameDirection(a, b) {
     const infoA = a._info, infoB = b._info;
-    if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
-      if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return null;
-      if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return null;
-      if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return null;
-    }
-
-    if (a.routeVec && b.routeVec) {
-      const refLat = (a.lat + b.lat) / 2;
-      const kLon = Math.cos(refLat * Math.PI / 180);
-      const rAx = a.routeVec[1] * kLon, rAy = a.routeVec[0];
-      const rBx = b.routeVec[1] * kLon, rBy = b.routeVec[0];
-      const mA = Math.hypot(rAx, rAy), mB = Math.hypot(rBx, rBy);
-      if (mA > 1e-8 && mB > 1e-8) {
-        const cosRoute = (rAx * rBx + rAy * rBy) / (mA * mB);
-        if (cosRoute < 0.15) return null;
-      }
-    }
-
-    const mvA = getTrainMotionVector(a);
-    const mvB = getTrainMotionVector(b);
-    if (!mvA || !mvB) return null;
-
-    const cosArrows = mvA.vx * mvB.vx + mvA.vy * mvB.vy;
-    if (cosArrows < 0.25) return null;
-
     const refLat = (a.lat + b.lat) / 2;
-    const tangents = getPathEndTangents(pathCoords, refLat);
 
-    if (tangents) {
-      const projA = mvA.vx * tangents.tAx + mvA.vy * tangents.tAy;
-      const projB = mvB.vx * tangents.tBx + mvB.vy * tangents.tBy;
-
-      if (Math.abs(projA) < 0.35 || Math.abs(projB) < 0.35) return null;
-
-      if ((projA > 0 && projB < 0) || (projA < 0 && projB > 0)) {
-        return null;
-      }
-
-      return projA > 0
-        ? { trailing: a, leading: b }
-        : { trailing: b, leading: a };
+    if (infoA.orig && infoA.dest && infoB.orig && infoB.dest) {
+      if (infoA.orig === infoB.dest || infoA.dest === infoB.orig) return false;
+      if (infoA.sig && infoB.ant && infoA.sig === infoB.ant) return false;
+      if (infoA.ant && infoB.sig && infoA.ant === infoB.sig) return false;
     }
 
-    const kLon = Math.cos(refLat * Math.PI / 180);
-    const abX = (b.lon - a.lon) * kLon, abY = b.lat - a.lat;
-    const proj = abX * (mvA.vx + mvB.vx) + abY * (mvA.vy + mvB.vy);
-    if (Math.abs(proj) < 1e-8) return null;
-    return proj > 0 ? { trailing: a, leading: b } : { trailing: b, leading: a };
+    const rA = a.routeVec, rB = b.routeVec;
+    if (rA && rB) {
+      const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
+      if (cosRoute !== null && cosRoute < 0.5) return false;
+    }
+
+    if (a.hasVector && b.hasVector) {
+      const cosGps = cosBetweenVectors(a.dLat, a.dLon, b.dLat, b.dLon, refLat);
+      if (cosGps !== null && cosGps < 0.5) return false;
+      return true;
+    }
+
+    if (a.hasVector && rB) {
+      const cosMix = cosBetweenVectors(a.dLat, a.dLon, rB[0], rB[1], refLat);
+      if (cosMix !== null && cosMix < 0.5) return false;
+    }
+    if (b.hasVector && rA) {
+      const cosMix = cosBetweenVectors(rA[0], rA[1], b.dLat, b.dLon, refLat);
+      if (cosMix !== null && cosMix < 0.5) return false;
+    }
+
+    if (rA && rB) {
+      const cosRoute = cosBetweenVectors(rA[0], rA[1], rB[0], rB[1], refLat);
+      return cosRoute !== null && cosRoute > 0.65;
+    }
+
+    return false;
+  }
+
+  function getTrailingAndLeading(a, b) {
+    let vLat = 0, vLon = 0;
+    if (a.hasVector) { vLat += a.dLat; vLon += a.dLon; }
+    if (b.hasVector) { vLat += b.dLat; vLon += b.dLon; }
+    if (vLat === 0 && vLon === 0) {
+      if (a.routeVec) { vLat += a.routeVec[0]; vLon += a.routeVec[1]; }
+      if (b.routeVec) { vLat += b.routeVec[0]; vLon += b.routeVec[1]; }
+    }
+    if (vLat === 0 && vLon === 0) return null;
+
+    const kLon = Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+    const abLat = b.lat - a.lat;
+    const abLon = (b.lon - a.lon) * kLon;
+    const proj = (abLat * vLat) + (abLon * vLon * kLon);
+    if (Math.abs(proj) < 1e-9) return null;
+
+    return proj > 0
+      ? { trailing: a, leading: b }
+      : { trailing: b, leading: a };
   }
 
   function buildUrl() {
@@ -1767,35 +1496,26 @@
       const avg = (t.speedsList[0] + t.speedsList[1]) / 2;
       return avg > minSpeedKmh && t.speedsList[1] > minSpeedKmh * 0.85;
     }
-    if (t.speedMeasures >= 2 && isNum(t.calcSpeed)) {
+    if (t.speedMeasures >= 2 && isFinite(t.calcSpeed)) {
       return t.calcSpeed > minSpeedKmh;
     }
     return false;
   }
 
-  function makePairKey(id1, id2) {
-    return id1 < id2 ? `${id1}|${id2}` : `${id2}|${id1}`;
-  }
-
   function computeProximity() {
     const tO = Math.max(0.5, toNum(el.thOrange.value) || 5);
     const minSpeed = Math.max(10, toNum(el.thSpeed.value) || 100);
-    const now = Date.now();
-    const activeRedKeys = new Set();
 
     trains.forEach(t => {
       t.d = Infinity;
-      t.redD = Infinity;
       t.nearTrain = null;
       t.hasRedPair = false;
       t.roleInfo = "";
-      t.impactSec = null;
-      t.inStation = isInStationArea(t.lat, t.lon, 1.6);
-      assignTrainTrackAndSnap(t);
+      t.inStation = isInStationArea(t.lat, t.lon, 2.2);
       t.isFast = isConfirmedHighSpeed(t, minSpeed);
       t._info = trainInfo(t);
+      assignTrainTrackAndSnap(t);
       t.routeVec = getRouteVector(t);
-      t.bearing = computeTrainBearing(t);
     });
 
     const activeTrains = trains.filter(t => !t.inStation);
@@ -1815,7 +1535,10 @@
         const straightD = haversine(a.lat, a.lon, b.lat, b.lon);
         if (straightD >= tO) continue;
 
-        // 2. CÁLCULO DE DISTANCIA Y TRAZADO REAL SOBRE LA VÍA
+        // 2. FILTRO ESTRICTO DE SENTIDO DE LA MARCHA
+        if (!areMovingSameDirection(a, b)) continue;
+
+        // 3. CÁLCULO DE DISTANCIA Y TRAZADO REAL SOBRE LA VÍA
         const anyLayerLoaded = TRACKS.av.loaded || TRACKS.md.loaded;
         let d = straightD;
         let pathCoords = null;
@@ -1829,76 +1552,40 @@
           pathCoords = [[a.drawLat, a.drawLon], [b.drawLat, b.drawLon]];
         }
 
-        // 3. VERIFICACIÓN TOPOLÓGICA DE SENTIDO A LO LARGO DE LA VÍA Y ENTRE VECTORES DE AVANCE
-        const order = analyzeMovementAlongPath(a, b, pathCoords);
-        if (!order) continue;
-
-        const trailing = order.trailing;
-        const leading = order.leading;
-        const vTrail = isNum(trailing.calcSpeed) ? trailing.calcSpeed : 0;
-        const vLead  = isNum(leading.calcSpeed)  ? leading.calcSpeed  : 0;
-        const closingSpeed = vTrail - vLead;
-
+        const order = getTrailingAndLeading(a, b);
         let pairSeverity = "orange";
-        let impactSec = null;
+        let trailing = a, leading = b;
 
-        if (trailing.isFast && closingSpeed >= 0) {
-          pairSeverity = "red";
-          impactSec = closingSpeed > 0 ? (d / closingSpeed) * 3600 : Infinity;
+        if (order) {
+          trailing = order.trailing;
+          leading = order.leading;
+          const vTrail = isFinite(trailing.calcSpeed) ? trailing.calcSpeed : 0;
+          const vLead  = isFinite(leading.calcSpeed)  ? leading.calcSpeed  : 0;
+
+          if (trailing.isFast && vTrail >= vLead) {
+            pairSeverity = "red";
+          } else {
+            pairSeverity = "orange";
+          }
         }
 
-        const pairKey = makePairKey(a.id, b.id);
-        let redStartMs = null;
-
-        // La alerta ROJA prevalece siempre sobre la NARANJA en los atributos del tren
+        if (d < a.d) { a.d = d; a.nearTrain = b; }
+        if (d < b.d) { b.d = d; b.nearTrain = a; }
         if (pairSeverity === "red") {
-          activeRedKeys.add(pairKey);
-          if (!redAlertStart.has(pairKey)) {
-            redAlertStart.set(pairKey, now);
-          }
-          redStartMs = redAlertStart.get(pairKey);
-
-          if (!a.hasRedPair || d < a.redD) {
-            a.redD = d;
-            a.d = d;
-            a.nearTrain = b;
-            a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
-          }
-          if (!b.hasRedPair || d < b.redD) {
-            b.redD = d;
-            b.d = d;
-            b.nearTrain = a;
-            b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
-          }
           a.hasRedPair = true;
           b.hasRedPair = true;
-          if (impactSec !== null) {
-            if (a.impactSec === null || impactSec < a.impactSec) a.impactSec = impactSec;
-            if (b.impactSec === null || impactSec < b.impactSec) b.impactSec = impactSec;
-          }
-        } else {
-          if (!a.hasRedPair && d < a.d) {
-            a.d = d;
-            a.nearTrain = b;
-            a.roleInfo = (a === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
-          }
-          if (!b.hasRedPair && d < b.d) {
-            b.d = d;
-            b.nearTrain = a;
-            b.roleInfo = (b === trailing) ? `Detrás de ${leading.tipo} ${leading.label}` : `Delante de ${trailing.tipo} ${trailing.label}`;
-          }
+        }
+        if (order) {
+          trailing.roleInfo = `Detrás de ${leading.tipo} ${leading.label}`;
+          leading.roleInfo  = `Delante de ${trailing.tipo} ${trailing.label}`;
         }
 
-        pairs.push({ a, b, trailing, leading, hasOrder: true, d, pathCoords, severity: pairSeverity, impactSec, pairKey, redStartMs });
+        pairs.push({ a, b, trailing, leading, hasOrder: !!order, d, pathCoords, severity: pairSeverity });
       }
     }
 
-    for (const k of redAlertStart.keys()) {
-      if (!activeRedKeys.has(k)) redAlertStart.delete(k);
-    }
-
     trains.forEach(t => {
-      if (t.inStation || !isNum(t.d) || t.d >= tO) {
+      if (t.inStation || !isFinite(t.d) || t.d >= tO) {
         t.color = "green";
       } else {
         t.color = t.hasRedPair ? "red" : "orange";
@@ -1919,7 +1606,7 @@
     const paradas = [];
     if (x.sig) paradas.push(`Próxima: <b>${esc(x.sig)}</b>`);
     if (x.vel !== null) {
-      const mTag = x.measures >= 2 ? ` (máx. ${x.maxSpd})` : " (1 med.)";
+      const mTag = x.measures >= 2 ? " (2 med.)" : " (1 med.)";
       paradas.push(`Vel. GPS: <b>${x.vel} km/h</b>${mTag}`);
     } else {
       paradas.push(`Vel. GPS: <i>calculando…</i>`);
@@ -1930,10 +1617,9 @@
     const nearName = t.nearTrain ? `${t.nearTrain.tipo ? t.nearTrain.tipo + " " : ""}${t.nearTrain.label}` : "otro tren";
     const roleTxt = t.roleInfo ? ` (${t.roleInfo})` : "";
     let near = "";
-    if (!t.inStation && isNum(t.d)) {
+    if (!t.inStation && isFinite(t.d)) {
       if (t.color === "red") {
-        const ttiTxt = t.impactSec !== null ? ` · ⏱ Impacto: ${fmtImpactTime(t.impactSec)}` : "";
-        near = `<div style="color:#e53935;font-weight:700;margin-top:3px">🚨 PELIGRO ALCANCE: A ${fmtKm(t.d)} por vía${esc(roleTxt)}${esc(ttiTxt)}</div>`;
+        near = `<div style="color:#e53935;font-weight:700;margin-top:3px">🚨 PELIGRO ALCANCE: A ${fmtKm(t.d)} por vía${esc(roleTxt)}</div>`;
       } else {
         near = `<div style="color:#d97706;font-weight:700;margin-top:3px">⚠ Precaución: A ${fmtKm(t.d)} por vía de ${esc(nearName)}${esc(roleTxt)}</div>`;
       }
@@ -1945,7 +1631,7 @@
     const x = t._info || trainInfo(t);
     const vGrp = t.trackGroup === "AV" ? "Alta Velocidad (UIC)" : (t.trackGroup === "CONV" ? "Convencional (Ibérico)" : "Ancho Variable / Mixto");
     const mainRows = [
-      ["Tipo de servicio", `${x.tipo} (Límite: ${x.maxSpd} km/h)`],
+      ["Tipo de servicio", x.tipo],
       ["Infraestructura", vGrp],
       ["Número de tren", x.numero + (x.numTecnico ? ` (ID: ${x.numTecnico})` : "")],
       ["Origen", x.orig || "—"],
@@ -1963,10 +1649,7 @@
     if (x.retHtml) mainRows.push(["Puntualidad", x.retHtml, true]);
     if (t.roleInfo) mainRows.push(["Posición en vía", t.roleInfo]);
     mainRows.push(["Estado de alerta", t.inStation ? "En zona de estación (exento)" : (t.color === "red" ? "ROJO (Alcance a >100 km/h)" : (t.color === "orange" ? "AMARILLO/NARANJA (<5 km sin alcance)" : "Normal en ruta"))]);
-    if (!t.inStation && isNum(t.d)) mainRows.push(["Distancia por vía", `${fmtKm(t.d)}`]);
-    if (t.color === "red" && t.impactSec !== null) {
-      mainRows.push(["Tiempo hasta impacto", `<b style="color:#e53935">⏱ ${esc(fmtImpactTime(t.impactSec))}</b>`, true]);
-    }
+    if (!t.inStation && isFinite(t.d)) mainRows.push(["Distancia por vía", `${fmtKm(t.d)}`]);
 
     const tableHtml = mainRows.map(([k, v, isHtml]) => `<tr><td class="k">${esc(k)}</td><td class="v">${isHtml ? v : esc(v)}</td></tr>`).join("");
     const rawRows = Object.entries(t.raw || {}).filter(([, v]) => v !== undefined && v !== null && v !== "" && typeof v !== "object").map(([k, v]) => `<tr><td style="padding-right:8px;color:#667085">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
@@ -1978,81 +1661,21 @@
   }
 
   const TRAIN_SVG = '<svg viewBox="0 0 24 24"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.4 5.6 19 7.5 19L6 20.5V21h2l2-2h4l2 2h2v-.5L16.5 19c1.9 0 3.5-1.6 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.8 0-1.5-.7-1.5-1.5S6.7 14 7.5 14s1.5.7 1.5 1.5S8.3 17 7.5 17zM11 11H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/></svg>';
-
-  function makeIcon(color, bearing, tagText, isSelected) {
-    let arrowHtml = "";
-    if ((color === "red" || color === "orange") && isNum(bearing)) {
-      const fillCol = color === "red" ? "#e53935" : "#f59e0b";
-      arrowHtml = `<div class="dir-arrow" style="transform:rotate(${Math.round(bearing)}deg)">` +
-        `<svg viewBox="0 0 24 24"><path d="M12 1L21 19L12 14.5L3 19Z" fill="${fillCol}" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/></svg>` +
-        `</div>`;
-    }
-    const tagHtml = tagText ? `<div class="tm-tag">${esc(tagText)}</div>` : "";
-    return L.divIcon({
-      className: "tm " + color + (isSelected ? " selected-pair" : ""),
-      html: `<div class="tm-wrap">${arrowHtml}<div class="b">${TRAIN_SVG}</div>${tagHtml}</div>`,
-      iconSize: [28, 28],
-      iconAnchor: [14, 14]
-    });
+  function makeIcon(color) {
+    return L.divIcon({ className: "tm " + color, html: '<div class="b">' + TRAIN_SVG + '</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
   }
 
   function formatPairText(p) {
     if (p.hasOrder) {
       const tr = `${p.trailing.tipo ? p.trailing.tipo + " " : ""}${p.trailing.label}`;
       const ld = `${p.leading.tipo ? p.leading.tipo + " " : ""}${p.leading.label}`;
-      const vT = isNum(p.trailing.calcSpeed) ? `${p.trailing.calcSpeed}` : "0";
-      const vL = isNum(p.leading.calcSpeed) ? `${p.leading.calcSpeed}` : "0";
-      return `${esc(tr)} (${vT} km/h) ➔ ${esc(ld)} (${vL} km/h)`;
+      const vT = isFinite(p.trailing.calcSpeed) ? `${p.trailing.calcSpeed}` : "?";
+      const vL = isFinite(p.leading.calcSpeed) ? `${p.leading.calcSpeed}` : "?";
+      return `${esc(tr)} (${vT}) ➔ ${esc(ld)} (${vL} km/h)`;
     }
     const la = (p.a.tipo ? p.a.tipo + " " : "") + p.a.label;
     const lb = (p.b.tipo ? p.b.tipo + " " : "") + p.b.label;
     return `${esc(la)} ↔ ${esc(lb)}`;
-  }
-
-  function renderRedOverlayList() {
-    const redPairs = [];
-    pairs.forEach((p, idx) => {
-      if (p.severity === "red") redPairs.push({ p, idx });
-    });
-
-    redPairs.sort((a, b) => {
-      const tA = isNum(a.p.impactSec) ? a.p.impactSec : Infinity;
-      const tB = isNum(b.p.impactSec) ? b.p.impactSec : Infinity;
-      if (tA !== tB) return tA - tB;
-      return a.p.d - b.p.d;
-    });
-
-    const persistThresholdSec = Math.max(1, toNum(el.thPersist.value) || 30);
-    const now = Date.now();
-    let anyPersistent = false;
-
-    el.roCount.textContent = redPairs.length;
-    if (!redPairs.length) {
-      el.redOverlay.classList.add("empty");
-      el.redOverlay.classList.remove("has-persistent");
-      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
-    } else {
-      el.redOverlay.classList.remove("empty");
-      el.redList.innerHTML = redPairs.map(({ p, idx }) => {
-        const elapsedSec = p.redStartMs ? (now - p.redStartMs) / 1000 : 0;
-        const isPersistent = elapsedSec >= persistThresholdSec;
-        if (isPersistent) anyPersistent = true;
-        const isSel = selectedPairKey && p.pairKey === selectedPairKey;
-
-        const ttiBadge = p.impactSec !== null
-          ? `<span class="ro-tti" title="Tiempo estimado hasta el impacto manteniendo velocidades actuales">⏱ Impacto: ${esc(fmtImpactTime(p.impactSec))}</span>`
-          : "";
-        const persBadge = isPersistent
-          ? `<span class="ro-pers" title="Esta alerta roja lleva más de ${persistThresholdSec} s activa de forma continua">🔥 ${esc(fmtDuration(elapsedSec))}</span>`
-          : "";
-
-        return `<div class="ro-item${isPersistent ? " persistent-blink" : ""}${isSel ? " active-pair" : ""}" data-i="${idx}">` +
-          `<span>🔴 ${formatPairText(p)}</span>` +
-          `<span class="ro-right">${persBadge}<span class="ro-d">${fmtKm(p.d)}</span>${ttiBadge}</span>` +
-          `</div>`;
-      }).join("");
-      el.redOverlay.classList.toggle("has-persistent", anyPersistent);
-    }
   }
 
   function render() {
@@ -2074,69 +1697,49 @@
       visible++;
       alive.add(t.id);
       let m = markers.get(t.id);
-      const isSelected = selectedTrainIds.has(t.id);
-      const z = (isSelected ? 2500 : 0) + (t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0);
+      const z = t.color === "red" ? 1000 : t.color === "orange" ? 500 : 0;
       const pos = [t.drawLat ?? t.lat, t.drawLon ?? t.lon];
-      const arrowDeg = (t.color === "red" || t.color === "orange") && isNum(t.bearing)
-        ? Math.round(t.bearing)
-        : null;
-
-      let tagText = "";
-      if (t.color === "red" || t.color === "orange" || isSelected) {
-        const vStr = isNum(t.calcSpeed) ? ` · ${t.calcSpeed} km/h` : "";
-        tagText = `${t.tipo ? t.tipo + " " : ""}${t.label}${vStr}`;
-      }
-
-      const iconKey = `${t.color}|${arrowDeg ?? ""}|${tagText}|${isSelected ? 1 : 0}`;
-
       if (!m) {
-        m = L.marker(pos, { icon: makeIcon(t.color, arrowDeg, tagText, isSelected), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
+        m = L.marker(pos, { icon: makeIcon(t.color), zIndexOffset: z, riseOnHover: true, keyboard: false }).addTo(map);
         m.bindTooltip(() => tipHtml(m._train), { direction: "top", offset: [0, -16], className: "trtip" });
         m.bindPopup(() => popupHtml(m._train), { maxWidth: 340 });
-        m._iconKey = iconKey;
+        m._color = t.color;
         markers.set(t.id, m);
       } else {
         m.setLatLng(pos);
-        if (m._iconKey !== iconKey) {
-          m.setIcon(makeIcon(t.color, arrowDeg, tagText, isSelected));
-          m.setZIndexOffset(z);
-          m._iconKey = iconKey;
-        }
+        if (m._color !== t.color) { m.setIcon(makeIcon(t.color)); m.setZIndexOffset(z); m._color = t.color; }
       }
       m._train = t;
     });
     for (const [id, m] of markers) if (!alive.has(id)) { map.removeLayer(m); markers.delete(id); }
 
-    // Dibujar las líneas sobre la vía garantizando que las ROJAS se pinten SIEMPRE ENCIMA de las NARANJAS
+    // Dibujar unión MUY GRUESA Y DESTACADA siguiendo exactamente los vértices de la vía entre ambos trenes
     linesLayer.clearLayers();
     if (el.showLines.checked) {
-      const drawList = [...pairs].sort((x, y) => {
-        const score = p => (p.severity === "red" ? 10 : 0) + (selectedPairKey && p.pairKey === selectedPairKey ? 5 : 0);
-        return score(x) - score(y);
-      });
-
-      drawList.forEach(p => {
+      pairs.forEach(p => {
         if (!p.a.visible || !p.b.visible || !p.pathCoords || p.pathCoords.length < 2) return;
         const isRed = p.severity === "red";
-        const isSel = selectedPairKey && p.pairKey === selectedPairKey;
         const col = isRed ? "#ff1744" : "#ff9100";
-        const coreCol = isSel ? "#2563eb" : (isRed ? "#ffebee" : "#fff8e1");
+        const coreCol = isRed ? "#ffebee" : "#fff8e1";
 
+        // 1. Halo exterior blanco muy ancho para separar el tramo de cualquier fondo o vía
         L.polyline(p.pathCoords, {
           pane: "alertTrackPane", renderer: alertCanvas,
-          color: isSel ? "#2563eb" : "#ffffff", weight: (isRed ? 16 : 14) + (isSel ? 4 : 0), opacity: 0.95,
+          color: "#ffffff", weight: isRed ? 16 : 14, opacity: 0.95,
           lineCap: "round", lineJoin: "round", interactive: false
         }).addTo(linesLayer);
 
+        // 2. Trazo principal grueso en rojo intenso o naranja vivo
         L.polyline(p.pathCoords, {
           pane: "alertTrackPane", renderer: alertCanvas,
           color: col, weight: isRed ? 10 : 8.5, opacity: 1.0,
           lineCap: "round", lineJoin: "round", interactive: false
         }).addTo(linesLayer);
 
+        // 3. Núcleo central discontinuo luminoso para resaltar el corredor entre ambos trenes
         L.polyline(p.pathCoords, {
           pane: "alertTrackPane", renderer: alertCanvas,
-          color: coreCol, weight: isSel ? 4 : 3, opacity: 0.98, dashArray: "6, 8",
+          color: coreCol, weight: 3, opacity: 0.95, dashArray: "6, 8",
           lineCap: "round", lineJoin: "round", interactive: false
         }).addTo(linesLayer);
       });
@@ -2145,30 +1748,37 @@
     el.nRed.textContent = counts.red; el.nOrange.textContent = counts.orange; el.nGreen.textContent = counts.green;
     el.nTotal.textContent = visible + " / " + trains.length;
 
-    // 1. Actualizar el recuadro superior izquierdo del mapa (Alertas Rojas + Persistencia)
-    renderRedOverlayList();
-
-    // 2. Banda lateral izquierda (Solo Amarillos/Naranjas en precaución o alejándose)
+    const redPairs = [];
     const orangePairs = [];
     pairs.forEach((p, idx) => {
-      if (p.severity !== "red") orangePairs.push({ p, idx });
+      if (p.severity === "red") redPairs.push({ p, idx });
+      else orangePairs.push({ p, idx });
     });
 
+    // 1. Recuadro superior izquierdo del mapa (Solo Alertas Rojas por alcance)
+    el.roCount.textContent = redPairs.length;
+    if (!redPairs.length) {
+      el.redOverlay.classList.add("empty");
+      el.redList.innerHTML = '<div class="sub">Ningún tren en alerta roja por alcance ahora mismo.</div>';
+    } else {
+      el.redOverlay.classList.remove("empty");
+      el.redList.innerHTML = redPairs.map(({ p, idx }) => {
+        return `<div class="ro-item" data-i="${idx}">` +
+          `<span>🔴 ${formatPairText(p)}</span>` +
+          `<span class="ro-d">${fmtKm(p.d)}</span>` +
+          `</div>`;
+      }).join("");
+    }
+
+    // 2. Banda lateral izquierda (Solo Amarillos/Naranjas en precaución o alejándose)
     if (!orangePairs.length) {
       el.pairs.innerHTML = '<div class="sub">Ningún par en precaución (amarillo/naranja).</div>';
     } else {
       el.pairs.innerHTML = orangePairs.slice(0, 100).map(({ p, idx }) => {
-        const isSel = selectedPairKey && p.pairKey === selectedPairKey;
-        return `<div class="pair${isSel ? " active-pair" : ""}" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
+        return `<div class="pair" data-i="${idx}"><span><span class="dot" style="background:${COLORS.orange}"></span> ${formatPairText(p)}</span><span class="d">${fmtKm(p.d)}</span></div>`;
       }).join("");
     }
   }
-
-  setInterval(() => {
-    if (!paused && redAlertStart.size > 0) {
-      renderRedOverlayList();
-    }
-  }, 1000);
 
   function updateTypes() {
     const counts = {};
@@ -2198,6 +1808,7 @@
     el.btnRefresh.disabled = true;
     el.btnRefresh.classList.add("spinning");
     try {
+      await loadStations();
       allTrains = await fetchTrains();
       updateTypes();
       trains = allTrains.filter(inTypes);
@@ -2220,38 +1831,10 @@
   function flyToPairIndex(idx) {
     const p = pairs[idx];
     if (!p) return;
-    selectedPairKey = p.pairKey;
-    selectedTrainIds = new Set([p.a.id, p.b.id]);
-    render();
-
-    const pts = (p.pathCoords && p.pathCoords.length >= 2)
-      ? p.pathCoords
-      : [[p.a.drawLat ?? p.a.lat, p.a.drawLon ?? p.a.lon], [p.b.drawLat ?? p.b.lat, p.b.drawLon ?? p.b.lon]];
-    const bounds = L.latLngBounds(pts);
-    map.flyToBounds(bounds.pad(0.35), {
-      paddingTopLeft: [70, 130],
-      paddingBottomRight: [70, 80],
-      maxZoom: 15,
-      duration: 0.85
-    });
+    map.flyTo([(p.a.lat + p.b.lat) / 2, (p.a.lon + p.b.lon) / 2], Math.max(map.getZoom(), 12), { duration: 0.8 });
   }
 
   /* ---------- Eventos de Interfaz y Controles Flotantes ---------- */
-  map.on("click", () => {
-    if (selectedPairKey !== null) {
-      selectedPairKey = null;
-      selectedTrainIds.clear();
-      render();
-    }
-  });
-
-  el.btnResetView.addEventListener("click", () => {
-    selectedPairKey = null;
-    selectedTrainIds.clear();
-    render();
-    map.flyTo(SPAIN_DEFAULT_CENTER, SPAIN_DEFAULT_ZOOM, { duration: 0.8 });
-  });
-
   $("btnHelp").addEventListener("click", () => el.helpModal.classList.add("open"));
   $("btnCloseHelp").addEventListener("click", () => el.helpModal.classList.remove("open"));
   el.helpModal.addEventListener("click", e => { if (e.target === el.helpModal) el.helpModal.classList.remove("open"); });
@@ -2285,11 +1868,13 @@
     $("sourceSwitch").querySelectorAll(".sw-opt").forEach(b => b.classList.toggle("active", b === opt));
     el.source.value = val;
     el.lblSource.textContent = val === "ld" ? "LD / Alta Velocidad" : "Cercanías";
+    if (val === "visor" && !el.showTrackMD.checked) {
+      el.showTrackMD.checked = true;
+      onTrackToggle("md", el.showTrackMD);
+    }
     markers.forEach(m => map.removeLayer(m)); markers.clear();
     trainHistory.clear();
-    redAlertStart.clear();
-    selectedPairKey = null;
-    selectedTrainIds.clear();
+    stationsTried = false;
     refresh();
   });
 
@@ -2315,7 +1900,6 @@
   });
 
   [el.thOrange, el.thSpeed].forEach(i => i.addEventListener("input", () => { if (trains.length) { computeProximity(); render(); } }));
-  el.thPersist.addEventListener("input", () => { if (trains.length) renderRedOverlayList(); });
   el.showLines.addEventListener("change", render);
   el.search.addEventListener("input", render);
   el.pairs.addEventListener("click", e => {
@@ -2333,8 +1917,8 @@
     el.proxy.value = "/api?url={url}";
   }
 
-  loadTrackLayer("av");
-  loadTrackLayer("md");
+  if (el.showTrackAV.checked) loadTrackLayer("av");
+  if (el.showTrackMD.checked) loadTrackLayer("md");
   updateTrackStatus();
   refresh();
   schedule();
