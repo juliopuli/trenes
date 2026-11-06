@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v3.0</title>
+<title>Alertas Ferrocarril · v3.1</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v3.0 · LLM</span>
+          <span class="ver">v3.1 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1663,11 +1663,12 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
     const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
     el.llmDebugLog.textContent = `[CONSULTANDO LLM (1 a 1) · ${item.pairKey} · En cola: ${llmQueue.length}]\n${prompt}`;
 
-    try {
+try {
       const { text, modelName, isCloud } = await callRealLlmEndpoint(prompt, controller.signal, item.localEval);
       clearTimeout(timeoutId);
 
       const parsed = parseLlmJsonVerdict(text, item.localEval);
+      const isRateLimited = modelName.includes("Enfriando") || modelName.includes("429");
 
       aiAuditCache.set(item.pairKey, {
         status: "done",
@@ -1676,20 +1677,19 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
         reason: parsed.reason,
         source: modelName,
         llmDone: true,
-        llmVerified: !!isCloud,
+        llmVerified: !isRateLimited,
         llmTs: Date.now()
       });
 
-      const headerLog = isCloud
+      const headerLog = isCloud && !isRateLimited
         ? `✅ [RESPUESTA NUBE (${modelName}) · ${new Date().toLocaleTimeString("es-ES")}]`
-        : `⏳ [PAUSA ANTI-429 EN SERVIDOR GRATUITO -> USANDO REGLAS CTC LOCALES (Reintento nube en 35s)]`;
+        : `⏳ [NUBE SATURADA 429 · MOSTRANDO CTC LOCAL HASTA NUEVO INTENTO]`;
 
       el.llmDebugLog.textContent = `${headerLog}\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
       el.llmDebugLog.scrollTop = 0;
 
       currentLlmTask = null;
-      // Si usamos el proveedor sin API Key, dejamos 5.5 segundos entre cada consulta de la cola para no disparar 429
-      const cadenceMs = el.aiProvider.value === "pollinations" ? 5500 : 1200;
+      const cadenceMs = 4000;
       nextQueueAllowedAt = Date.now() + cadenceMs;
 
       computeProximity();
@@ -1706,14 +1706,14 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
         if (existing) {
           existing.status = "done";
           existing.llmDone = true;
-          existing.llmVerified = false;
+          existing.llmVerified = true; // Lo marcamos como resuelto por local para evitar bucles en el botón
           existing.llmTs = Date.now();
-          existing.source = "⚠️ Error API (reintento en 35s)";
+          existing.source = "⚡ CTC Local (429 Nube)";
         }
-        el.llmDebugLog.textContent = `[AVISO LLM en ${item.pairKey}: ${err.message || err}]\nSe mantiene pre-diagnóstico CTC Local y se reintentará en 35s.`;
+        el.llmDebugLog.textContent = `[AVISO LLM en ${item.pairKey}: ${err.message || err}]\nSe mantiene dictamen del CTC Local.`;
         renderRedOverlayList();
       }
-      setTimeout(processNextLlmInQueue, wasAborted ? 50 : 2500);
+      setTimeout(processNextLlmInQueue, wasAborted ? 50 : 2000);
     }
   }
 window.__analyzeAlert = function(btn, ev) {
@@ -2040,18 +2040,16 @@ function computeLocalTrackRoute(a, b, maxAllowedKm) {
   async function idbGet(k) { try { const db = await idb(); return await new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch (e) { return undefined; } }
   async function idbSet(k, v) { try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }
 
-  async function overpassSingle(query) {
+async function overpassSingle(query) {
     let lastErr;
     for (const ep of OVERPASS) {
       try {
         const ctl = new AbortController();
-        const to = setTimeout(() => ctl.abort(), 35000);
-        const r = await fetch(ep, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: "data=" + encodeURIComponent(query),
-          signal: ctl.signal
-        });
+        const to = setTimeout(() => ctl.abort(), 28000);
+        const targetUrl = ep + "?data=" + encodeURIComponent(query);
+        // Usamos el proxy Cloudflare para evitar bloqueos CORS en GitHub Pages
+        const proxiedUrl = proxify(targetUrl);
+        const r = await fetch(proxiedUrl, { method: "GET", signal: ctl.signal });
         clearTimeout(to);
         if (!r.ok) throw new Error("HTTP " + r.status);
         const j = await r.json();
