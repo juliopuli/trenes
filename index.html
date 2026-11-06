@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v2.8</title>
+<title>Alertas Ferrocarril · v2.9</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v2.8 · LLM</span>
+          <span class="ver">v2.9 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1488,29 +1488,38 @@ let freeCloudCooldownUntil = 0; // Enfriamiento automático si llm7.io devuelve 
       return { text: j.choices?.[0]?.message?.content || "", modelName: "☁️ LLM: Llama 3.3 70B", isCloud: true };
     }
 
-    // 3. MODO GRATUITO SIN API KEY: Pollinations text API (no requiere registro)
+// 3. MODO GRATUITO SIN API KEY: LLM7.io por POST JSON (evita el error 404 de Pollinations por URLs largas con barras)
     if (Date.now() >= freeCloudCooldownUntil) {
       try {
         const stepCtl = new AbortController();
-        const tId = setTimeout(() => stepCtl.abort(), 12000);
+        const tId = setTimeout(() => stepCtl.abort(), 10000);
         const onAbort = () => stepCtl.abort();
         signal?.addEventListener("abort", onAbort, { once: true });
 
-        const fullPrompt = encodeURIComponent(sysMsg + "\n\n" + promptText);
-        const rFree = await fetch(`https://text.pollinations.ai/${fullPrompt}?model=openai&json=true&seed=${Math.floor(Math.random()*99999)}`, {
-          method: "GET",
-          signal: stepCtl.signal
+        const rFree = await fetch("https://api.llm7.io/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: stepCtl.signal,
+          body: JSON.stringify({
+            model: "default",
+            temperature: 0.1,
+            messages: [
+              { role: "system", content: sysMsg },
+              { role: "user", content: promptText }
+            ]
+          })
         });
         clearTimeout(tId);
         signal?.removeEventListener("abort", onAbort);
 
         if (rFree.ok) {
-          const textFree = await rFree.text();
+          const jFree = await rFree.json();
+          const textFree = jFree.choices?.[0]?.message?.content || "";
           if (textFree && textFree.includes("{")) {
             return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
           }
         } else if (rFree.status === 429 || rFree.status === 503) {
-          freeCloudCooldownUntil = Date.now() + 120000; // 2 min de cooldown
+          freeCloudCooldownUntil = Date.now() + 30000; // 30 s de enfriamiento si hay límite de ráfaga
         }
       } catch (e) {
         if (signal?.aborted) throw e;
