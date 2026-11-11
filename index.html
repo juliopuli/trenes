@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v3.2</title>
+<title>Alertas Ferrocarril · v3.3</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v3.2 · LLM</span>
+          <span class="ver">v3.3 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1441,7 +1441,23 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
 let freeCloudCooldownUntil = (() => {
   try { return parseInt(localStorage.getItem("llmCooldownUntil") || "0", 10) || 0; } catch(e) { return 0; }
 })();
+  let _cooldownInterval = null;
+  function startCooldownCountdown() {
+    if (_cooldownInterval) clearInterval(_cooldownInterval);
+    _cooldownInterval = setInterval(() => {
+      const remaining = Math.ceil((freeCloudCooldownUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        clearInterval(_cooldownInterval);
+        _cooldownInterval = null;
+        el.llmDebugLog.textContent = "✅ Cuota LLM libre — pulsa 🤖 Analizar en cualquier alerta para enviar una consulta.";
+        return;
+      }
+      el.llmDebugLog.textContent = `⏳ Cuota LLM temporalmente agotada (429).\nNueva petición disponible en: ${remaining} s\n\nPulsa "Re-analizar cola LLM" cuando el contador llegue a 0, o espera a que se libere automáticamente.`;
+    }, 1000);
+  }
 
+  // Arrancar el contador si ya había un cooldown activo al cargar la página
+  if (freeCloudCooldownUntil > Date.now()) startCooldownCountdown();
   async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     const prov = el.aiProvider.value;
     const apiKey = el.aiApiKey.value.trim();
@@ -1523,6 +1539,7 @@ let freeCloudCooldownUntil = (() => {
         } else if (rFree.status === 429 || rFree.status === 503) {
           freeCloudCooldownUntil = Date.now() + 60000; // 60 s de enfriamiento
           try { localStorage.setItem("llmCooldownUntil", String(freeCloudCooldownUntil)); } catch(e) {}
+          startCooldownCountdown();
         }
       } catch (e) {
         if (signal?.aborted) throw e;
@@ -1757,6 +1774,8 @@ window.__analyzeAlert = function(btn, ev) {
     aiAuditCache.clear();
     freeCloudCooldownUntil = 0;
     try { localStorage.removeItem("llmCooldownUntil"); } catch(e) {}
+        if (_cooldownInterval) { clearInterval(_cooldownInterval); _cooldownInterval = null; }
+    el.llmDebugLog.textContent = "✅ Cuota LLM reiniciada — lista para nuevas consultas.";
     nextQueueAllowedAt = 0;
     computeProximity();
     render();
