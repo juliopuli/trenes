@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v3.4</title>
+<title>Alertas Ferrocarril · v3.5</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v3.4 · LLM</span>
+          <span class="ver">v3.5 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1535,12 +1535,12 @@ let freeCloudCooldownUntil = (() => {
           rFree.headers.forEach((v, k) => { hdrs[k] = v; });
           el.llmDebugLog.textContent = `HTTP ${rFree.status}\nCabeceras recibidas:\n${JSON.stringify(hdrs, null, 2)}`;
         }
-        if (rFree.ok) {
-          const jFree = await rFree.json();
-          const textFree = jFree.choices?.[0]?.message?.content || "";
-          if (textFree && textFree.includes("{")) {
-            return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
-          }
+ //       if (rFree.ok) {
+ //         const jFree = await rFree.json();
+ //         const textFree = jFree.choices?.[0]?.message?.content || "";
+  //        if (textFree && textFree.includes("{")) {
+  //          return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
+  //        }
 
         } else if (rFree.status === 429 || rFree.status === 503) {
           // Intentar leer Retry-After del servidor (en segundos o como fecha HTTP)
