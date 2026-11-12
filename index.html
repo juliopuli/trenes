@@ -1535,12 +1535,12 @@ let freeCloudCooldownUntil = (() => {
           rFree.headers.forEach((v, k) => { hdrs[k] = v; });
           el.llmDebugLog.textContent = `HTTP ${rFree.status}\nCabeceras recibidas:\n${JSON.stringify(hdrs, null, 2)}`;
         }
- //       if (rFree.ok) {
- //         const jFree = await rFree.json();
- //         const textFree = jFree.choices?.[0]?.message?.content || "";
-  //        if (textFree && textFree.includes("{")) {
-  //          return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
-  //        }
+        if (rFree.ok) {
+          const jFree = await rFree.json();
+         const textFree = jFree.choices?.[0]?.message?.content || "";
+          if (textFree && textFree.includes("{")) {
+            return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
+          }
 
         } else if (rFree.status === 429 || rFree.status === 503) {
           // Intentar leer Retry-After del servidor (en segundos o como fecha HTTP)
