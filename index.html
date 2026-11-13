@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v3.6</title>
+<title>Alertas Ferrocarril · v3.7</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v3.6 · LLM</span>
+          <span class="ver">v3.7 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1560,7 +1560,11 @@ let freeCloudCooldownUntil = (() => {
       }
       const msgSrv = lastRateLimitServerMsg ? `\nRespuesta servidor: ${lastRateLimitServerMsg}` : "";
       const extra = startCooldownCountdown._lastExtra ? `\n\n${startCooldownCountdown._lastExtra}` : "";
-      el.llmDebugLog.textContent = `⏳ Límite 429 alcanzado · Próxima consulta disponible en: ${remaining} s${msgSrv}${extra}`;
+   const h = Math.floor(remaining / 3600);
+      const m = Math.floor((remaining % 3600) / 60);
+      const s = remaining % 60;
+      const fmtTime = h > 0 ? `${h}h ${m}m ${s}s (${remaining} s)` : (m > 0 ? `${m}m ${s}s (${remaining} s)` : `${s} s`);
+      el.llmDebugLog.textContent = `⏳ Límite 429 alcanzado · Próxima consulta disponible en: ${fmtTime}${msgSrv}${extra}`;
     };
 
     tick();
@@ -1669,10 +1673,11 @@ let freeCloudCooldownUntil = (() => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: stepCtl.signal,
-        body: JSON.stringify({
-          model: "default",
-          temperature: 0.1,
-          messages: [
+     body: JSON.stringify({
+            model: "default",
+            temperature: 0.1,
+            max_tokens: 120,
+            messages: [
             { role: "system", content: sysMsg },
             { role: "user", content: promptText }
           ]
@@ -3018,10 +3023,10 @@ const stations = new Map();
           activeLlmCandidateKeys.add(pairKey);
           // Solo auto-encolar si ya tiene un veredicto LLM previo (para mantener refresco)
           // Las alertas nuevas esperan al botón "Analizar con IA" del usuario
-          const existingCache = aiAuditCache.get(pairKey);
-          if (existingCache && existingCache.llmVerified) {
-            toEnqueueList.push({ pairObj, localEval });
-          }
+        //  const existingCache = aiAuditCache.get(pairKey);
+        //  if (existingCache && existingCache.llmVerified) {
+        //    toEnqueueList.push({ pairObj, localEval });
+        //  }
         }
       }
     }
