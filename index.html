@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v3.5</title>
+<title>Alertas Ferrocarril · v3.6</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v3.5 · LLM</span>
+          <span class="ver">v3.6 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -1439,31 +1439,155 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
   }
 
 let freeCloudCooldownUntil = (() => {
-  try { return parseInt(localStorage.getItem("llmCooldownUntil") || "0", 10) || 0; } catch(e) { return 0; }
-})();
+    try { return parseInt(localStorage.getItem("llmCooldownUntil") || "0", 10) || 0; } catch(e) { return 0; }
+  })();
+  let lastRateLimitServerMsg = "";
   let _cooldownInterval = null;
-  function startCooldownCountdown() {
+
+  // Extrae el tiempo REAL de espera que responde el servidor LLM (en cuerpo JSON, texto de error o cabeceras)
+  async function extractRealRetryMsFromLlmError(response, providerName) {
+    let bodyText = "";
+    try { bodyText = await response.text(); } catch (_) {}
+
+    let waitSeconds = null;
+    let serverDetail = "";
+
+    // 1. Intentar extraer desde el JSON devuelto por el LLM (OpenAI / LLM7 / Groq / Gemini)
+    if (bodyText) {
+      try {
+        const j = JSON.parse(bodyText);
+        const msg = j.error?.message || j.message || j.detail || j.error || "";
+        if (typeof msg === "string" && msg.trim()) serverDetail = msg.trim();
+
+        // Campos directos estándar: retry_after, retryAfter, reset_seconds
+        const directSec = j.retry_after ?? j.retryAfter ?? j.error?.retry_after ?? j.error?.retryAfter ?? j.reset_seconds;
+        if (directSec !== undefined && !isNaN(parseFloat(directSec)) && parseFloat(directSec) > 0) {
+          waitSeconds = parseFloat(directSec);
+        }
+
+        // Formato Google Gemini: details[].retryDelay ("42s" o "35.5s")
+        if (waitSeconds === null && Array.isArray(j.error?.details)) {
+          for (const d of j.error.details) {
+            if (d.retryDelay) {
+              const m = String(d.retryDelay).match(/([\d.]+)\s*s/i);
+              if (m) { waitSeconds = parseFloat(m[1]); break; }
+            }
+          }
+        }
+      } catch (_) {
+        serverDetail = bodyText.slice(0, 160).trim();
+      }
+
+      // 2. Buscar en el texto del mensaje frases del tipo:
+      // "try again in 1m23.4s", "try again in 24.5s", "retry after 45 seconds", "wait 15s", "in 850ms"
+      const textToScan = serverDetail || bodyText;
+      if (waitSeconds === null && textToScan) {
+        const minSecMatch = textToScan.match(/(?:in|after|wait)\s+(?:(\d+)\s*m(?:in(?:ute)?s?)?\s*)?([\d.]+)\s*s(?:ec(?:ond)?s?)?\b/i);
+        const onlyMinMatch = textToScan.match(/(?:in|after|wait)\s+(\d+)\s*m(?:in(?:ute)?s?)?\b/i);
+        const msMatch = textToScan.match(/(?:in|after|wait)\s+(\d+)\s*ms\b/i);
+
+        if (minSecMatch) {
+          const mins = minSecMatch[1] ? parseFloat(minSecMatch[1]) : 0;
+          const secs = parseFloat(minSecMatch[2]);
+          if (!isNaN(secs)) waitSeconds = mins * 60 + secs;
+        } else if (onlyMinMatch) {
+          waitSeconds = parseFloat(onlyMinMatch[1]) * 60;
+        } else if (msMatch) {
+          waitSeconds = Math.ceil(parseFloat(msMatch[1]) / 1000);
+        }
+      }
+    }
+
+    // 3. Intentar leer cabeceras HTTP si el servidor las expone por CORS
+    if (waitSeconds === null && response && response.headers) {
+      const hRetry = response.headers.get("retry-after")
+        || response.headers.get("x-ratelimit-reset-after")
+        || response.headers.get("x-ratelimit-reset-requests")
+        || response.headers.get("x-ratelimit-reset-tokens")
+        || response.headers.get("x-ratelimit-reset");
+
+      if (hRetry) {
+        const mDur = String(hRetry).match(/(?:(\d+)m)?([\d.]+)s/i);
+        if (mDur) {
+          waitSeconds = (mDur[1] ? parseFloat(mDur[1]) * 60 : 0) + parseFloat(mDur[2]);
+        } else {
+          const asNum = parseFloat(hRetry);
+          if (!isNaN(asNum) && asNum > 0) {
+            if (asNum > 1700000000) {
+              // Es un timestamp Unix en segundos
+              waitSeconds = Math.max(1, Math.ceil(asNum - Date.now() / 1000));
+            } else if (asNum < 86400) {
+              waitSeconds = asNum;
+            }
+          } else {
+            const asDate = Date.parse(hRetry);
+            if (!isNaN(asDate) && asDate > Date.now()) {
+              waitSeconds = Math.ceil((asDate - Date.now()) / 1000);
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Si el servidor no envió número ni en JSON ni en cabeceras (por ej. LLM7.io cuyo límite es 1 req/seg y 60 req/min),
+    // calculamos la ventana real de enfriamiento de ráfaga (15 s) e indicamos qué devolvió exactamente el servidor
+    let isExactFromServer = true;
+    if (waitSeconds === null || !isFinite(waitSeconds) || waitSeconds <= 0) {
+      isExactFromServer = false;
+      waitSeconds = providerName === "LLM7" ? 15 : 30;
+    }
+
+    const waitMs = Math.ceil(waitSeconds * 1000) + 500;
+    const cleanDetail = serverDetail
+      ? serverDetail.replace(/\s+/g, " ").slice(0, 180)
+      : `HTTP ${response ? response.status : 429} sin detalle adicional en el cuerpo`;
+
+    return { waitMs, waitSeconds: Math.ceil(waitSeconds), isExactFromServer, cleanDetail };
+  }
+
+  function startCooldownCountdown(extraBottomText) {
     if (_cooldownInterval) clearInterval(_cooldownInterval);
-    _cooldownInterval = setInterval(() => {
+    if (extraBottomText !== undefined) startCooldownCountdown._lastExtra = extraBottomText;
+
+    const tick = () => {
       const remaining = Math.ceil((freeCloudCooldownUntil - Date.now()) / 1000);
       if (remaining <= 0) {
         clearInterval(_cooldownInterval);
         _cooldownInterval = null;
-        el.llmDebugLog.textContent = "✅ Cuota LLM libre — pulsa 🤖 Analizar en cualquier alerta para enviar una consulta.";
+        try { localStorage.removeItem("llmCooldownUntil"); } catch (e) {}
+        el.llmDebugLog.textContent = "✅ Cuota LLM ya disponible — pulsa 🤖 Analizar con IA en cualquier alerta para consultar al modelo.";
         return;
       }
-      el.llmDebugLog.textContent = `⏳ Cuota LLM temporalmente agotada (429).\nNueva petición disponible en: ${remaining} s\n\nPulsa "Re-analizar cola LLM" cuando el contador llegue a 0, o espera a que se libere automáticamente.`;
-    }, 1000);
+      const msgSrv = lastRateLimitServerMsg ? `\nRespuesta servidor: ${lastRateLimitServerMsg}` : "";
+      const extra = startCooldownCountdown._lastExtra ? `\n\n${startCooldownCountdown._lastExtra}` : "";
+      el.llmDebugLog.textContent = `⏳ Límite 429 alcanzado · Próxima consulta disponible en: ${remaining} s${msgSrv}${extra}`;
+    };
+
+    tick();
+    _cooldownInterval = setInterval(tick, 1000);
   }
 
-  // Arrancar el contador si ya había un cooldown activo al cargar la página
   if (freeCloudCooldownUntil > Date.now()) startCooldownCountdown();
+
   async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     const prov = el.aiProvider.value;
     const apiKey = el.aiApiKey.value.trim();
     const sysMsg = "Eres un Ingeniero Jefe del CTC de Adif en España. Analizas telemetría ferroviaria y respondes exclusivamente en JSON válido con las claves verdict, confidence y reason.";
 
-    // 1. GOOGLE GEMINI 2.5 FLASH-LITE (Con API Key gratuita: hasta 1.500 peticiones/día gratis)
+    // Si estamos dentro de la cuenta atrás de un 429, no bombardeamos al servidor y devolvemos el respaldo local manteniendo el contador
+    if (Date.now() < freeCloudCooldownUntil) {
+      const remSec = Math.max(1, Math.ceil((freeCloudCooldownUntil - Date.now()) / 1000));
+      const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
+      return {
+        text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
+        modelName: `⚡ CTC Local (Libre en ${remSec}s)`,
+        isCloud: false,
+        rateLimited: true,
+        remSec
+      };
+    }
+
+    // 1. GOOGLE GEMINI 2.5 FLASH-LITE
     if (prov === "gemini") {
       if (!apiKey) throw new Error("Falta tu API Key de Gemini (créala gratis en aistudio.google.com)");
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -1476,6 +1600,20 @@ let freeCloudCooldownUntil = (() => {
           generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
         })
       });
+      if (r.status === 429 || r.status === 503) {
+        const info = await extractRealRetryMsFromLlmError(r, "Gemini");
+        freeCloudCooldownUntil = Date.now() + info.waitMs;
+        lastRateLimitServerMsg = `[Gemini] ${info.cleanDetail}`;
+        try { localStorage.setItem("llmCooldownUntil", String(freeCloudCooldownUntil)); } catch (e) {}
+        const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
+        return {
+          text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
+          modelName: `⚡ CTC Local (Libre en ${info.waitSeconds}s)`,
+          isCloud: false,
+          rateLimited: true,
+          remSec: info.waitSeconds
+        };
+      }
       if (!r.ok) {
         const errTxt = await r.text().catch(() => "");
         throw new Error(`Gemini HTTP ${r.status}: ${errTxt.slice(0, 80)}`);
@@ -1484,7 +1622,7 @@ let freeCloudCooldownUntil = (() => {
       return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "☁️ LLM: Gemini 2.5 Flash-Lite", isCloud: true };
     }
 
-    // 2. GROQ LLAMA 3.3 70B (Con API Key gratuita: hasta 14.400 peticiones/día gratis)
+    // 2. GROQ LLAMA 3.3 70B
     if (prov === "groq") {
       if (!apiKey) throw new Error("Falta tu API Key de Groq (créala gratis en console.groq.com)");
       const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -1501,78 +1639,78 @@ let freeCloudCooldownUntil = (() => {
           ]
         })
       });
+      if (r.status === 429 || r.status === 503) {
+        const info = await extractRealRetryMsFromLlmError(r, "Groq");
+        freeCloudCooldownUntil = Date.now() + info.waitMs;
+        lastRateLimitServerMsg = `[Groq] ${info.cleanDetail}`;
+        try { localStorage.setItem("llmCooldownUntil", String(freeCloudCooldownUntil)); } catch (e) {}
+        const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
+        return {
+          text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
+          modelName: `⚡ CTC Local (Libre en ${info.waitSeconds}s)`,
+          isCloud: false,
+          rateLimited: true,
+          remSec: info.waitSeconds
+        };
+      }
       if (!r.ok) throw new Error("Groq HTTP " + r.status);
       const j = await r.json();
       return { text: j.choices?.[0]?.message?.content || "", modelName: "☁️ LLM: Llama 3.3 70B", isCloud: true };
     }
 
-// 3. MODO GRATUITO SIN API KEY: LLM7.io por POST JSON (evita el error 404 de Pollinations por URLs largas con barras)
-    if (Date.now() >= freeCloudCooldownUntil) {
-      try {
-        const stepCtl = new AbortController();
-        const tId = setTimeout(() => stepCtl.abort(), 10000);
-        const onAbort = () => stepCtl.abort();
-        signal?.addEventListener("abort", onAbort, { once: true });
+    // 3. MODO GRATUITO SIN API KEY: LLM7.io
+    try {
+      const stepCtl = new AbortController();
+      const tId = setTimeout(() => stepCtl.abort(), 10000);
+      const onAbort = () => stepCtl.abort();
+      signal?.addEventListener("abort", onAbort, { once: true });
 
-        const rFree = await fetch("https://api.llm7.io/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: stepCtl.signal,
-          body: JSON.stringify({
-            model: "default",
-            temperature: 0.1,
-            messages: [
-              { role: "system", content: sysMsg },
-              { role: "user", content: promptText }
-            ]
-          })
-        });
-        clearTimeout(tId);
-        signal?.removeEventListener("abort", onAbort);
-        
-        if (!rFree.ok) {
-          const hdrs = {};
-          rFree.headers.forEach((v, k) => { hdrs[k] = v; });
-          el.llmDebugLog.textContent = `HTTP ${rFree.status}\nCabeceras recibidas:\n${JSON.stringify(hdrs, null, 2)}`;
-        }
-        if (rFree.ok) {
-          const jFree = await rFree.json();
-         const textFree = jFree.choices?.[0]?.message?.content || "";
-          if (textFree && textFree.includes("{")) {
-            return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
-          }
+      const rFree = await fetch("https://api.llm7.io/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: stepCtl.signal,
+        body: JSON.stringify({
+          model: "default",
+          temperature: 0.1,
+          messages: [
+            { role: "system", content: sysMsg },
+            { role: "user", content: promptText }
+          ]
+        })
+      });
+      clearTimeout(tId);
+      signal?.removeEventListener("abort", onAbort);
 
-        } else if (rFree.status === 429 || rFree.status === 503) {
-          // Intentar leer Retry-After del servidor (en segundos o como fecha HTTP)
-          let waitMs = 60000; // fallback: 60 s
-          const retryAfter = rFree.headers.get("Retry-After") || rFree.headers.get("retry-after") || rFree.headers.get("x-ratelimit-reset-after");
-          if (retryAfter) {
-            const asNum = parseFloat(retryAfter);
-            if (!isNaN(asNum) && asNum > 0 && asNum < 3600) {
-              // Valor en segundos (lo más habitual en APIs modernas)
-              waitMs = Math.ceil(asNum) * 1000 + 1000; // +1 s de margen
-            } else {
-              // Puede ser una fecha HTTP ("Wed, 12 Nov 2026 20:00:00 GMT")
-              const asDate = Date.parse(retryAfter);
-              if (!isNaN(asDate) && asDate > Date.now()) {
-                waitMs = (asDate - Date.now()) + 1000;
-              }
-            }
-          }
-          freeCloudCooldownUntil = Date.now() + waitMs;
-          try { localStorage.setItem("llmCooldownUntil", String(freeCloudCooldownUntil)); } catch(e) {}
-          startCooldownCountdown();
+      if (rFree.ok) {
+        const jFree = await rFree.json();
+        const textFree = jFree.choices?.[0]?.message?.content || "";
+        if (textFree && textFree.includes("{")) {
+          return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
         }
-      } catch (e) {
-        if (signal?.aborted) throw e;
+      } else if (rFree.status === 429 || rFree.status === 503) {
+        const info = await extractRealRetryMsFromLlmError(rFree, "LLM7");
+        freeCloudCooldownUntil = Date.now() + info.waitMs;
+        lastRateLimitServerMsg = info.isExactFromServer
+          ? `[LLM7] ${info.cleanDetail}`
+          : `[LLM7 límite 1 req/s] ${info.cleanDetail}`;
+        try { localStorage.setItem("llmCooldownUntil", String(freeCloudCooldownUntil)); } catch (e) {}
+        const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
+        return {
+          text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
+          modelName: `⚡ CTC Local (Libre en ${info.waitSeconds}s)`,
+          isCloud: false,
+          rateLimited: true,
+          remSec: info.waitSeconds
+        };
       }
+    } catch (e) {
+      if (signal?.aborted) throw e;
     }
 
-    // Respaldo instantáneo por Reglas CTC Locales mientras la pasarela está en enfriamiento
     const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
     return {
       text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
-      modelName: "⚡ CTC Local (Enfriando cuota nube)",
+      modelName: "⚡ CTC Local (Nube sin resp.)",
       isCloud: false
     };
   }
@@ -1723,11 +1861,13 @@ try {
         llmTs: Date.now()
       });
 
-      const headerLog = isCloud && !isRateLimited
-        ? `✅ [RESPUESTA NUBE (${modelName}) · ${new Date().toLocaleTimeString("es-ES")}]`
-        : `⏳ [NUBE SATURADA 429 · MOSTRANDO CTC LOCAL HASTA NUEVO INTENTO]`;
-
-      el.llmDebugLog.textContent = `${headerLog}\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
+    if (isRateLimited || freeCloudCooldownUntil > Date.now()) {
+        startCooldownCountdown(`Dictamen CTC Local aplicado:\n${JSON.stringify(parsed, null, 2)}`);
+      } else {
+        if (_cooldownInterval) { clearInterval(_cooldownInterval); _cooldownInterval = null; }
+        const headerLog = `✅ [RESPUESTA NUBE (${modelName}) · ${new Date().toLocaleTimeString("es-ES")}]`;
+        el.llmDebugLog.textContent = `${headerLog}\n${JSON.stringify(parsed, null, 2)}\n\n--- PROMPT ENVIADO ---\n${prompt}`;
+      }
       el.llmDebugLog.scrollTop = 0;
 
       currentLlmTask = null;
