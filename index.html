@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alertas Ferrocarril · v3.7</title>
+<title>Alertas Ferrocarril · v3.8</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -525,7 +525,7 @@
         <h1>
           <span>🚆</span>
           <span class="emerg-title">Alertas Ferrocarril</span>
-          <span class="ver">v3.7 · LLM</span>
+          <span class="ver">v3.8 · LLM</span>
         </h1>
       </div>
       <div id="status">Iniciando…</div>
@@ -697,15 +697,15 @@
         <div class="fl-pop" id="popAi" style="min-width:340px">
           <div class="fl-title">🤖 Arquitectura IA (Reglas CTC + Cola LLM)</div>
           <label for="aiProvider" style="margin-top:0">Proveedor LLM Neuronal</label>
-<select id="aiProvider">
-            <option value="pollinations" selected>🌐 LLM Gratis sin API Key (Auto-fallback · Cola 1 a 1)</option>
+          <select id="aiProvider">
+            <option value="llm7" selected>🌐 LLM7.io (Gratis sin API Key · o con Token)</option>
             <option value="gemini">✨ Google Gemini 2.5 Flash-Lite (Con tu API Key gratis)</option>
             <option value="groq">⚡ Groq · Llama 3.3 70B (Con tu API Key gratis)</option>
             <option value="local">🛡️ Solo Reglas CTC Locales (Sin llamadas externas)</option>
           </select>
           <div id="aiKeyWrap" style="display:none;margin-top:6px">
-            <label for="aiApiKey">API Key gratuita (guardada solo en tu navegador)</label>
-            <input type="password" id="aiApiKey" placeholder="Pega tu API Key de Gemini o Groq…">
+            <label for="aiApiKey" id="lblAiKey">API Key / Token (guardada solo en tu navegador)</label>
+            <input type="password" id="aiApiKey" placeholder="Pega tu API Key de Gemini, Groq o Token de LLM7…">
           </div>
           <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
             <span class="sub" id="aiStats">Cargando catálogo Adif…</span>
@@ -764,7 +764,7 @@
   "use strict";
 
   /* ---------- Configuración ---------- */
-  const VERSION = "2.2";
+  const VERSION = "3.8";
   const SPAIN_DEFAULT_CENTER = [40.2, -3.7];
   const SPAIN_DEFAULT_ZOOM = 6;
   const SOURCES = {
@@ -1143,7 +1143,7 @@
     source: $("source"), customWrap: $("customWrap"), customUrl: $("customUrl"), proxy: $("proxy"),
     interval: $("interval"), btnResetView: $("btnResetView"), btnRefresh: $("btnRefresh"), btnPause: $("btnPause"), status: $("status"),
     thOrange: $("thOrange"), thSpeed: $("thSpeed"), thPersist: $("thPersist"),
-    enableAiAudit: $("enableAiAudit"), aiProvider: $("aiProvider"), aiKeyWrap: $("aiKeyWrap"), aiApiKey: $("aiApiKey"),
+    enableAiAudit: $("enableAiAudit"), aiProvider: $("aiProvider"), aiKeyWrap: $("aiKeyWrap"), lblAiKey: $("lblAiKey"), aiApiKey: $("aiApiKey"),
     lblAiProvider: $("lblAiProvider"), aiStats: $("aiStats"), btnReauditAll: $("btnReauditAll"), llmDebugLog: $("llmDebugLog"),
     showTrackAV: $("showTrackAV"), showTrackMD: $("showTrackMD"), showOrmTiles: $("showOrmTiles"),
     btnReloadTrack: $("btnReloadTrack"), trackStatus: $("trackStatus"),
@@ -1245,15 +1245,31 @@ const TRACKS = {
   try {
     const savedProv = localStorage.getItem("aiProviderRenfe");
     const savedKey  = localStorage.getItem("aiApiKeyRenfe");
-    if (savedProv && ["pollinations", "gemini", "groq", "local"].includes(savedProv)) el.aiProvider.value = savedProv;
+    if (savedProv === "pollinations" || savedProv === "llm7") el.aiProvider.value = "llm7";
+    else if (savedProv && ["gemini", "groq", "local"].includes(savedProv)) el.aiProvider.value = savedProv;
     if (savedKey) el.aiApiKey.value = savedKey;
   } catch (e) {}
 
   function syncAiProviderUi() {
     const prov = el.aiProvider.value;
-    el.aiKeyWrap.style.display = (prov === "gemini" || prov === "groq") ? "block" : "none";
-    el.lblAiProvider.textContent = prov === "pollinations"
-      ? "IA: GPT-4o-mini (LLM)"
+    const isLlm7 = (prov === "llm7" || prov === "pollinations");
+    el.aiKeyWrap.style.display = prov === "local" ? "none" : "block";
+
+    if (el.lblAiKey) {
+      if (isLlm7) {
+        el.lblAiKey.textContent = "Token LLM7 (opcional, para 30+ req/min):";
+        el.aiApiKey.placeholder = "Opcional: pega tu token de llm7.io o déjalo vacío…";
+      } else if (prov === "gemini") {
+        el.lblAiKey.textContent = "API Key de Gemini (gratis en aistudio.google.com):";
+        el.aiApiKey.placeholder = "Pega tu API Key de Gemini…";
+      } else if (prov === "groq") {
+        el.lblAiKey.textContent = "API Key de Groq (gratis en console.groq.com):";
+        el.aiApiKey.placeholder = "Pega tu API Key de Groq…";
+      }
+    }
+
+    el.lblAiProvider.textContent = isLlm7
+      ? (el.aiApiKey.value.trim() ? "IA: LLM7 (Con Token)" : "IA: LLM7 (Gratis)")
       : (prov === "gemini" ? "IA: Gemini Flash" : (prov === "groq" ? "IA: Groq Llama 3.3" : "IA: Reglas CTC"));
     try {
       localStorage.setItem("aiProviderRenfe", prov);
@@ -1438,9 +1454,8 @@ Responde EXCLUSIVAMENTE un objeto JSON válido sin markdown:
 {"verdict":"REAL"|"DOWNGRADED_ORANGE"|"PROMOTED_RED","confidence":90,"reason":"Explicación técnica del LLM en español (máx 16 palabras) citando estaciones o vía"}`;
   }
 
-let freeCloudCooldownUntil = (() => {
-    try { return parseInt(localStorage.getItem("llmCooldownUntil") || "0", 10) || 0; } catch(e) { return 0; }
-  })();
+  let freeCloudCooldownUntil = 0;
+  try { localStorage.removeItem("llmCooldownUntil"); } catch(e) {}
   let lastRateLimitServerMsg = "";
   let _cooldownInterval = null;
 
@@ -1460,9 +1475,15 @@ let freeCloudCooldownUntil = (() => {
         if (typeof msg === "string" && msg.trim()) serverDetail = msg.trim();
 
         // Campos directos estándar: retry_after, retryAfter, reset_seconds
-        const directSec = j.retry_after ?? j.retryAfter ?? j.error?.retry_after ?? j.error?.retryAfter ?? j.reset_seconds;
-        if (directSec !== undefined && !isNaN(parseFloat(directSec)) && parseFloat(directSec) > 0) {
-          waitSeconds = parseFloat(directSec);
+        const rawSec = j.retry_after ?? j.retryAfter ?? j.error?.retry_after ?? j.error?.retryAfter ?? j.reset_seconds ?? j.error?.reset_seconds;
+        if (rawSec !== undefined && !isNaN(parseFloat(rawSec))) {
+          const n = parseFloat(rawSec);
+          if (n > 1700000000) {
+            // Es un timestamp Unix en segundos
+            waitSeconds = Math.max(1, Math.ceil(n - Date.now() / 1000));
+          } else if (n > 0) {
+            waitSeconds = n;
+          }
         }
 
         // Formato Google Gemini: details[].retryDelay ("42s" o "35.5s")
@@ -1514,7 +1535,6 @@ let freeCloudCooldownUntil = (() => {
           const asNum = parseFloat(hRetry);
           if (!isNaN(asNum) && asNum > 0) {
             if (asNum > 1700000000) {
-              // Es un timestamp Unix en segundos
               waitSeconds = Math.max(1, Math.ceil(asNum - Date.now() / 1000));
             } else if (asNum < 86400) {
               waitSeconds = asNum;
@@ -1529,20 +1549,21 @@ let freeCloudCooldownUntil = (() => {
       }
     }
 
-    // 4. Si el servidor no envió número ni en JSON ni en cabeceras (por ej. LLM7.io cuyo límite es 1 req/seg y 60 req/min),
-    // calculamos la ventana real de enfriamiento de ráfaga (15 s) e indicamos qué devolvió exactamente el servidor
+    // 4. Si el servidor no envió número ni en JSON ni en cabeceras:
     let isExactFromServer = true;
     if (waitSeconds === null || !isFinite(waitSeconds) || waitSeconds <= 0) {
       isExactFromServer = false;
-      waitSeconds = providerName === "LLM7" ? 15 : 30;
+      waitSeconds = providerName === "LLM7" ? 15 : 25;
     }
 
-    const waitMs = Math.ceil(waitSeconds * 1000) + 500;
+    // Tope de seguridad: nunca congelar más de 60 segundos por ráfagas de 429
+    waitSeconds = Math.min(60, Math.max(1, Math.ceil(waitSeconds)));
+    const waitMs = waitSeconds * 1000 + 400;
     const cleanDetail = serverDetail
       ? serverDetail.replace(/\s+/g, " ").slice(0, 180)
       : `HTTP ${response ? response.status : 429} sin detalle adicional en el cuerpo`;
 
-    return { waitMs, waitSeconds: Math.ceil(waitSeconds), isExactFromServer, cleanDetail };
+    return { waitMs, waitSeconds, isExactFromServer, cleanDetail };
   }
 
   function startCooldownCountdown(extraBottomText) {
@@ -1554,24 +1575,23 @@ let freeCloudCooldownUntil = (() => {
       if (remaining <= 0) {
         clearInterval(_cooldownInterval);
         _cooldownInterval = null;
+        freeCloudCooldownUntil = 0;
         try { localStorage.removeItem("llmCooldownUntil"); } catch (e) {}
         el.llmDebugLog.textContent = "✅ Cuota LLM ya disponible — pulsa 🤖 Analizar con IA en cualquier alerta para consultar al modelo.";
+        renderRedOverlayList();
         return;
       }
       const msgSrv = lastRateLimitServerMsg ? `\nRespuesta servidor: ${lastRateLimitServerMsg}` : "";
       const extra = startCooldownCountdown._lastExtra ? `\n\n${startCooldownCountdown._lastExtra}` : "";
-   const h = Math.floor(remaining / 3600);
-      const m = Math.floor((remaining % 3600) / 60);
+      const m = Math.floor(remaining / 60);
       const s = remaining % 60;
-      const fmtTime = h > 0 ? `${h}h ${m}m ${s}s (${remaining} s)` : (m > 0 ? `${m}m ${s}s (${remaining} s)` : `${s} s`);
+      const fmtTime = m > 0 ? `${m}m ${s}s (${remaining} s)` : `${s} s`;
       el.llmDebugLog.textContent = `⏳ Límite 429 alcanzado · Próxima consulta disponible en: ${fmtTime}${msgSrv}${extra}`;
     };
 
     tick();
     _cooldownInterval = setInterval(tick, 1000);
   }
-
-  if (freeCloudCooldownUntil > Date.now()) startCooldownCountdown();
 
   async function callRealLlmEndpoint(promptText, signal, fallbackEval) {
     const prov = el.aiProvider.value;
@@ -1608,7 +1628,6 @@ let freeCloudCooldownUntil = (() => {
         const info = await extractRealRetryMsFromLlmError(r, "Gemini");
         freeCloudCooldownUntil = Date.now() + info.waitMs;
         lastRateLimitServerMsg = `[Gemini] ${info.cleanDetail}`;
-        try { localStorage.setItem("llmCooldownUntil", String(freeCloudCooldownUntil)); } catch (e) {}
         const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
         return {
           text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
@@ -1623,7 +1642,7 @@ let freeCloudCooldownUntil = (() => {
         throw new Error(`Gemini HTTP ${r.status}: ${errTxt.slice(0, 80)}`);
       }
       const j = await r.json();
-      return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "☁️ LLM: Gemini 2.5 Flash-Lite", isCloud: true };
+      return { text: j.candidates?.[0]?.content?.parts?.[0]?.text || "", modelName: "☁️ LLM: Gemini 2.5 Flash-Lite", isCloud: true, rateLimited: false };
     }
 
     // 2. GROQ LLAMA 3.3 70B
@@ -1647,7 +1666,6 @@ let freeCloudCooldownUntil = (() => {
         const info = await extractRealRetryMsFromLlmError(r, "Groq");
         freeCloudCooldownUntil = Date.now() + info.waitMs;
         lastRateLimitServerMsg = `[Groq] ${info.cleanDetail}`;
-        try { localStorage.setItem("llmCooldownUntil", String(freeCloudCooldownUntil)); } catch (e) {}
         const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
         return {
           text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
@@ -1659,25 +1677,30 @@ let freeCloudCooldownUntil = (() => {
       }
       if (!r.ok) throw new Error("Groq HTTP " + r.status);
       const j = await r.json();
-      return { text: j.choices?.[0]?.message?.content || "", modelName: "☁️ LLM: Llama 3.3 70B", isCloud: true };
+      return { text: j.choices?.[0]?.message?.content || "", modelName: "☁️ LLM: Llama 3.3 70B", isCloud: true, rateLimited: false };
     }
 
-    // 3. MODO GRATUITO SIN API KEY: LLM7.io
+    // 3. MODO GRATUITO: LLM7.io (sin clave o con token opcional)
     try {
       const stepCtl = new AbortController();
       const tId = setTimeout(() => stepCtl.abort(), 10000);
       const onAbort = () => stepCtl.abort();
       signal?.addEventListener("abort", onAbort, { once: true });
 
+      const headers = { "Content-Type": "application/json" };
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
+
       const rFree = await fetch("https://api.llm7.io/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         signal: stepCtl.signal,
-     body: JSON.stringify({
-            model: "default",
-            temperature: 0.1,
-            max_tokens: 120,
-            messages: [
+        body: JSON.stringify({
+          model: "default",
+          temperature: 0.1,
+          max_tokens: 120,
+          messages: [
             { role: "system", content: sysMsg },
             { role: "user", content: promptText }
           ]
@@ -1690,15 +1713,15 @@ let freeCloudCooldownUntil = (() => {
         const jFree = await rFree.json();
         const textFree = jFree.choices?.[0]?.message?.content || "";
         if (textFree && textFree.includes("{")) {
-          return { text: textFree, modelName: "☁️ LLM Nube (GPT-4o-mini)", isCloud: true };
+          const modTag = apiKey ? "☁️ LLM7 (Con Token)" : "☁️ LLM7 (Gratis)";
+          return { text: textFree, modelName: modTag, isCloud: true, rateLimited: false };
         }
       } else if (rFree.status === 429 || rFree.status === 503) {
         const info = await extractRealRetryMsFromLlmError(rFree, "LLM7");
         freeCloudCooldownUntil = Date.now() + info.waitMs;
         lastRateLimitServerMsg = info.isExactFromServer
           ? `[LLM7] ${info.cleanDetail}`
-          : `[LLM7 límite 1 req/s] ${info.cleanDetail}`;
-        try { localStorage.setItem("llmCooldownUntil", String(freeCloudCooldownUntil)); } catch (e) {}
+          : `[LLM7 límite de cuota] ${info.cleanDetail}`;
         const fb = fallbackEval || { verdict: "REAL", confidence: 90, reason: "Evaluado por reglas locales CTC" };
         return {
           text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
@@ -1716,7 +1739,8 @@ let freeCloudCooldownUntil = (() => {
     return {
       text: JSON.stringify({ verdict: fb.verdict, confidence: fb.confidence, reason: fb.reason }),
       modelName: "⚡ CTC Local (Nube sin resp.)",
-      isCloud: false
+      isCloud: false,
+      rateLimited: false
     };
   }
   function parseLlmJsonVerdict(rawText, fallbackEval) {
@@ -1848,12 +1872,12 @@ let freeCloudCooldownUntil = (() => {
     const prompt = buildLlmPromptForPair(item.pairObj, item.localEval);
     el.llmDebugLog.textContent = `[CONSULTANDO LLM (1 a 1) · ${item.pairKey} · En cola: ${llmQueue.length}]\n${prompt}`;
 
-try {
-      const { text, modelName, isCloud } = await callRealLlmEndpoint(prompt, controller.signal, item.localEval);
+    try {
+      const { text, modelName, isCloud, rateLimited } = await callRealLlmEndpoint(prompt, controller.signal, item.localEval);
       clearTimeout(timeoutId);
 
       const parsed = parseLlmJsonVerdict(text, item.localEval);
-      const isRateLimited = modelName.includes("Enfriando") || modelName.includes("429");
+      const isRateLimited = Boolean(rateLimited) || !isCloud;
 
       aiAuditCache.set(item.pairKey, {
         status: "done",
@@ -1861,13 +1885,13 @@ try {
         confidence: parsed.confidence,
         reason: parsed.reason,
         source: modelName,
-        llmDone: true,
-        llmVerified: !isRateLimited,
+        llmDone: !isRateLimited,
+        llmVerified: !isRateLimited && isCloud,
         llmTs: Date.now()
       });
 
-    if (isRateLimited || freeCloudCooldownUntil > Date.now()) {
-        startCooldownCountdown(`Dictamen CTC Local aplicado:\n${JSON.stringify(parsed, null, 2)}`);
+      if (isRateLimited || freeCloudCooldownUntil > Date.now()) {
+        startCooldownCountdown(`Dictamen CTC Local temporal aplicado:\n${JSON.stringify(parsed, null, 2)}`);
       } else {
         if (_cooldownInterval) { clearInterval(_cooldownInterval); _cooldownInterval = null; }
         const headerLog = `✅ [RESPUESTA NUBE (${modelName}) · ${new Date().toLocaleTimeString("es-ES")}]`;
@@ -1876,7 +1900,8 @@ try {
       el.llmDebugLog.scrollTop = 0;
 
       currentLlmTask = null;
-      const cadenceMs = 4000;
+      const isAnon = (!el.aiApiKey.value.trim() && (el.aiProvider.value === "llm7" || el.aiProvider.value === "pollinations"));
+      const cadenceMs = isAnon ? 5000 : 2500;
       nextQueueAllowedAt = Date.now() + cadenceMs;
 
       computeProximity();
@@ -1892,10 +1917,10 @@ try {
         const existing = aiAuditCache.get(item.pairKey);
         if (existing) {
           existing.status = "done";
-          existing.llmDone = true;
-          existing.llmVerified = true; // Lo marcamos como resuelto por local para evitar bucles en el botón
+          existing.llmDone = false;
+          existing.llmVerified = false;
           existing.llmTs = Date.now();
-          existing.source = "⚡ CTC Local (429 Nube)";
+          existing.source = "⚡ CTC Local (Error Nube)";
         }
         el.llmDebugLog.textContent = `[AVISO LLM en ${item.pairKey}: ${err.message || err}]\nSe mantiene dictamen del CTC Local.`;
         renderRedOverlayList();
